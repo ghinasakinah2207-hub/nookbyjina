@@ -1,26 +1,234 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: var(--font-plus-jakarta-sans), 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --color-brand-bg: #F6F6F7;
+  --color-brand-surface: #FFFFFF;
+  --color-brand-text: #111111;
+  --color-brand-muted: #737373;
+  --color-brand-divider: #E5E5E5;
+  --color-brand-primary: #F25B09;
+  --color-brand-primary-pressed: #D94D06;
+  --color-brand-whatsapp: #25D366;
+  --color-brand-danger: #B42318;
+  --color-brand-warning-bg: #FFF4E5;
+  --color-brand-warning-text: #8A4B08;
+  --color-brand-success: #18794E;
+  --color-brand-category: #111111;
+  --color-brand-category-text: #FFFFFF;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-plus-jakarta-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+html, body {
+  background-color: #F6F6F7;
+  color: #111111;
+  font-family: var(--font-plus-jakarta-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ensure strictly NO shadows anywhere in the app per Design MD specification */
+*, *::before, *::after {
+  box-shadow: none !important;
+}
+
+/* Clean scrollbar styling without jarring scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #E5E5E5;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #737373;
+}
+
+/* Hide scrollbar utility for clean horizontal carousels */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Subtle first-visit landing page fade-in animation (400-600ms, ease-out) */
+@keyframes landingFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.animate-landing-fade {
+  animation: landingFadeIn 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-landing-fade {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* Subtle continuous idle pulse for landing ORDER button (2.8s cycle, mostly at rest) */
+@keyframes orderIdlePulse {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  15% {
+    transform: scale(1.025);
+    filter: brightness(1.08);
+  }
+  30% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+.animate-order-idle {
+  animation: orderIdlePulse 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform, filter;
+}
+
+.animate-order-idle:active {
+  animation: none !important;
+  transform: scale(0.97) !important;
+  filter: brightness(0.95) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-order-idle {
+    animation: none !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}
+
+/* Subtle looping horizontal nudge for ORDER button accent arrow */
+@keyframes orderAccentNudge {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+}
+
+.animate-order-nudge {
+  animation: orderAccentNudge 2s ease-in-out infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-order-nudge {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* Order Button Hover Light-Sweep Shimmer across ORDER text */
+@keyframes orderTextLightSweep {
+  0% {
+    transform: translateX(-150%) skewX(-25deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.85;
+  }
+  85% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(250%) skewX(-25deg);
+    opacity: 0;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .group:hover .animate-order-light-sweep {
+    animation: orderTextLightSweep 0.85s cubic-bezier(0.4, 0, 0.2, 1) 1 forwards;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-order-light-sweep {
+    display: none !important;
+    animation: none !important;
+  }
+}
+
+/* =========================================================================
+   DEDICATED THERMAL RECEIPT PRINT STYLES
+   ========================================================================= */
+@media print {
+  @page {
+    size: auto;
+    margin: 0mm !important;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Completely hide the entire Next.js app, sidebar, topbar, modals, overlays, buttons */
+  body > *:not(#thermal-receipt-print-root) {
+    display: none !important;
+  }
+
+  /* Show ONLY the dedicated thermal receipt portal */
+  #thermal-receipt-print-root {
+    display: block !important;
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: auto !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+  }
+
+  .receipt-item-row {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .receipt-totals-section {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}
+
+/* In screen view, the print root is strictly hidden so it NEVER duplicates on screen */
+#thermal-receipt-print-root {
+  display: none !important;
 }

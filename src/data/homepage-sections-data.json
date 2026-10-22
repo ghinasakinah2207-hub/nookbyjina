@@ -1,0 +1,76 @@
+[
+  {
+    "id": "c0000001-0000-4000-8000-000000000001",
+    "title": "Menu Pilihan Pelanggan",
+    "subtitle": "Paling sering dipesan di Lhoksukon",
+    "isActive": true,
+    "sortOrder": 1,
+    "maxProducts": 6,
+    "viewAllUrl": "/menu",
+    "productIds": [
+      "b0000001-0000-4000-8000-000000000001",
+      "b0000001-0000-4000-8000-000000000002",
+      "b0000001-0000-4000-8000-000000000003",
+      "b0000001-0000-4000-8000-000000000004"
+    ]
+  },
+  {
+    "id": "c0000001-0000-4000-8000-000000000002",
+    "title": "Best seller",
+    "subtitle": "Olahan homemade gurih & mengenyangkan",
+    "isActive": true,
+    "sortOrder": 2,
+    "maxProducts": 6,
+    "viewAllUrl": "/menu",
+    "productIds": [
+      "b0000001-0000-4000-8000-000000000001",
+      "b0000001-0000-4000-8000-000000000002",
+      "735ab03a-efa6-4136-b3dc-ad8fe764e1a0"
+    ],
+    "updatedAt": "2026-10-16T16:40:23.690Z"
+  },
+  {
+    "id": "c0000001-0000-4000-8000-000000000003",
+    "title": "Snack & Camilan",
+    "subtitle": "Camilan renyah & lumer teman santai",
+    "isActive": true,
+    "sortOrder": 3,
+    "maxProducts": 6,
+    "viewAllUrl": "/menu",
+    "productIds": [
+      "b0000001-0000-4000-8000-000000000003",
+      "b0000001-0000-4000-8000-000000000004",
+      "b0000001-0000-4000-8000-000000000005"
+    ],
+    "updatedAt": "2026-10-16T16:41:10.398Z"
+  },
+  {
+    "id": "c0000001-0000-4000-8000-000000000004",
+    "title": "Minuman Segar",
+    "subtitle": "Kopi aren & minuman pelepas dahaga",
+    "isActive": true,
+    "sortOrder": 4,
+    "maxProducts": 6,
+    "viewAllUrl": "/menu",
+    "productIds": [
+      "b0000001-0000-4000-8000-000000000006",
+      "77b28184-3356-424a-aadd-c4f437c463b4"
+    ],
+    "updatedAt": "2026-10-16T16:41:09.606Z"
+  },
+  {
+    "id": "187263b9-9157-465f-b736-4bbd8087675f",
+    "title": "Pilihan Pelanggan",
+    "subtitle": null,
+    "isActive": true,
+    "sortOrder": 5,
+    "maxProducts": null,
+    "viewAllUrl": "/menu",
+    "productIds": [
+      "b0000001-0000-4000-8000-000000000005",
+      "b0000001-0000-4000-8000-000000000001"
+    ],
+    "createdAt": "2026-10-17T10:33:12.337Z",
+    "updatedAt": "2026-10-17T10:33:29.092Z"
+  }
+]

@@ -1,0 +1,264 @@
+INSTRUKSI IMPLEMENTASI FRONTEND PERTAMA — TEMU BY JINA Untuk Google
+Antigravity Agent menggunakan Gemini 3.8 High
+
+TUJUAN UTAMA Bangun frontend pelanggan yang rapi, matang secara visual,
+responsif, dan dapat dijalankan untuk temu by jina, sebuah web app
+pemesanan makanan homemade untuk satu toko. Kerjakan langsung di folder
+project yang saat ini terbuka di Antigravity. Jangan membuat project
+baru di folder lain. PRD dan Design MD yang tersedia di workspace adalah
+sumber acuan utama.
+
+DOKUMEN WAJIB DIBACA Baca seluruh isi kedua file ini dari workspace
+aktif sebelum mengedit kode: - docs/PRD-temu-by-jina-final.md -
+docs/DESIGN-temu-by-jina.md
+
+Buka file secara langsung dan benar-benar baca kontennya. Jangan sekadar
+menyebut path. Jangan mengasumsikan isi dokumen jika file tidak
+ditemukan. Jika salah satu file belum tersedia atau tidak dapat dibaca,
+hentikan perubahan kode, jelaskan file mana yang bermasalah, dan minta
+saya memperbaiki lokasi file. Jangan membuat ulang isi dokumen dengan
+tebakan.
+
+URUTAN KERJA WAJIB 1. Audit folder project yang sudah terbuka. 2. Baca
+PRD dan Design MD. 3. Ringkas pemahaman produk dan rencana implementasi
+secara singkat di chat. 4. Mulai implementasi nyata, bukan hanya
+memberikan rencana. 5. Jalankan aplikasi dan pemeriksaan yang tersedia.
+6. Perbaiki error yang timbul. 7. Berikan laporan hasil dengan batasan
+yang jujur.
+
+Jangan menunggu persetujuan tambahan setelah audit kecuali ada risiko
+yang nyata, kehilangan data, atau hambatan teknis yang benar-benar
+membutuhkan keputusan saya.
+
+BATASAN SCOPE UNTUK TAHAP INI Fokus pada FRONTEND PELANGGAN. Jangan
+membuat dashboard admin pada tahap ini. Jangan mengintegrasikan
+Supabase, database, autentikasi, payment gateway, QRIS dinamis, API
+WhatsApp, atau backend. Jangan menambahkan sistem enterprise,
+multi-tenant, akun pelanggan, loyalty, review, kupon, delivery tracking,
+peta, jadwal pesanan, atau fitur lain yang tidak tercantum dalam scope
+awal.
+
+Buat aplikasi demo frontend dengan data dummy yang konsisten dan
+interaksi lokal yang berfungsi. Bagian yang membutuhkan backend harus
+disimulasikan secara jelas. Jangan pernah mengklaim pesanan sudah
+benar-benar tersimpan di server, pembayaran sudah benar-benar
+diverifikasi, WhatsApp sudah terkirim, atau status backend berjalan jika
+semuanya masih dummy.
+
+AUDIT PROJECT DAN PERLINDUNGAN FILE - Periksa package.json, lockfile,
+struktur app/src, routing, styling, komponen, dependensi, dan
+konfigurasi yang sudah ada. - Pertahankan stack dan pola project yang
+ada jika masih sehat. - Jika project sudah Next.js App Router,
+TypeScript, dan Tailwind CSS, gunakan setup tersebut. - Jika project
+kosong dan tidak ada setup yang dapat dipakai, baru siapkan Next.js App
+Router, TypeScript, dan Tailwind CSS sesuai versi stabil yang tersedia
+di lingkungan project. - Jangan membuat project baru di dalam project
+lama. - Jangan menghapus file, mengganti konfigurasi besar, mengganti
+package manager, atau memasang dependensi besar tanpa kebutuhan yang
+jelas. - Gunakan package manager yang sesuai dengan lockfile yang sudah
+ada. - Periksa apakah komponen atau dependensi yang diperlukan sudah
+tersedia sebelum menambah yang baru. - Jangan menaruh secret, token,
+atau kredensial di frontend. - Jangan menggunakan URL gambar palsu atau
+path file yang tidak ada.
+
+ARAH DESAIN — WAJIB MENGIKUTI DESIGN MD Design MD adalah acuan visual.
+Jangan membuat gaya alternatif atau mengganti identitas brand. Brand:
+temu by jina. Karakter: warm, bersih, editorial, minimal, ramah, fokus
+pada makanan, whitespace yang cukup, bukan template dashboard SaaS. Font
+utama: Poppins, gunakan cara pemuatan yang cocok dengan stack project
+dan fallback yang baik. Token visual yang telah ditentukan: -
+Background: #F6F6F7 - Surface: #FFFFFF - Primary text: #111111 -
+Secondary text: #737373 - Primary CTA: #F25B09 - Divider/border:
+#E5E5E5 - CTA WhatsApp: hijau yang sesuai dengan pola WhatsApp. Ikuti
+nilai radius, ukuran font, spacing, rasio gambar, dan detail lain yang
+tertulis di Design MD. Jangan menebak jika nilai sudah ditetapkan di
+sana.
+
+Larangan visual: - Tidak menggunakan shadow pada kartu, tombol, input,
+sheet, sticky bar, atau navigasi. - Hindari glassmorphism, neon,
+gradient dekoratif, ornamen berlebihan, dan layout SaaS generik. -
+Jangan mengubah semua elemen menjadi pill jika Design MD tidak
+memintanya. - Jangan memenuhi halaman dengan terlalu banyak card, badge,
+border, atau ikon dekoratif. - Jangan memakai emoji sebagai pengganti
+ikon UI bila tersedia ikon yang konsisten. - Jangan menggunakan gambar
+yang tidak relevan, gambar rusak, atau gambar yang terlihat sebagai
+placeholder asal-asalan. - Jangan menambahkan elemen yang membuat desain
+ramai atau mengurangi keterbacaan.
+
+PRINSIP RESPONSIF DAN AKSESIBILITAS - Mobile-first. Tampilan mobile
+adalah prioritas utama, lalu tablet dan desktop. - Pastikan tidak ada
+horizontal overflow pada viewport sempit. - Gunakan ukuran tap yang
+nyaman, jarak antarkontrol yang cukup, label input yang jelas, fokus
+keyboard yang terlihat, dan kontras yang memadai. - Layout desktop boleh
+memanfaatkan ruang ekstra tetapi harus tetap terasa seperti toko
+makanan, bukan admin dashboard. - Navigasi bawah pelanggan mengikuti PRD
+dan disembunyikan pada Checkout serta Payment jika ditentukan
+demikian. - Gunakan semantik HTML yang benar, heading terstruktur,
+button untuk tindakan, link untuk navigasi, dan label untuk form. -
+Semua gambar harus memiliki alt yang sesuai atau alt kosong bila
+benar-benar dekoratif.
+
+STRUKTUR DAN KUALITAS KODE - Gunakan TypeScript yang jelas; hindari any
+jika tidak perlu. - Pisahkan data dummy, tipe data, komponen UI, dan
+logika perhitungan agar mudah diganti dengan API di masa depan. - Buat
+komponen reusable sesuai kebutuhan, misalnya Button, Input, Container,
+ProductCard, Price, EmptyState, QuantityControl, BottomNavigation, dan
+SectionHeading. Jangan membuat abstraksi berlebihan. - Hindari satu file
+raksasa yang berisi semua halaman dan semua logika. - Hindari duplikasi
+markup dan aturan styling. - Gunakan design tokens atau CSS variables
+untuk warna, radius, dan spacing yang memang perlu konsisten. - Jangan
+menambah library hanya untuk fungsi sederhana yang dapat dikerjakan
+dengan kemampuan stack saat ini. - Jangan meninggalkan import rusak,
+console error, warning penting, atau tombol yang tidak melakukan
+apa-apa. - Jangan membuat mockup statis yang hanya tampak bagus;
+interaksi inti harus bekerja secara lokal. - Gunakan format Rupiah
+Indonesia secara konsisten, misalnya Rp12.000, dengan locale id-ID. -
+Teks UI harus natural dalam Bahasa Indonesia sesuai konteks brand.
+
+URUTAN IMPLEMENTASI Kerjakan berurutan. Pastikan tahap yang sedang
+dikerjakan berfungsi sebelum memperluas ke tahap berikutnya.
+
+TAHAP 1 — FONDASI DAN HOME 1. Audit project dan dokumen. 2. Atur font
+dan token desain sesuai Design MD. 3. Buat struktur layout pelanggan dan
+komponen dasar. 4. Implementasikan Home/Welcome dengan branding temu by
+jina. 5. Home menampilkan hero makanan yang kuat, copy singkat, CTA ke
+menu, banner promo jika sesuai PRD, serta section produk yang relevan.
+6. Gunakan data dummy lokal yang konsisten. Gunakan aset gambar yang
+memang tersedia atau sumber gambar yang valid; jangan membuat URL palsu.
+Jika gambar belum tersedia, buat fallback visual yang rapi dan
+konsisten. 7. Pastikan halaman tidak terlihat kosong, generik, atau
+seperti template starter bawaan. 8. Uji Home pada viewport mobile dan
+desktop.
+
+TAHAP 2 — MENU DAN DETAIL PRODUK Implementasikan halaman Menu dengan
+kategori, daftar produk, pencarian yang berjalan hanya setelah tombol
+Cari/Enter jika itulah aturan dalam PRD, serta empty state yang jelas.
+Implementasikan Detail Produk dengan foto, nama, deskripsi, harga,
+varian, add-on, catatan item, dan kontrol jumlah sesuai PRD. - Produk
+Habis tetap dapat terlihat tetapi tidak dapat ditambahkan. - Validasi
+pilihan wajib dan batas minimum/maksimum varian. - Perubahan pilihan
+varian/add-on memperbarui harga tampilan secara konsisten. - Batas
+catatan item 200 karakter. - Gunakan struktur data yang bisa digunakan
+kembali oleh keranjang. - Jika ada lebih dari satu foto, buat galeri
+swipe/horizontal yang sesuai dengan Design MD dan tampilkan indikator
+posisi bila relevan.
+
+TAHAP 3 — KERANJANG Implementasikan keranjang yang dapat: - Menampilkan
+item, pilihan varian, add-on, catatan item, jumlah, subtotal, dan
+ringkasan total. - Mengubah jumlah dan menghapus item. - Mengedit
+catatan item tanpa menghapus lalu menambahkan ulang item. -
+Menggabungkan item hanya jika produk, varian, add-on, dan catatan item
+identik; item yang berbeda pada salah satu hal tersebut tetap
+terpisah. - Menyimpan cart secara lokal di browser agar tetap ada saat
+berpindah halaman atau reload, menggunakan pendekatan yang sesuai dengan
+stack. - Menampilkan empty state dengan CTA kembali ke Menu. - Menangani
+produk yang menjadi Habis: tampilkan peringatan dan blokir checkout
+sampai item Habis dihapus. - Menghitung ulang total setelah setiap
+perubahan.
+
+TAHAP 4 — CHECKOUT Implementasikan checkout dengan field dan alur sesuai
+PRD: - Nama pelanggan. - Nomor WhatsApp. - Pilihan delivery atau
+pickup. - Catatan pesanan opsional, maksimal 200 karakter. - Ringkasan
+item dan biaya. - Validasi input dan pesan error yang mudah dipahami. -
+Pickup gratis. - Untuk area Lhoksukon, ongkir Rp3.000; gratis ongkir
+hanya jika subtotal produk lebih dari Rp50.000. Pada subtotal tepat
+Rp50.000, ongkir tetap Rp3.000. - Untuk alamat/area di luar area yang
+sudah dikonfigurasi, jangan membuat pesanan seolah-olah pengiriman sudah
+tersedia; tampilkan instruksi menghubungi WhatsApp admin sesuai PRD. -
+Jangan menambahkan penjadwalan pesanan atau pilihan tanggal/jam. -
+Jangan menampilkan teks pelanggan seperti “siap besok”, “1 day”, atau
+janji waktu persiapan yang tidak disepakati. - Pastikan ringkasan total
+jelas dan konsisten.
+
+TAHAP 5 — PEMBAYARAN, SUKSES, DETAIL, DAN RIWAYAT Implementasikan
+tampilan frontend yang sesuai PRD dengan simulasi yang jujur: - Halaman
+pembayaran QRIS menggunakan gambar QRIS placeholder lokal yang jelas
+diberi label DEMO jika QRIS asli belum tersedia. Jangan mengarang QRIS
+yang tampak seolah-olah bisa menerima pembayaran. - Tampilkan total,
+status menunggu pembayaran, dan batas waktu 2 jam pada data simulasi
+jika diperlukan. Jangan mengklaim timer atau pembatalan otomatis server
+sudah aktif. - Tombol “Konfirmasi pembayaran ke admin” dapat membuka
+WhatsApp dengan pesan yang sudah disiapkan jika nomor admin yang valid
+tersedia di konfigurasi dummy. Jika belum ada, tampilkan fallback yang
+jelas. - Jelaskan secara visual bahwa pengiriman pesan masih perlu
+tindakan pengguna dan tidak otomatis terkirim. - Halaman sukses
+menampilkan nomor pesanan demo dan tautan/detail sesuai simulasi. - Buat
+halaman detail pesanan dan riwayat yang menggunakan data lokal/dummy
+secara konsisten. - Jangan mengklaim tautan token aman, polling backend,
+auto-cancel server, verifikasi transaksi aktual, atau penyimpanan
+pesanan permanen sudah berjalan jika belum ada backend. - Jangan membuat
+fitur reorder jika PRD menyatakan tidak ada tombol pesan ulang. - Jangan
+membuat fitur akun pelanggan.
+
+ATURAN BISNIS PENTING YANG TIDAK BOLEH DILANGGAR Ikuti PRD untuk detail
+lengkap. Secara khusus: - Satu toko, satu admin, bukan marketplace. -
+Tidak ada login pelanggan. - Customer checkout memakai nama dan nomor
+WhatsApp. - Cart/favorites/history di frontend tahap ini hanya
+simulasi/local storage, bukan penyimpanan server. - Tidak ada pembayaran
+tunai. - QRIS statis; tidak ada payment gateway atau pembayaran otomatis
+pada tahap ini. - Dalam produk nyata, admin memverifikasi transaksi
+aktual di DANA Bisnis, bukan berdasarkan screenshot pelanggan. -
+Pembayaran nominal kurang tidak boleh ditandai lunas sebelum total
+terpenuhi dan transaksi tambahan terverifikasi. - Kelebihan pembayaran
+ditangani manual; tidak ada status refund atau fitur tracking refund. -
+Tidak ada log audit tindakan admin. - Status dan akses keamanan produksi
+memerlukan backend pada tahap selanjutnya. - Tidak ada fitur yang
+sengaja ditambahkan di luar PRD demi terlihat canggih.
+
+DATA DUMMY Buat satu modul atau file data dummy yang konsisten untuk: -
+Produk dan foto. - Kategori. - Varian dan opsi. - Add-on. - Banner
+promo. - Konfigurasi toko yang dibutuhkan frontend, termasuk nomor
+WhatsApp placeholder yang jelas belum final. - Data contoh pesanan.
+Gunakan nama produk dan deskripsi makanan yang masuk akal untuk toko
+makanan homemade. Jangan menganggap data dummy sebagai menu final yang
+sudah disetujui pemilik. Jika harga dan isi menu belum tersedia dari
+dokumen, gunakan contoh yang mudah diganti dan isolasikan di satu file
+data.
+
+INTERAKSI YANG HARUS DAPAT DICOBA - Navigasi
+Home/Menu/Keranjang/Pesanan. - Pencarian menu sesuai aturan PRD. -
+Membuka detail produk. - Memilih varian dan add-on. - Mengubah jumlah
+dan menambahkan ke keranjang. - Mengedit catatan item. - Melihat empty
+state. - Checkout dengan validasi. - Beralih antara pickup dan delivery
+dan melihat biaya yang sesuai. - Melihat total yang berubah saat item
+atau opsi berubah. - Melihat halaman pembayaran dan simulasi
+konfirmasi. - Membuka detail pesanan dan riwayat demo. Pastikan tiap
+tombol mempunyai hasil yang jelas. Jika tindakan memang belum bisa
+dilakukan tanpa backend, tampilkan feedback yang jujur, bukan aksi
+palsu.
+
+PEMERIKSAAN SEBELUM DIANGGAP SELESAI 1. Jalankan perintah yang sesuai
+dengan project untuk development server. 2. Jalankan lint dan TypeScript
+check jika tersedia. 3. Jalankan build jika tidak membutuhkan
+konfigurasi rahasia yang belum tersedia. 4. Perbaiki error yang muncul;
+jangan hanya melaporkannya. 5. Periksa browser/preview untuk Home, Menu,
+Detail Produk, Keranjang, Checkout, Payment, Success, Order Detail, dan
+History jika sudah dibuat. 6. Periksa setidaknya viewport mobile sekitar
+390 px dan desktop sekitar 1440 px. 7. Periksa horizontal overflow,
+gambar rusak, navigasi buntu, tombol tidak aktif, perhitungan harga, dan
+error console yang relevan. 8. Jangan menyatakan tes berhasil jika belum
+dijalankan. 9. Jika ada pemeriksaan yang tidak dapat dilakukan, jelaskan
+alasan spesifiknya.
+
+DEFINITION OF DONE Pekerjaan tahap frontend awal dianggap berhasil
+jika: - Aplikasi berjalan secara lokal. - Tidak merusak konfigurasi
+project yang sudah ada. - Home memiliki tampilan yang sengaja dirancang,
+bukan starter template. - Navigasi dan alur utama pelanggan bisa
+didemonstrasikan. - Komponen dan visual konsisten dengan Design MD. -
+Aturan bisnis utama yang bisa disimulasikan sudah diterapkan. - Halaman
+penting memiliki loading/empty/error/disabled state yang sesuai. - Tidak
+ada error TypeScript/build yang diketahui dan dibiarkan tanpa
+penjelasan. - Keterbatasan dummy/backend disebutkan secara transparan. -
+Tidak ada dashboard admin atau fitur enterprise yang dibuat pada tahap
+ini.
+
+FORMAT LAPORAN AKHIR Setelah implementasi, laporkan dengan ringkas: 1.
+Stack dan kondisi project yang ditemukan. 2. Halaman dan interaksi yang
+sudah selesai. 3. File utama yang dibuat/diubah. 4. Perintah yang
+benar-benar dijalankan dan hasilnya. 5. Cara menjalankan project. 6.
+Bagian yang masih dummy atau menunggu backend/aset final. 7. Masalah
+yang masih tersisa, jika ada.
+
+Mulai sekarang: audit project, baca dua dokumen, jelaskan pemahaman
+singkat, lalu implementasikan dan verifikasi frontend. Jangan berhenti
+pada rencana.

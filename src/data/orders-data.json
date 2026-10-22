@@ -1,0 +1,584 @@
+[
+  {
+    "id": "TJ-261021-019",
+    "token": "cZSLJS6EHkDhU1r2hjNxsZMRcGKuH9DT",
+    "createdAt": "2026-10-21T11:06:42.068Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "628123456789",
+    "fulfillmentType": "delivery",
+    "deliveryArea": "Lhoksukon",
+    "orderNote": "Tolong jangan terlalu pedas",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "p1",
+        "productName": "Nasi Gurih Spesial",
+        "quantity": 2,
+        "basePrice": 15000,
+        "selectedOptions": [],
+        "selectedAddons": [],
+        "itemTotal": 30000
+      }
+    ],
+    "subtotal": 30000,
+    "shippingFee": 4000,
+    "total": 34000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Pembayaran",
+    "paymentMethod": "Cash",
+    "paymentDeadline": "",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-018",
+    "token": "hefxFV2MbDMmzBYrzAJz1HsIIdTX0dFI",
+    "createdAt": "2026-10-21T11:06:41.998Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "628123456789",
+    "fulfillmentType": "pickup",
+    "deliveryArea": "Pickup Toko (Lhoksukon)",
+    "orderNote": "Tolong jangan terlalu pedas",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "p1",
+        "productName": "Nasi Gurih Spesial",
+        "quantity": 2,
+        "basePrice": 15000,
+        "selectedOptions": [],
+        "selectedAddons": [],
+        "itemTotal": 30000
+      }
+    ],
+    "subtotal": 30000,
+    "shippingFee": 0,
+    "total": 30000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Verifikasi",
+    "paymentMethod": "QRIS Statis",
+    "paymentDeadline": "2026-10-21T11:36:41.998Z",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-017",
+    "token": "uwDHoHZhD4K3BNn200aUjiqKEYaNBF0N",
+    "createdAt": "2026-10-21T11:06:40.873Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "628123456789",
+    "fulfillmentType": "pickup",
+    "deliveryArea": "Pickup Toko (Lhoksukon)",
+    "orderNote": "Tolong jangan terlalu pedas",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "p1",
+        "productName": "Nasi Gurih Spesial",
+        "quantity": 2,
+        "basePrice": 15000,
+        "selectedOptions": [],
+        "selectedAddons": [],
+        "itemTotal": 30000
+      }
+    ],
+    "subtotal": 30000,
+    "shippingFee": 0,
+    "total": 30000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Pembayaran",
+    "paymentMethod": "Cash",
+    "paymentDeadline": "",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-016",
+    "token": "5aeYiEqpg8AlQQw0alJI2yAjQ3GroBgr",
+    "createdAt": "2026-10-21T11:06:40.381Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "628123456789",
+    "fulfillmentType": "pickup",
+    "deliveryArea": "Pickup Toko (Lhoksukon)",
+    "orderNote": "Tolong jangan terlalu pedas",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "p1",
+        "productName": "Nasi Gurih Spesial",
+        "quantity": 2,
+        "basePrice": 15000,
+        "selectedOptions": [],
+        "selectedAddons": [],
+        "itemTotal": 30000
+      }
+    ],
+    "subtotal": 30000,
+    "shippingFee": 0,
+    "total": 30000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Verifikasi",
+    "paymentMethod": "QRIS Statis",
+    "paymentDeadline": "2026-10-21T11:36:40.381Z",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-015",
+    "token": "vXp4aBk1I0F9A5vPoe3qc8ZoJY4Hv4cz",
+    "createdAt": "2026-10-21T11:06:39.986Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "628123456789",
+    "fulfillmentType": "pickup",
+    "deliveryArea": "Pickup Toko (Lhoksukon)",
+    "orderNote": "Tolong jangan terlalu pedas",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "p1",
+        "productName": "Nasi Gurih Spesial",
+        "quantity": 2,
+        "basePrice": 15000,
+        "selectedOptions": [],
+        "selectedAddons": [],
+        "itemTotal": 30000
+      }
+    ],
+    "subtotal": 30000,
+    "shippingFee": 0,
+    "total": 30000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Pembayaran",
+    "paymentMethod": "Cash",
+    "paymentDeadline": "",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-014",
+    "token": "rcZYJ72PCEqx2zg31SS9zHTwkGOwPeOW",
+    "createdAt": "2026-10-21T11:06:39.914Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "628123456789",
+    "fulfillmentType": "pickup",
+    "deliveryArea": "Pickup Toko (Lhoksukon)",
+    "orderNote": "Tolong jangan terlalu pedas",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "p1",
+        "productName": "Nasi Gurih Spesial",
+        "quantity": 2,
+        "basePrice": 15000,
+        "selectedOptions": [],
+        "selectedAddons": [],
+        "itemTotal": 30000
+      }
+    ],
+    "subtotal": 30000,
+    "shippingFee": 0,
+    "total": 30000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Verifikasi",
+    "paymentMethod": "QRIS Statis",
+    "paymentDeadline": "2026-10-21T11:36:39.914Z",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-013",
+    "token": "ZV2A43380Y96FvE9UjdaeDvNvLL4WxlI",
+    "createdAt": "2026-10-21T11:06:33.729Z",
+    "customerName": "Siti Aminah",
+    "customerWhatsapp": "6281298765432",
+    "fulfillmentType": "delivery",
+    "deliveryArea": "Lhoksukon",
+    "orderNote": "",
+    "items": [
+      {
+        "id": "item-free-1",
+        "productId": "nasi-bakar-cakalang",
+        "productName": "Nasi Bakar Cakalang",
+        "price": 25000,
+        "quantity": 2,
+        "itemTotal": 50000,
+        "selectedOptions": [],
+        "selectedAddons": []
+      }
+    ],
+    "subtotal": 50000,
+    "shippingFee": 0,
+    "total": 50000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Verifikasi",
+    "paymentMethod": "QRIS Statis",
+    "paymentDeadline": "2026-10-21T11:36:33.729Z",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-012",
+    "token": "l0pc7Z5j4SsRaUx8qE7GfUf07y8VsrkQ",
+    "createdAt": "2026-10-21T11:06:33.673Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "6281234567890",
+    "fulfillmentType": "delivery",
+    "deliveryArea": "Lhoksukon",
+    "orderNote": "",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "nasi-bakar-cakalang",
+        "productName": "Nasi Bakar Cakalang",
+        "price": 25000,
+        "quantity": 1,
+        "itemTotal": 25000,
+        "selectedOptions": [],
+        "selectedAddons": []
+      }
+    ],
+    "subtotal": 25000,
+    "shippingFee": 4000,
+    "total": 29000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Verifikasi",
+    "paymentMethod": "QRIS Statis",
+    "paymentDeadline": "2026-10-21T11:36:33.673Z",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-011",
+    "token": "GLlJ6vj8dvqppW38RxtNUoWLE89ddshh",
+    "createdAt": "2026-10-21T11:05:54.817Z",
+    "customerName": "Siti Aminah",
+    "customerWhatsapp": "6281298765432",
+    "fulfillmentType": "delivery",
+    "deliveryArea": "Lhoksukon",
+    "orderNote": "",
+    "items": [
+      {
+        "id": "item-free-1",
+        "productId": "nasi-bakar-cakalang",
+        "productName": "Nasi Bakar Cakalang",
+        "price": 25000,
+        "quantity": 2,
+        "itemTotal": 50000,
+        "selectedOptions": [],
+        "selectedAddons": []
+      }
+    ],
+    "subtotal": 50000,
+    "shippingFee": 0,
+    "total": 50000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Verifikasi",
+    "paymentMethod": "QRIS Statis",
+    "paymentDeadline": "2026-10-21T11:35:54.817Z",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-010",
+    "token": "lwSYwMOVEeBtiRcqOGwK7pfTljEHui0c",
+    "createdAt": "2026-10-21T11:05:54.633Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "6281234567890",
+    "fulfillmentType": "delivery",
+    "deliveryArea": "Lhoksukon",
+    "orderNote": "",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "nasi-bakar-cakalang",
+        "productName": "Nasi Bakar Cakalang",
+        "price": 25000,
+        "quantity": 1,
+        "itemTotal": 25000,
+        "selectedOptions": [],
+        "selectedAddons": []
+      }
+    ],
+    "subtotal": 25000,
+    "shippingFee": 4000,
+    "total": 29000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Verifikasi",
+    "paymentMethod": "QRIS Statis",
+    "paymentDeadline": "2026-10-21T11:35:54.633Z",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-009",
+    "token": "BSlER6bSC68QyFal5XssheyDiCLNFdiy",
+    "createdAt": "2026-10-21T11:05:30.964Z",
+    "customerName": "Siti Aminah",
+    "customerWhatsapp": "6281298765432",
+    "fulfillmentType": "delivery",
+    "deliveryArea": "Lhoksukon",
+    "orderNote": "",
+    "items": [
+      {
+        "id": "item-free-1",
+        "productId": "nasi-bakar-cakalang",
+        "productName": "Nasi Bakar Cakalang",
+        "price": 25000,
+        "quantity": 2,
+        "itemTotal": 50000,
+        "selectedOptions": [],
+        "selectedAddons": []
+      }
+    ],
+    "subtotal": 50000,
+    "shippingFee": 0,
+    "total": 50000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Verifikasi",
+    "paymentMethod": "QRIS Statis",
+    "paymentDeadline": "2026-10-21T11:35:30.964Z",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-008",
+    "token": "gD3Jx8qCEvp1FPbXpmETSoPuw49XUiII",
+    "createdAt": "2026-10-21T11:05:30.908Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "6281234567890",
+    "fulfillmentType": "delivery",
+    "deliveryArea": "Lhoksukon",
+    "orderNote": "",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "nasi-bakar-cakalang",
+        "productName": "Nasi Bakar Cakalang",
+        "price": 25000,
+        "quantity": 1,
+        "itemTotal": 25000,
+        "selectedOptions": [],
+        "selectedAddons": []
+      }
+    ],
+    "subtotal": 25000,
+    "shippingFee": 4000,
+    "total": 29000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Verifikasi",
+    "paymentMethod": "QRIS Statis",
+    "paymentDeadline": "2026-10-21T11:35:30.908Z",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-007",
+    "token": "W58XMiJGSoKe5hieE6EI8R1ePjNhcD7X",
+    "createdAt": "2026-10-21T11:05:27.750Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "628123456789",
+    "fulfillmentType": "delivery",
+    "deliveryArea": "Lhoksukon",
+    "orderNote": "Tolong jangan terlalu pedas",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "p1",
+        "productName": "Nasi Gurih Spesial",
+        "quantity": 2,
+        "basePrice": 15000,
+        "selectedOptions": [],
+        "selectedAddons": [],
+        "itemTotal": 30000
+      }
+    ],
+    "subtotal": 30000,
+    "shippingFee": 4000,
+    "total": 34000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Pembayaran",
+    "paymentMethod": "Cash",
+    "paymentDeadline": "",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-006",
+    "token": "ajBoo8pnZhXmEFPQocwf5HkP9CWyiz3h",
+    "createdAt": "2026-10-21T11:05:27.632Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "628123456789",
+    "fulfillmentType": "pickup",
+    "deliveryArea": "Pickup Toko (Lhoksukon)",
+    "orderNote": "Tolong jangan terlalu pedas",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "p1",
+        "productName": "Nasi Gurih Spesial",
+        "quantity": 2,
+        "basePrice": 15000,
+        "selectedOptions": [],
+        "selectedAddons": [],
+        "itemTotal": 30000
+      }
+    ],
+    "subtotal": 30000,
+    "shippingFee": 0,
+    "total": 30000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Verifikasi",
+    "paymentMethod": "QRIS Statis",
+    "paymentDeadline": "2026-10-21T11:35:27.632Z",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-005",
+    "token": "bDM6MJ53oiDQzQG7XYwTWgn4I5TLkioe",
+    "createdAt": "2026-10-21T11:05:26.404Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "628123456789",
+    "fulfillmentType": "pickup",
+    "deliveryArea": "Pickup Toko (Lhoksukon)",
+    "orderNote": "Tolong jangan terlalu pedas",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "p1",
+        "productName": "Nasi Gurih Spesial",
+        "quantity": 2,
+        "basePrice": 15000,
+        "selectedOptions": [],
+        "selectedAddons": [],
+        "itemTotal": 30000
+      }
+    ],
+    "subtotal": 30000,
+    "shippingFee": 0,
+    "total": 30000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Pembayaran",
+    "paymentMethod": "Cash",
+    "paymentDeadline": "",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-004",
+    "token": "uMlMuaswGQNjTesWsCMsxe3D3Js0rBKA",
+    "createdAt": "2026-10-21T11:05:25.843Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "628123456789",
+    "fulfillmentType": "pickup",
+    "deliveryArea": "Pickup Toko (Lhoksukon)",
+    "orderNote": "Tolong jangan terlalu pedas",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "p1",
+        "productName": "Nasi Gurih Spesial",
+        "quantity": 2,
+        "basePrice": 15000,
+        "selectedOptions": [],
+        "selectedAddons": [],
+        "itemTotal": 30000
+      }
+    ],
+    "subtotal": 30000,
+    "shippingFee": 0,
+    "total": 30000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Verifikasi",
+    "paymentMethod": "QRIS Statis",
+    "paymentDeadline": "2026-10-21T11:35:25.843Z",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-003",
+    "token": "1tT4kSiV7qVKdRqpoEbby795hORjBiJU",
+    "createdAt": "2026-10-21T11:05:25.499Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "628123456789",
+    "fulfillmentType": "pickup",
+    "deliveryArea": "Pickup Toko (Lhoksukon)",
+    "orderNote": "Tolong jangan terlalu pedas",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "p1",
+        "productName": "Nasi Gurih Spesial",
+        "quantity": 2,
+        "basePrice": 15000,
+        "selectedOptions": [],
+        "selectedAddons": [],
+        "itemTotal": 30000
+      }
+    ],
+    "subtotal": 30000,
+    "shippingFee": 0,
+    "total": 30000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Pembayaran",
+    "paymentMethod": "Cash",
+    "paymentDeadline": "",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-002",
+    "token": "3pDov4OAvn540TzsMr3AwCAmMoKkaaao",
+    "createdAt": "2026-10-21T11:05:25.436Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "628123456789",
+    "fulfillmentType": "pickup",
+    "deliveryArea": "Pickup Toko (Lhoksukon)",
+    "orderNote": "Tolong jangan terlalu pedas",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "p1",
+        "productName": "Nasi Gurih Spesial",
+        "quantity": 2,
+        "basePrice": 15000,
+        "selectedOptions": [],
+        "selectedAddons": [],
+        "itemTotal": 30000
+      }
+    ],
+    "subtotal": 30000,
+    "shippingFee": 0,
+    "total": 30000,
+    "orderStatus": "Pesanan baru",
+    "paymentStatus": "Menunggu Verifikasi",
+    "paymentMethod": "QRIS Statis",
+    "paymentDeadline": "2026-10-21T11:35:25.436Z",
+    "merchantName": "Nook by Jina"
+  },
+  {
+    "id": "TJ-261021-999",
+    "token": "test_tok_sec_6blpmu4dnbf",
+    "createdAt": "2026-10-21T11:08:49.343Z",
+    "customerName": "Budi Santoso",
+    "customerWhatsapp": "081234567890",
+    "fulfillmentType": "delivery",
+    "deliveryArea": "Lhoksukon",
+    "orderNote": "Tolong bungkus rapi",
+    "items": [
+      {
+        "id": "item-1",
+        "productId": "nasi-bakar-cakalang",
+        "productName": "Nasi Bakar Cakalang Asap",
+        "productImage": "/images/nasi-bakar.webp",
+        "basePrice": 25000,
+        "unitPrice": 25000,
+        "quantity": 2,
+        "itemTotal": 50000,
+        "itemNote": "",
+        "isAvailable": true,
+        "selectedOptions": [
+          {
+            "groupId": "opt-1",
+            "groupName": "Pedas",
+            "valueId": "v-1",
+            "valueName": "Level 1",
+            "priceDelta": 0
+          }
+        ],
+        "selectedAddons": []
+      }
+    ],
+    "subtotal": 50000,
+    "shippingFee": 0,
+    "total": 50000,
+    "orderStatus": "Diproses",
+    "paymentStatus": "Lunas",
+    "paymentMethod": "QRIS Statis",
+    "paymentDeadline": "2026-10-21T11:38:49.343Z",
+    "merchantName": "Nook by Jina"
+  }
+]

@@ -1,0 +1,12 @@
+{
+  "storeName": "Nook by Jina",
+  "isOpen": true,
+  "adminWhatsapp": "082273180000",
+  "deliveryConfig": {
+    "configuredArea": "Lhoksukon",
+    "standardFee": 4000,
+    "freeShippingThreshold": 50000
+  },
+  "instagramUrl": "",
+  "updatedAt": "2026-10-21T16:40:04.111Z"
+}

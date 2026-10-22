@@ -1,0 +1,26 @@
+[
+  {
+    "id": "banner-1",
+    "imageUrl": "/images/banner-promo-1.webp",
+    "targetUrl": "/menu",
+    "isActive": true,
+    "sortOrder": 1,
+    "createdAt": "2026-10-17T00:00:00.000Z"
+  },
+  {
+    "id": "banner-2",
+    "imageUrl": "/images/hero-food.webp",
+    "targetUrl": "/produk/nasi-bakar-cakalang",
+    "isActive": true,
+    "sortOrder": 2,
+    "createdAt": "2026-10-17T00:01:00.000Z"
+  },
+  {
+    "id": "banner-3",
+    "imageUrl": "/images/dimsum-mentai.webp",
+    "targetUrl": "/produk/dimsum-mentai",
+    "isActive": true,
+    "sortOrder": 3,
+    "createdAt": "2026-10-17T00:02:00.000Z"
+  }
+]
