@@ -170,9 +170,10 @@ export async function saveOrder(order: Order): Promise<Order> {
     order_number: orderNumber,
     order_status: order.orderStatus || "Pesanan baru",
     payment_status: order.paymentStatus || (isCash ? "Menunggu Pembayaran" : "Menunggu Verifikasi"),
-    payment_method: order.paymentMethod || "QRIS Statis",
-    payment_deadline: order.paymentDeadline || null,
-    subtotal: order.subtotal || 0,
+    payment_deadline:
+      order.paymentDeadline && !isNaN(Date.parse(order.paymentDeadline))
+        ? order.paymentDeadline
+        : new Date(new Date(createdAt).getTime() + 30 * 60 * 1000).toISOString(),
     delivery_fee: order.shippingFee || 0,
     total: order.total || 0,
     customer_name: order.customerName || "",

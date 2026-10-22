@@ -442,17 +442,17 @@ export async function POST(request: Request) {
       orderStatus: "Pesanan baru",
       paymentStatus: isCash ? "Menunggu Pembayaran" : "Menunggu Verifikasi",
       paymentMethod: isCash ? "Cash" : "QRIS Statis",
-      paymentDeadline: isCash ? "" : deadline.toISOString(),
+      paymentDeadline: deadline.toISOString(),
       merchantName: storeSettings.qrisMerchantName || "Nook by Jina",
     };
 
     // Persist to server store
-    await saveOrder(order);
+    const savedOrder = await saveOrder(order);
 
     return NextResponse.json(
       {
         success: true,
-        order,
+        order: savedOrder,
         serverValidated: {
           subtotal: authoritativeSubtotal,
           shippingFee: authoritativeShippingFee,

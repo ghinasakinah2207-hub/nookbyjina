@@ -1,6 +1,8 @@
 import fs from "fs";
 import path from "path";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "./client";
+import { getServiceRoleSupabaseClient } from "./service-role";
 import { StoreSettings } from "@/types";
 import { STORE_SETTINGS as DEFAULT_SETTINGS } from "@/data/dummy-data";
 import { normalizeInstagramUrl } from "@/lib/instagram-url";
@@ -129,13 +131,14 @@ export function validateStoreSettings(settings: StoreSettings): string | null {
  * with the fallback persistent store. Supabase is authoritative whenever
  * a database record is returned.
  */
-export async function getStoreSettings(): Promise<StoreSettings> {
+export async function getStoreSettings(clientOverride?: SupabaseClient): Promise<StoreSettings> {
   const local = readLocalStoreSettings();
+  const client = clientOverride || getServiceRoleSupabaseClient() || supabase;
 
   try {
     // 1. Resilient fetch from public.store_settings
     let ssData: Record<string, unknown> | null = null;
-    const fullSSRes = await supabase
+    const fullSSRes = await client
       .from("store_settings")
       .select(
         "id, store_name, is_open, whatsapp_number, qris_image_url, updated_at, location, operating_hours_text, qris_merchant_name, qris_nmid, tagline, instagram_url, payment_methods"
@@ -145,9 +148,10 @@ export async function getStoreSettings(): Promise<StoreSettings> {
 
     if (!fullSSRes.error && fullSSRes.data) {
       ssData = fullSSRes.data as Record<string, unknown>;
-    } else if (fullSSRes.error?.code === "42703") {
-      // Some extended columns not migrated yet on live database; fall back to baseline columns
-      const baselineSSRes = await supabase
+    } else if (fullSSRes.error) {
+      // Extended columns missing (42703) or column privilege restricted (42501);
+      // gracefully fall back to baseline columns guaranteed to exist
+      const baselineSSRes = await client
         .from("store_settings")
         .select("id, store_name, is_open, whatsapp_number, qris_image_url, updated_at")
         .limit(1)
@@ -159,7 +163,7 @@ export async function getStoreSettings(): Promise<StoreSettings> {
 
     // 2. Resilient fetch from public.delivery_areas
     let daData: Record<string, unknown> | null = null;
-    const fullDARes = await supabase
+    const fullDARes = await client
       .from("delivery_areas")
       .select("id, name, fee, free_shipping_threshold, is_active, sort_order, created_at")
       .eq("is_active", true)
@@ -169,9 +173,9 @@ export async function getStoreSettings(): Promise<StoreSettings> {
 
     if (!fullDARes.error && fullDARes.data) {
       daData = fullDARes.data as Record<string, unknown>;
-    } else if (fullDARes.error?.code === "42703") {
+    } else if (fullDARes.error) {
       // free_shipping_threshold column not added yet; fall back to baseline columns
-      const baselineDARes = await supabase
+      const baselineDARes = await client
         .from("delivery_areas")
         .select("id, name, fee, is_active, sort_order, created_at")
         .eq("is_active", true)

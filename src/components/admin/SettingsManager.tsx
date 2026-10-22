@@ -156,6 +156,27 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
       try {
         const result = await saveStoreSettingsAction(payload);
         if (result.success && result.settings) {
+          // Verification: verify that the reloaded persisted settings match the submitted values
+          const savedWa = (result.settings.adminWhatsapp || "").replace(/[^0-9]/g, "");
+          const submittedWa = payload.adminWhatsapp.replace(/[^0-9]/g, "");
+          const savedIg = (result.settings.instagramUrl || "").trim();
+          const submittedIg = (payload.instagramUrl || "").trim();
+
+          const waMismatch = submittedWa && savedWa !== submittedWa;
+          const igMismatch = submittedIg && savedIg !== submittedIg;
+
+          if (waMismatch || igMismatch) {
+            const mismatchFields: string[] = [];
+            if (waMismatch) mismatchFields.push(`WhatsApp (tersimpan: "${savedWa || "kosong"}")`);
+            if (igMismatch) mismatchFields.push(`Instagram (tersimpan: "${savedIg || "kosong"}")`);
+
+            setErrorMessage(
+              `Sebagian pengaturan tidak terverifikasi di server: ${mismatchFields.join(", ")}. Nilai input Anda tetap dipertahankan. Silakan periksa koneksi atau schema database.`
+            );
+            // Preserve user's entered formState so inputs do NOT disappear
+            return;
+          }
+
           setConfirmedSettings(result.settings);
           setFormState(result.settings);
           setStandardFeeDraft(String(result.settings.deliveryConfig.standardFee));
@@ -168,6 +189,7 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
           setErrorMessage(
             result.error || "Gagal menyimpan pengaturan ke database."
           );
+          // Preserve user input on failure (formState is untouched)
         }
       } catch (err: unknown) {
         const msg =
@@ -175,6 +197,7 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
             ? err.message
             : "Terjadi kesalahan tidak terduga saat menyimpan.";
         setErrorMessage(msg);
+        // Preserve user input on error (formState is untouched)
       }
     });
   };

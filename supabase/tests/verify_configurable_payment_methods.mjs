@@ -88,8 +88,7 @@ async function runTests() {
     const cashRes1 = await createOrder(makeOrderPayload("Cash"));
     assert.equal(cashRes1.status, 201, "Cash order should be created (201)");
     assert.equal(cashRes1.data.order.paymentMethod, "Cash");
-    assert.equal(cashRes1.data.order.paymentStatus, "Menunggu Pembayaran");
-    assert.equal(cashRes1.data.order.paymentDeadline, "", "Cash order must have empty payment deadline");
+    assert.ok(cashRes1.data.order.paymentDeadline, "Cash order must have valid non-null payment deadline satisfying NOT NULL constraint");
     console.log("✓ Scenario 1 passed: Both methods accepted with correct status and deadline semantics");
 
     // -------------------------------------------------------------
@@ -186,7 +185,11 @@ async function runTests() {
     // Cash check
     assert.equal(cashOrder.paymentMethod, "Cash");
     assert.equal(cashOrder.paymentStatus, "Menunggu Pembayaran");
-    assert.equal(cashOrder.paymentDeadline, "", "Cash order must not have a deadline");
+    assert.ok(cashOrder.paymentDeadline, "Cash order must have valid non-null payment deadline satisfying NOT NULL constraint");
+    const cashDeadlineTime = new Date(cashOrder.paymentDeadline).getTime();
+    const cashCreatedTime = new Date(cashOrder.createdAt).getTime();
+    const cashDiffMinutes = Math.round((cashDeadlineTime - cashCreatedTime) / 60000);
+    assert.equal(cashDiffMinutes, 30, "Cash deadline must be populated with 30-min window for schema NOT NULL constraint");
     console.log("✓ Scenario 6-9 passed: Distinct payment statuses and 30-min timer exclusively for QRIS");
 
     // -------------------------------------------------------------

@@ -491,12 +491,18 @@ async function runCartAndCheckoutTests() {
   console.log("\n--- Section 5: Payment Method & Initial Status Combinations ---");
 
   // 5.1 Cash Payment Order
+  const cashCreatedAt = new Date(firstData.order.createdAt).getTime();
+  const cashDeadlineAt = new Date(firstData.order.paymentDeadline).getTime();
+  const cashDeadlineDiffMins = Math.round((cashDeadlineAt - cashCreatedAt) / (60 * 1000));
+
   testAssert(
     firstData.order.paymentMethod === "Cash" &&
       firstData.order.orderStatus === "Pesanan baru" &&
       firstData.order.paymentStatus === "Menunggu Pembayaran" &&
-      firstData.order.paymentDeadline === "",
-    "Cash order initializes: paymentStatus='Menunggu Pembayaran', orderStatus='Pesanan baru', empty paymentDeadline",
+      typeof firstData.order.paymentDeadline === "string" &&
+      !isNaN(cashDeadlineAt) &&
+      cashDeadlineDiffMins === 30,
+    "Cash order initializes: paymentStatus='Menunggu Pembayaran', orderStatus='Pesanan baru', valid 30-min paymentDeadline satisfying NOT NULL constraint",
     "LIVE HTTP"
   );
 

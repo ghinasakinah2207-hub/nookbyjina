@@ -195,10 +195,10 @@ export async function saveStoreSettingsAction(
   writeLocalStoreSettings(settings);
 
   // 3. Persist to Supabase
-  try {
-    const client =
-      getServiceRoleSupabaseClient() || (await createServerSupabaseClient());
+  const client =
+    getServiceRoleSupabaseClient() || (await createServerSupabaseClient());
 
+  try {
     // Check existing store_settings row
     const { data: existingSS, error: ssCheckErr } = await client
       .from("store_settings")
@@ -404,7 +404,7 @@ export async function saveStoreSettingsAction(
   revalidatePath("/checkout");
   revalidatePath("/");
 
-  const confirmedSettings = await getStoreSettings();
+  const confirmedSettings = await getStoreSettings(client);
   return { success: true, settings: confirmedSettings };
 }
 

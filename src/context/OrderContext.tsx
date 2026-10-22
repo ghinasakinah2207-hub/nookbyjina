@@ -207,7 +207,7 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
       orderStatus: "Pesanan baru",
       paymentStatus: isCash ? "Menunggu Pembayaran" : "Menunggu Verifikasi",
       paymentMethod: isCash ? "Cash" : "QRIS Statis",
-      paymentDeadline: isCash ? "" : deadline.toISOString(),
+      paymentDeadline: deadline.toISOString(),
       merchantName: STORE_SETTINGS.qrisMerchantName,
     };
 

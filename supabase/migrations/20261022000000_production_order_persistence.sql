@@ -304,12 +304,22 @@ BEGIN
       RAISE EXCEPTION 'Status pembayaran awal untuk Cash harus "Menunggu Pembayaran".' USING ERRCODE = '22000';
     END IF;
     v_payment_status := 'Menunggu Pembayaran';
-    v_deadline := NULL;
   ELSE
     IF p_order->>'paymentStatus' IS NOT NULL AND p_order->>'paymentStatus' != 'Menunggu Verifikasi' THEN
       RAISE EXCEPTION 'Status pembayaran awal untuk QRIS Statis harus "Menunggu Verifikasi".' USING ERRCODE = '22000';
     END IF;
     v_payment_status := 'Menunggu Verifikasi';
+  END IF;
+
+  -- 4b. Authoritative 30-minute payment deadline (satisfies orders.payment_deadline NOT NULL)
+  -- Accepts valid client timestamp or authoritatively derives 30 minutes from creation
+  IF p_order->>'paymentDeadline' IS NOT NULL AND length(trim(p_order->>'paymentDeadline')) > 0 THEN
+    BEGIN
+      v_deadline := (p_order->>'paymentDeadline')::timestamptz;
+    EXCEPTION WHEN OTHERS THEN
+      v_deadline := v_created_at + interval '30 minutes';
+    END;
+  ELSE
     v_deadline := v_created_at + interval '30 minutes';
   END IF;
 
