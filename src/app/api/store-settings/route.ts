@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import {
   getStoreSettings,
   writeLocalStoreSettings,
@@ -198,11 +198,18 @@ export async function POST(request: Request) {
     }
 
     // 3. Invalidate caches for storefront and admin
+    try {
+      revalidateTag("store-settings", { expire: 0 });
+    } catch {
+      // Graceful fallback if called outside Next.js request
+    }
     revalidatePath("/pembayaran", "layout");
     revalidatePath("/checkout");
     revalidatePath("/keranjang");
     revalidatePath("/home");
+    revalidatePath("/menu");
     revalidatePath("/admin/pengaturan");
+    revalidatePath("/");
 
     const confirmed = await getStoreSettings();
     return NextResponse.json(

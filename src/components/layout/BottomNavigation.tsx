@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, UtensilsCrossed, ShoppingBag, ReceiptText } from "lucide-react";
@@ -9,6 +9,34 @@ import { useCart } from "@/context/CartContext";
 export function BottomNavigation() {
   const pathname = usePathname();
   const { itemCount, isHydrated } = useCart();
+  const [targetHref, setTargetHref] = useState<string | null>(null);
+  const cancelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Derived optimistic pending destination: automatically clears when pathname matches
+  const pendingHref = targetHref !== null && targetHref !== pathname ? targetHref : null;
+
+  // Handle browser Back / Forward (popstate) and bfcache restoration (pageshow)
+  useEffect(() => {
+    const handleRestore = () => {
+      setTargetHref(null);
+      if (cancelTimerRef.current) {
+        clearTimeout(cancelTimerRef.current);
+        cancelTimerRef.current = null;
+      }
+    };
+
+    window.addEventListener("popstate", handleRestore);
+    window.addEventListener("pageshow", handleRestore);
+
+    return () => {
+      window.removeEventListener("popstate", handleRestore);
+      window.removeEventListener("pageshow", handleRestore);
+      if (cancelTimerRef.current) {
+        clearTimeout(cancelTimerRef.current);
+        cancelTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Hide bottom navigation on welcome page (/), checkout, payment, and success screens
   if (
@@ -20,31 +48,59 @@ export function BottomNavigation() {
     return null;
   }
 
+  const handleNavClick = (href: string) => {
+    // If clicking current route, ignore
+    if (pathname === href || (href !== "/home" && pathname.startsWith(href))) {
+      return;
+    }
+
+    if (cancelTimerRef.current) {
+      clearTimeout(cancelTimerRef.current);
+    }
+
+    setTargetHref(href);
+
+    // Safety timeout: cancel optimistic highlight after 2500ms if navigation fails or is aborted
+    cancelTimerRef.current = setTimeout(() => {
+      setTargetHref(null);
+      cancelTimerRef.current = null;
+    }, 2500);
+  };
+
   const navItems = [
     {
       label: "Home",
       href: "/home",
       icon: Home,
-      isActive: pathname === "/home",
+      isActive:
+        pendingHref === "/home" ||
+        (pendingHref === null && pathname === "/home"),
     },
     {
       label: "Menu",
       href: "/menu",
       icon: UtensilsCrossed,
-      isActive: pathname.startsWith("/menu") || pathname.startsWith("/produk"),
+      isActive:
+        pendingHref === "/menu" ||
+        (pendingHref === null &&
+          (pathname.startsWith("/menu") || pathname.startsWith("/produk"))),
     },
     {
       label: "Keranjang",
       href: "/keranjang",
       icon: ShoppingBag,
-      isActive: pathname.startsWith("/keranjang"),
+      isActive:
+        pendingHref === "/keranjang" ||
+        (pendingHref === null && pathname.startsWith("/keranjang")),
       badgeCount: isHydrated ? itemCount : 0,
     },
     {
       label: "Pesanan",
       href: "/pesanan",
       icon: ReceiptText,
-      isActive: pathname.startsWith("/pesanan"),
+      isActive:
+        pendingHref === "/pesanan" ||
+        (pendingHref === null && pathname.startsWith("/pesanan")),
     },
   ];
 
@@ -56,11 +112,14 @@ export function BottomNavigation() {
       <div className="max-w-md mx-auto flex items-center justify-around h-16 px-2">
         {navItems.map((item) => {
           const IconComponent = item.icon;
+          const isPending = pendingHref === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center flex-1 h-full py-1 min-h-[48px] transition-colors ${
+              prefetch={true}
+              onClick={() => handleNavClick(item.href)}
+              className={`flex flex-col items-center justify-center flex-1 h-full py-1 min-h-[48px] transition-colors select-none ${
                 item.isActive
                   ? "text-[#F25B09] font-medium"
                   : "text-[#737373] hover:text-[#111111]"
@@ -68,7 +127,9 @@ export function BottomNavigation() {
             >
               <div className="relative flex items-center justify-center w-6 h-6">
                 <IconComponent
-                  className="w-5 h-5 transition-transform"
+                  className={`w-5 h-5 transition-transform duration-150 ${
+                    isPending ? "scale-110" : ""
+                  }`}
                   strokeWidth={item.isActive ? 2.3 : 1.8}
                   aria-hidden="true"
                 />

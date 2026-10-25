@@ -114,27 +114,50 @@ export function LandingOrderCta({ isOpen }: LandingOrderCtaProps) {
     >
       {/* 1. ORDER Text Label */}
       <span className="font-bold text-xs sm:text-sm tracking-[0.22em] uppercase text-white transition-colors group-hover:text-white pl-1.5 sm:pl-2">
-        ORDER
+        {isNavigating ? "MEMUAT..." : "ORDER"}
       </span>
 
-      {/* 2. Vibrant Orange Accent Circle with Animated Forward Arrow */}
+      {/* 2. Vibrant Orange Accent Circle with Animated Forward Arrow or Spinner */}
       <div
         className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-full bg-[#F25B09] group-hover:bg-[#ff6817] flex items-center justify-center text-white transition-all duration-150 ease-out group-hover:scale-105 shrink-0"
         aria-hidden="true"
       >
-        <svg
-          className="w-4 h-4 text-white transition-transform duration-150 ease-out group-hover:translate-x-0.5 animate-order-nudge"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2.5}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-          />
-        </svg>
+        {isNavigating ? (
+          <svg
+            className="w-4 h-4 text-white animate-spin"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+        ) : (
+          <svg
+            className="w-4 h-4 text-white transition-transform duration-150 ease-out group-hover:translate-x-0.5 animate-order-nudge"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
+            />
+          </svg>
+        )}
       </div>
 
       {/* 3. Subtle Hover Light-Sweep Shimmer across button surface on desktop */}

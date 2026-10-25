@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { unstable_cache } from "next/cache";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "./client";
 import { getServiceRoleSupabaseClient } from "./service-role";
@@ -127,25 +128,36 @@ export function validateStoreSettings(settings: StoreSettings): string | null {
 }
 
 /**
- * Fetches confirmed store settings by merging Supabase database columns
- * with the fallback persistent store. Supabase is authoritative whenever
- * a database record is returned.
+ * Fetches confirmed store settings directly from Supabase with parallel queries.
  */
-export async function getStoreSettings(clientOverride?: SupabaseClient): Promise<StoreSettings> {
+export async function fetchAuthoritativeStoreSettings(
+  clientOverride?: SupabaseClient
+): Promise<StoreSettings> {
   const local = readLocalStoreSettings();
   const client = clientOverride || getServiceRoleSupabaseClient() || supabase;
 
   try {
-    // 1. Resilient fetch from public.store_settings
-    let ssData: Record<string, unknown> | null = null;
-    const fullSSRes = await client
-      .from("store_settings")
-      .select(
-        "id, store_name, is_open, whatsapp_number, qris_image_url, updated_at, location, operating_hours_text, qris_merchant_name, qris_nmid, tagline, instagram_url, payment_methods"
-      )
-      .limit(1)
-      .maybeSingle();
+    // 1. Parallel fetch from public.store_settings and public.delivery_areas
+    const [fullSSRes, fullDARes] = await Promise.all([
+      client
+        .from("store_settings")
+        .select(
+          "id, store_name, is_open, whatsapp_number, qris_image_url, updated_at, location, operating_hours_text, qris_merchant_name, qris_nmid, tagline, instagram_url, payment_methods"
+        )
+        .limit(1)
+        .maybeSingle(),
+      client
+        .from("delivery_areas")
+        .select(
+          "id, name, fee, free_shipping_threshold, is_active, sort_order, created_at"
+        )
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
+    let ssData: Record<string, unknown> | null = null;
     if (!fullSSRes.error && fullSSRes.data) {
       ssData = fullSSRes.data as Record<string, unknown>;
     } else if (fullSSRes.error) {
@@ -161,16 +173,7 @@ export async function getStoreSettings(clientOverride?: SupabaseClient): Promise
       }
     }
 
-    // 2. Resilient fetch from public.delivery_areas
     let daData: Record<string, unknown> | null = null;
-    const fullDARes = await client
-      .from("delivery_areas")
-      .select("id, name, fee, free_shipping_threshold, is_active, sort_order, created_at")
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
     if (!fullDARes.error && fullDARes.data) {
       daData = fullDARes.data as Record<string, unknown>;
     } else if (fullDARes.error) {
@@ -253,7 +256,37 @@ export async function getStoreSettings(clientOverride?: SupabaseClient): Promise
 
     return merged;
   } catch (err) {
-    console.error("Database query failed in getStoreSettings:", err);
+    console.error("Database query failed in fetchAuthoritativeStoreSettings:", err);
     return local;
+  }
+}
+
+const cachedStoreSettingsFetcher = unstable_cache(
+  async () => fetchAuthoritativeStoreSettings(),
+  ["store-settings-key"],
+  {
+    tags: ["store-settings"],
+    revalidate: 60,
+  }
+);
+
+/**
+ * Fetches confirmed store settings by merging Supabase database columns
+ * with the fallback persistent store. Uses Next.js data cache with tag 'store-settings'
+ * for fast storefront rendering and falls back gracefully to live query outside Next.js runtime.
+ */
+export async function getStoreSettings(
+  clientOverride?: SupabaseClient,
+  options?: { fresh?: boolean }
+): Promise<StoreSettings> {
+  if (clientOverride || options?.fresh || !cachedStoreSettingsFetcher) {
+    return fetchAuthoritativeStoreSettings(clientOverride);
+  }
+
+  try {
+    return await cachedStoreSettingsFetcher();
+  } catch {
+    // Outside Next.js incrementalCache (e.g. tsx test suites or non-cache contexts)
+    return fetchAuthoritativeStoreSettings(clientOverride);
   }
 }

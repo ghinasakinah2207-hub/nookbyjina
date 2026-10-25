@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import Image from "next/image";
 import { getStoreSettings } from "@/lib/supabase/store-settings";
 import { LandingOrderCta } from "@/components/home/LandingOrderCta";
@@ -6,10 +6,12 @@ import { WelcomeIntroAnimation } from "@/components/home/WelcomeIntroAnimation";
 
 export const instant = false;
 
-export default async function WelcomeLandingPage() {
+async function DynamicLandingOrderCta() {
   const settings = await getStoreSettings();
-  const isOpen = settings.isOpen;
+  return <LandingOrderCta isOpen={settings.isOpen} />;
+}
 
+export default function WelcomeLandingPage() {
   return (
     <div className="relative h-screen h-[100dvh] h-[100svh] min-h-[100svh] max-h-[100svh] w-full max-w-full overflow-hidden bg-black flex items-center justify-center">
       {/* Cinematic Full-screen Background with Subtle Blur and Contrast Overlay */}
@@ -45,9 +47,11 @@ export default async function WelcomeLandingPage() {
           />
         </div>
 
-        {/* Pill ORDER Button Immediately Below */}
-        <div className="w-full flex items-center justify-center">
-          <LandingOrderCta isOpen={isOpen} />
+        {/* Pill ORDER Button Immediately Below (Streaming Shell) */}
+        <div className="w-full flex items-center justify-center min-h-[55px] sm:min-h-[60px]">
+          <Suspense fallback={<LandingOrderCta isOpen={true} />}>
+            <DynamicLandingOrderCta />
+          </Suspense>
         </div>
       </main>
     </div>

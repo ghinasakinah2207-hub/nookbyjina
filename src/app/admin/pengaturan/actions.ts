@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
 import {
@@ -394,7 +394,12 @@ export async function saveStoreSettingsAction(
     return { success: false, error: message };
   }
 
-  // 4. Revalidate all storefront and admin pages
+  // 4. Revalidate all storefront and admin pages and invalidate data cache
+  try {
+    revalidateTag("store-settings", { expire: 0 });
+  } catch {
+    // Graceful fallback if called outside Next.js request
+  }
   revalidatePath("/admin/pengaturan");
   revalidatePath("/admin/pembayaran");
   revalidatePath("/pembayaran", "layout");
@@ -475,6 +480,11 @@ export async function toggleStoreStatusAction(
     return { success: false, error: message };
   }
 
+  try {
+    revalidateTag("store-settings", { expire: 0 });
+  } catch {
+    // Graceful fallback if called outside Next.js request
+  }
   revalidatePath("/admin/pengaturan");
   revalidatePath("/home");
   revalidatePath("/menu");

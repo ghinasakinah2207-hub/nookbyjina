@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     } = body;
 
     // 1. Fetch authoritative store settings from database/persistent store
-    const storeSettings = await getStoreSettings();
+    const storeSettings = await getStoreSettings(undefined, { fresh: true });
 
     // 2. Reject if store is closed
     if (!storeSettings.isOpen) {

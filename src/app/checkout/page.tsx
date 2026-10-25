@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import Link from "next/link";
 import { Store } from "lucide-react";
 import { getStoreSettings } from "@/lib/supabase/store-settings";
@@ -37,5 +37,9 @@ export default async function CheckoutPage() {
     );
   }
 
-  return <CheckoutClient initialStoreSettings={storeSettings} />;
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#F6F6F7]" />}>
+      <CheckoutClient initialStoreSettings={storeSettings} />
+    </Suspense>
+  );
 }
