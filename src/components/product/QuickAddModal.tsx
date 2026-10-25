@@ -72,6 +72,9 @@ function QuickAddForm({ product, onClose }: QuickAddFormProps) {
             groupName: group.name,
             valueId: val.id,
             valueName: val.name,
+            optionValueId: val.id,
+            optionValue: val.name,
+            optionName: group.name,
             priceDelta: val.priceDelta,
           });
         }

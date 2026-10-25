@@ -60,6 +60,9 @@ export interface SelectedOption {
   valueId: string;
   valueName: string;
   priceDelta: number;
+  optionValueId?: string;
+  optionValue?: string;
+  optionName?: string;
 }
 
 export interface SelectedAddon {

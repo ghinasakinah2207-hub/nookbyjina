@@ -228,8 +228,8 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
                       {/* Selected Options & Addons */}
                       <div className="text-[11px] text-[#737373] mt-1 space-y-0.5">
                         {item.selectedOptions.map((opt) => (
-                          <div key={opt.groupId}>
-                            • {opt.groupName}: <span className="text-[#111111]">{opt.valueName}</span>
+                          <div key={opt.groupId || opt.optionName || opt.valueId}>
+                            • {opt.groupName || opt.optionName}: <span className="text-[#111111]">{opt.valueName || opt.optionValue}</span>
                           </div>
                         ))}
                         {item.selectedAddons.length > 0 ? (

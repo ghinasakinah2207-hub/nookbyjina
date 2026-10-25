@@ -471,7 +471,7 @@ Terima kasih telah memesan di Nook by Jina!`;
                 {item.selectedOptions.length > 0 ? (
                   <p className="text-[11px] text-[#737373]">
                     {item.selectedOptions
-                      .map((o) => `${o.groupName}: ${o.valueName}`)
+                      .map((o) => `${o.groupName || o.optionName}: ${o.valueName || o.optionValue}`)
                       .join(" • ")}
                   </p>
                 ) : null}

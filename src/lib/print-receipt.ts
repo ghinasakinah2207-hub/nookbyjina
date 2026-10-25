@@ -67,7 +67,7 @@ export function generateCustomerReceiptHtml(order: Order, width: "58mm" | "80mm"
               .map(
                 (opt) =>
                   `<div style="padding-left: 10px; font-size: ${is58mm ? "9px" : "10px"}; color: #333;">
-                    • ${escapeHtml(opt.groupName)}: ${escapeHtml(opt.valueName)}${
+                    • ${escapeHtml(opt.groupName || opt.optionName || "")}: ${escapeHtml(opt.valueName || opt.optionValue || "")}${
                     opt.priceDelta > 0 ? ` (+${formatRupiah(opt.priceDelta)})` : ""
                   }
                   </div>`

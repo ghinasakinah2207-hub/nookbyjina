@@ -172,7 +172,7 @@ export function OrderReceipt({
               <div className="text-[9px] pl-3 text-neutral-800 space-y-0.5 mt-0.5">
                 {item.selectedOptions.map((opt, i) => (
                   <div key={i} className="break-words">
-                    • {opt.groupName}: {opt.valueName}
+                    • {opt.groupName || opt.optionName}: {opt.valueName || opt.optionValue}
                     {opt.priceDelta > 0
                       ? ` (+${formatRupiah(opt.priceDelta)})`
                       : ""}

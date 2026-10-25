@@ -232,6 +232,90 @@ async function runTests() {
   );
   console.log("✅ PASSED: Mismatched, non-initial, and invalid lifecycle transitions are strictly rejected.");
 
+  // 5. Variant Option & Add-on Flow (Risol Mayo Regression)
+  console.log("=== 5. Testing Variant Option & Add-on Flow (Risol Mayo Regression) ===");
+  const variantToken = generateSecureOrderToken();
+  const variantOrderId = `TJ-RISOL-${Date.now()}`;
+  const variantOrder: Order = {
+    id: variantOrderId,
+    token: variantToken,
+    createdAt: new Date().toISOString(),
+    customerName: "Pembeli Risol Mayo",
+    customerWhatsapp: "081234567890",
+    fulfillmentType: "pickup",
+    deliveryArea: "Pickup Toko (Lhoksukon)",
+    orderNote: "Tolong banyakin saus",
+    items: [
+      {
+        id: "item-risol-1",
+        productId: "b0000001-0000-4000-8000-000000000003",
+        productName: "Risol Mayo Beef Lumer (Isi 3)",
+        productImage: "/images/risol-mayo.webp",
+        basePrice: 18000,
+        unitPrice: 19500,
+        quantity: 1,
+        itemTotal: 19500,
+        itemNote: "",
+        isAvailable: true,
+        selectedOptions: [
+          {
+            groupId: "b0000003-0000-4000-8000-000000000004",
+            groupName: "Varian Rasa",
+            valueId: "b0000004-0000-4000-8000-000000000008",
+            valueName: "Original Mayo Creamy",
+            optionValueId: "b0000004-0000-4000-8000-000000000008",
+            optionValue: "Original Mayo Creamy",
+            optionName: "Varian Rasa",
+            priceDelta: 0,
+          },
+        ],
+        selectedAddons: [
+          {
+            addonId: "addon-saus-cocol",
+            addonName: "Ekstra Saus Sambal Cocol",
+            price: 1500,
+          },
+        ],
+      },
+    ],
+    subtotal: 19500,
+    shippingFee: 0,
+    total: 19500,
+    orderStatus: "Pesanan baru",
+    paymentStatus: "Menunggu Pembayaran",
+    paymentMethod: "Cash",
+    paymentDeadline: "",
+    merchantName: "Nook by Jina",
+  };
+
+  const savedVariantOrder = await saveOrder(variantOrder);
+  assert.strictEqual(savedVariantOrder.items.length, 1, "Order item created");
+  const savedItem = savedVariantOrder.items[0];
+  assert.strictEqual(savedItem.selectedOptions.length, 1, "Selected options preserved");
+  assert.strictEqual(
+    savedItem.selectedOptions[0].optionValue || savedItem.selectedOptions[0].valueName,
+    "Original Mayo Creamy",
+    "optionValue is preserved and non-empty"
+  );
+  assert.strictEqual(
+    savedItem.selectedOptions[0].valueName || savedItem.selectedOptions[0].optionValue,
+    "Original Mayo Creamy",
+    "valueName is preserved and non-empty"
+  );
+  assert.strictEqual(savedItem.selectedAddons.length, 1, "Selected addons preserved");
+  assert.strictEqual(savedItem.selectedAddons[0].addonName, "Ekstra Saus Sambal Cocol");
+
+  // Verify retrieval by token
+  const retrievedVariantOrder = await getOrderByToken(variantToken);
+  assert(retrievedVariantOrder !== null, "Variant order retrievable by token");
+  const retrievedOpt = retrievedVariantOrder?.items[0]?.selectedOptions[0];
+  assert.strictEqual(
+    retrievedOpt?.optionValue || retrievedOpt?.valueName,
+    "Original Mayo Creamy",
+    "Retrieved option has non-empty optionValue/valueName"
+  );
+  console.log("✅ PASSED: Variant option and addon regression verified successfully.");
+
   console.log("\n==================================================================");
   console.log("🎉 ALL PAYMENT & TOKEN VAULT INVARIANT TESTS PASSED (0 FAILURES)!");
   console.log("==================================================================\n");

@@ -402,7 +402,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                     </p>
                     {item.selectedOptions.length > 0 ? (
                       <p className="text-[11px] text-[#737373] truncate">
-                        {item.selectedOptions.map((o) => o.valueName).join(", ")}
+                        {item.selectedOptions.map((o) => o.valueName || o.optionValue).join(", ")}
                       </p>
                     ) : null}
                     {item.itemNote ? (

@@ -179,7 +179,15 @@ export async function POST(request: Request) {
 
       if (Array.isArray(item.selectedOptions)) {
         for (const opt of item.selectedOptions) {
-          const rawValId = (opt.valueId || opt.valueName || "").trim().toLowerCase();
+          const rawValId = (
+            opt.optionValueId ||
+            opt.valueId ||
+            opt.optionValue ||
+            opt.valueName ||
+            ""
+          )
+            .trim()
+            .toLowerCase();
           let foundGroup: OptionGroup | undefined;
           let foundVal: OptionValue | undefined;
 
@@ -188,7 +196,8 @@ export async function POST(request: Request) {
               (val) =>
                 val.id.toLowerCase() === rawValId ||
                 val.name.toLowerCase() === rawValId ||
-                val.name.toLowerCase() === (opt.valueName || "").trim().toLowerCase()
+                val.name.toLowerCase() ===
+                  (opt.optionValue || opt.valueName || "").trim().toLowerCase()
             );
             if (v) {
               foundGroup = g;
@@ -201,7 +210,7 @@ export async function POST(request: Request) {
             return NextResponse.json(
               {
                 success: false,
-                error: `Pilihan varian "${opt.valueName || opt.valueId}" tidak valid untuk produk "${catalogProduct.name}".`,
+                error: `Pilihan varian "${opt.optionValue || opt.valueName || opt.optionValueId || opt.valueId}" tidak valid untuk produk "${catalogProduct.name}".`,
               },
               { status: 400 }
             );
@@ -228,6 +237,9 @@ export async function POST(request: Request) {
             groupName: foundGroup.name,
             valueId: foundVal.id,
             valueName: foundVal.name,
+            optionValueId: foundVal.id,
+            optionValue: foundVal.name,
+            optionName: foundGroup.name,
             priceDelta: Number(foundVal.priceDelta || 0),
           });
         }

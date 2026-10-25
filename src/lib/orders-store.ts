@@ -91,7 +91,24 @@ function mapDatabaseRowToOrder(row: Record<string, unknown>, rawToken?: string):
     fulfillmentType: ((row.fulfillment_method as string) || "delivery") as "pickup" | "delivery",
     deliveryArea: (row.delivery_area as string) || "Lhoksukon",
     orderNote: (row.customer_note as string) || "",
-    items: Array.isArray(row.items_snapshot) ? (row.items_snapshot as Order["items"]) : [],
+    items: Array.isArray(row.items_snapshot)
+      ? (row.items_snapshot as Order["items"]).map((item) => ({
+          ...item,
+          selectedOptions: Array.isArray(item.selectedOptions)
+            ? item.selectedOptions.map((opt) => ({
+                ...opt,
+                groupId: opt.groupId || opt.optionName || "",
+                groupName: opt.groupName || opt.optionName || "",
+                optionName: opt.optionName || opt.groupName || "",
+                valueId: opt.valueId || opt.optionValueId || "",
+                valueName: opt.valueName || opt.optionValue || "",
+                optionValueId: opt.optionValueId || opt.valueId || "",
+                optionValue: opt.optionValue || opt.valueName || "",
+                priceDelta: Number(opt.priceDelta || 0),
+              }))
+            : [],
+        }))
+      : [],
     subtotal: Number(row.subtotal || 0),
     shippingFee: Number(row.delivery_fee || 0),
     total: Number(row.total || 0),
@@ -181,8 +198,29 @@ export async function saveOrder(order: Order): Promise<Order> {
   });
 
   if (!rpcErr && rpcResult && typeof rpcResult === "object") {
+    const rawOrder = rpcResult as Order;
+    const normalizedItems = Array.isArray(rawOrder.items)
+      ? rawOrder.items.map((item) => ({
+          ...item,
+          selectedOptions: Array.isArray(item.selectedOptions)
+            ? item.selectedOptions.map((opt) => ({
+                ...opt,
+                groupId: opt.groupId || opt.optionName || "",
+                groupName: opt.groupName || opt.optionName || "",
+                optionName: opt.optionName || opt.groupName || "",
+                valueId: opt.valueId || opt.optionValueId || "",
+                valueName: opt.valueName || opt.optionValue || "",
+                optionValueId: opt.optionValueId || opt.valueId || "",
+                optionValue: opt.optionValue || opt.valueName || "",
+                priceDelta: Number(opt.priceDelta || 0),
+              }))
+            : [],
+        }))
+      : [];
+
     return {
-      ...(rpcResult as Order),
+      ...rawOrder,
+      items: normalizedItems,
       token: order.token, // preserve raw token for customer checkout response
     };
   }

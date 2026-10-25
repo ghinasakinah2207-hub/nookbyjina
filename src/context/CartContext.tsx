@@ -61,8 +61,22 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
               const prod = PRODUCTS.find(
                 (p) => p.id === item.productId || p.slug === item.productId
               );
+              const normalizedOptions = Array.isArray(item.selectedOptions)
+                ? item.selectedOptions.map((opt) => ({
+                    ...opt,
+                    groupId: opt.groupId || opt.optionName || "",
+                    groupName: opt.groupName || opt.optionName || "",
+                    valueId: opt.valueId || opt.optionValueId || "",
+                    valueName: opt.valueName || opt.optionValue || "",
+                    optionValueId: opt.optionValueId || opt.valueId || "",
+                    optionValue: opt.optionValue || opt.valueName || "",
+                    optionName: opt.optionName || opt.groupName || "",
+                    priceDelta: Number(opt.priceDelta || 0),
+                  }))
+                : [];
               return {
                 ...item,
+                selectedOptions: normalizedOptions,
                 isAvailable: prod ? prod.isAvailable : (item.isAvailable ?? true),
               };
             })
@@ -152,8 +166,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       note: string
     ) => {
       const sortedOpts = [...options]
-        .sort((a, b) => a.groupId.localeCompare(b.groupId))
-        .map((o) => `${o.groupId}:${o.valueId}`)
+        .sort((a, b) => (a.groupId || a.optionName || "").localeCompare(b.groupId || b.optionName || ""))
+        .map((o) => `${o.groupId || o.optionName}:${o.valueId || o.optionValueId}`)
         .join("|");
 
       const sortedAddons = [...addons]
@@ -177,14 +191,26 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (quantity <= 0 || !product.isAvailable) return;
 
       const trimmedNote = itemNote.slice(0, 200).trim();
+      const normalizedOptions = options.map((opt) => ({
+        ...opt,
+        groupId: opt.groupId || opt.optionName || "",
+        groupName: opt.groupName || opt.optionName || "",
+        valueId: opt.valueId || opt.optionValueId || "",
+        valueName: opt.valueName || opt.optionValue || "",
+        optionValueId: opt.optionValueId || opt.valueId || "",
+        optionValue: opt.optionValue || opt.valueName || "",
+        optionName: opt.optionName || opt.groupName || "",
+        priceDelta: Number(opt.priceDelta || 0),
+      }));
+
       const itemId = createItemCompositeKey(
         product.id,
-        options,
+        normalizedOptions,
         addons,
         trimmedNote
       );
 
-      const optionsDelta = options.reduce((sum, o) => sum + o.priceDelta, 0);
+      const optionsDelta = normalizedOptions.reduce((sum, o) => sum + o.priceDelta, 0);
       const addonsDelta = addons.reduce((sum, a) => sum + a.price, 0);
       const unitPrice = product.basePrice + optionsDelta + addonsDelta;
 
@@ -209,7 +235,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             productName: product.name,
             productImage: product.images[0] || "/images/hero-food.webp",
             basePrice: product.basePrice,
-            selectedOptions: options,
+            selectedOptions: normalizedOptions,
             selectedAddons: addons,
             itemNote: trimmedNote,
             quantity,

@@ -823,7 +823,7 @@ export function OrdersManager() {
                       </div>
                       {item.selectedOptions.length > 0 && (
                         <p className="text-[11px] text-[#737373]">
-                          Opsi: {item.selectedOptions.map((o) => `${o.groupName}: ${o.valueName}`).join(", ")}
+                          Opsi: {item.selectedOptions.map((o) => `${o.groupName || o.optionName}: ${o.valueName || o.optionValue}`).join(", ")}
                         </p>
                       )}
                       {item.selectedAddons.length > 0 && (
