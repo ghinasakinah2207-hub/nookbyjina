@@ -239,7 +239,7 @@ export const PRODUCTS: Product[] = [
 
 export const BANNERS: Banner[] = [
   {
-    id: "banner-1",
+    id: "d0000001-0000-4000-8000-000000000001",
     title: "Sajian Homemade Penuh Rasa",
     subtitle: "Pre-order menu favoritmu hari ini untuk area Lhoksukon & sekitarnya.",
     imageUrl: "/images/banner-promo-1.webp",
@@ -247,7 +247,7 @@ export const BANNERS: Banner[] = [
     isActive: true,
   },
   {
-    id: "banner-2",
+    id: "d0000001-0000-4000-8000-000000000002",
     title: "Nasi Bakar Cakalang Asap",
     subtitle: "Aroma daun kemangi & suwiran cakalang asap gurih pedas khas Nook by Jina.",
     imageUrl: "/images/hero-food.webp",
@@ -255,7 +255,7 @@ export const BANNERS: Banner[] = [
     isActive: true,
   },
   {
-    id: "banner-3",
+    id: "d0000001-0000-4000-8000-000000000003",
     title: "Dimsum Mentai Homemade",
     subtitle: "Siomay ayam udang lembut dengan saus mentai bakar harum & taburan tobiko.",
     imageUrl: "/images/dimsum-mentai.webp",

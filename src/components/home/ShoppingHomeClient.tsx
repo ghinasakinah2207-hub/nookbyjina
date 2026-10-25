@@ -78,8 +78,10 @@ export default function ShoppingHomeClient({
   initialCategories,
   initialProducts,
 }: ShoppingHomeClientProps) {
+  const [clientBanners, setClientBanners] = useState<Banner[] | null>(null);
   const banners =
-    initialBanners && initialBanners.length > 0 ? initialBanners : BANNERS;
+    clientBanners ??
+    (initialBanners && initialBanners.length > 0 ? initialBanners : BANNERS);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
@@ -119,6 +121,9 @@ export default function ShoppingHomeClient({
         setSections(data.sections || []);
         if (data.categories && data.categories.length > 0) {
           setCategories(data.categories);
+        }
+        if (data.banners && data.banners.length > 0) {
+          setClientBanners(data.banners);
         }
 
         const productMap = new Map<string, Product>();
@@ -160,6 +165,9 @@ export default function ShoppingHomeClient({
           setSections(data.sections || []);
           if (data.categories && data.categories.length > 0) {
             setCategories(data.categories);
+          }
+          if (data.banners && data.banners.length > 0) {
+            setClientBanners(data.banners);
           }
 
           const productMap = new Map<string, Product>();

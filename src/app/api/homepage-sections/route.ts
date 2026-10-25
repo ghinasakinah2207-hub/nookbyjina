@@ -4,15 +4,18 @@ import {
   mapSectionsWithProducts,
   DEFAULT_FALLBACK_SECTIONS,
 } from "@/lib/supabase/homepage-sections";
+import { getPublicHomeBanners } from "@/lib/supabase/banners";
 import { getVisibleProducts, getActiveCategories } from "@/lib/supabase/catalog";
 
 export async function GET() {
   try {
-    const [rawSections, catalogProducts, categories] = await Promise.all([
-      getAdminHomepageSections(),
-      getVisibleProducts(),
-      getActiveCategories().catch(() => []),
-    ]);
+    const [rawSections, catalogProducts, categories, banners] =
+      await Promise.all([
+        getAdminHomepageSections(),
+        getVisibleProducts(),
+        getActiveCategories().catch(() => []),
+        getPublicHomeBanners().catch(() => []),
+      ]);
 
     const activeSections = rawSections.filter((s) => s.isActive);
 
@@ -25,6 +28,7 @@ export async function GET() {
       success: true,
       sections: sectionsWithProducts,
       categories,
+      banners: banners || [],
     });
   } catch (err: unknown) {
     const message =
