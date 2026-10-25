@@ -78,6 +78,8 @@ export function CategoryManagerModal({
   // Handle Create submission
   const handleSubmitCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     if (!formName.trim() || formName.trim().length < 2) {
       setErrorMessage("Nama kategori minimal 2 karakter.");
       return;
@@ -111,7 +113,7 @@ export function CategoryManagerModal({
   // Handle Edit submission (name + icon)
   const handleSubmitEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeCategory) return;
+    if (isSubmitting || !activeCategory) return;
 
     if (!formName.trim() || formName.trim().length < 2) {
       setErrorMessage("Nama kategori minimal 2 karakter.");
@@ -150,7 +152,7 @@ export function CategoryManagerModal({
 
   // Handle Quick Icon submission (changes ONLY icon without touching name or other data)
   const handleSubmitQuickIcon = async (iconId: string) => {
-    if (!activeCategory) return;
+    if (isSubmitting || !activeCategory) return;
 
     setIsSubmitting(true);
     setErrorMessage(null);
@@ -182,6 +184,7 @@ export function CategoryManagerModal({
 
   // Handle Delete category
   const handleDeleteCategory = async (catId: string) => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
     setErrorMessage(null);
 

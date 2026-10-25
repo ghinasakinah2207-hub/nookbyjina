@@ -57,6 +57,12 @@ export function HomepageSectionManager({
   const [managingProductsSection, setManagingProductsSection] =
     useState<HomepageSection | null>(null);
 
+  // Pending interaction states
+  const [togglingSectionId, setTogglingSectionId] = useState<string | null>(null);
+  const [isReordering, setIsReordering] = useState(false);
+  const [isSavingSection, setIsSavingSection] = useState(false);
+  const [isDeletingSection, setIsDeletingSection] = useState(false);
+
   // Form states for Create/Edit Modal
   const [formTitle, setFormTitle] = useState("");
   const [formSubtitle, setFormSubtitle] = useState("");
@@ -114,7 +120,8 @@ export function HomepageSectionManager({
 
   // Handlers for Section Reordering
   const handleMoveUp = (index: number) => {
-    if (index <= 0) return;
+    if (isReordering || index <= 0) return;
+    setIsReordering(true);
     const next = [...sections];
     const temp = next[index - 1];
     next[index - 1] = next[index];
@@ -124,15 +131,20 @@ export function HomepageSectionManager({
     setSections(next);
 
     startTransition(async () => {
-      const res = await reorderHomepageSectionsAction(orderedIds);
-      if (res.success) {
-        showToast("Urutan seksi berhasil diperbarui.");
+      try {
+        const res = await reorderHomepageSectionsAction(orderedIds);
+        if (res.success) {
+          showToast("Urutan seksi berhasil diperbarui.");
+        }
+      } finally {
+        setIsReordering(false);
       }
     });
   };
 
   const handleMoveDown = (index: number) => {
-    if (index >= sections.length - 1) return;
+    if (isReordering || index >= sections.length - 1) return;
+    setIsReordering(true);
     const next = [...sections];
     const temp = next[index + 1];
     next[index + 1] = next[index];
@@ -142,28 +154,44 @@ export function HomepageSectionManager({
     setSections(next);
 
     startTransition(async () => {
-      const res = await reorderHomepageSectionsAction(orderedIds);
-      if (res.success) {
-        showToast("Urutan seksi berhasil diperbarui.");
+      try {
+        const res = await reorderHomepageSectionsAction(orderedIds);
+        if (res.success) {
+          showToast("Urutan seksi berhasil diperbarui.");
+        }
+      } finally {
+        setIsReordering(false);
       }
     });
   };
 
   // Handler for Toggle Visibility
   const handleToggleStatus = (sectionId: string, currentStatus: boolean) => {
+    if (togglingSectionId === sectionId) return;
+    setTogglingSectionId(sectionId);
     const nextStatus = !currentStatus;
     setSections((prev) =>
       prev.map((s) => (s.id === sectionId ? { ...s, isActive: nextStatus } : s))
     );
 
     startTransition(async () => {
-      const res = await toggleSectionStatusAction(sectionId, nextStatus);
-      if (res.success) {
-        showToast(
-          nextStatus
-            ? "Seksi diaktifkan di beranda pelanggan."
-            : "Seksi disembunyikan dari beranda pelanggan."
-        );
+      try {
+        const res = await toggleSectionStatusAction(sectionId, nextStatus);
+        if (res.success) {
+          showToast(
+            nextStatus
+              ? "Seksi diaktifkan di beranda pelanggan."
+              : "Seksi disembunyikan dari beranda pelanggan."
+          );
+        } else {
+          // Rollback on server error
+          setSections((prev) =>
+            prev.map((s) => (s.id === sectionId ? { ...s, isActive: currentStatus } : s))
+          );
+          showToast(`Gagal: ${res.error || "Gagal mengubah status seksi."}`);
+        }
+      } finally {
+        setTogglingSectionId(null);
       }
     });
   };
@@ -195,6 +223,7 @@ export function HomepageSectionManager({
   // Submit Create/Edit Section
   const handleSaveSectionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingSection) return;
     setFormError(null);
 
     const title = formTitle.trim();
@@ -212,6 +241,8 @@ export function HomepageSectionManager({
       return;
     }
 
+    setIsSavingSection(true);
+
     const payload = {
       id: editingSection ? editingSection.id : undefined,
       title,
@@ -223,27 +254,32 @@ export function HomepageSectionManager({
     };
 
     startTransition(async () => {
-      const res = await saveHomepageSectionAction(payload);
-      if (res.success && res.section) {
-        if (editingSection) {
-          setSections((prev) =>
-            prev.map((s) => (s.id === res.section!.id ? res.section! : s))
-          );
-          showToast(`Seksi "${res.section.title}" berhasil diperbarui.`);
+      try {
+        const res = await saveHomepageSectionAction(payload);
+        if (res.success && res.section) {
+          if (editingSection) {
+            setSections((prev) =>
+              prev.map((s) => (s.id === res.section!.id ? res.section! : s))
+            );
+            showToast(`Seksi "${res.section.title}" berhasil diperbarui.`);
+          } else {
+            setSections((prev) => [...prev, res.section!]);
+            showToast(`Seksi baru "${res.section.title}" berhasil dibuat.`);
+          }
+          setIsCreateModalOpen(false);
         } else {
-          setSections((prev) => [...prev, res.section!]);
-          showToast(`Seksi baru "${res.section.title}" berhasil dibuat.`);
+          setFormError(res.error || "Gagal menyimpan seksi.");
         }
-        setIsCreateModalOpen(false);
-      } else {
-        setFormError(res.error || "Gagal menyimpan seksi.");
+      } finally {
+        setIsSavingSection(false);
       }
     });
   };
 
   // Delete Section Confirmation
   const confirmDeleteSection = () => {
-    if (!deletingSection) return;
+    if (!deletingSection || isDeletingSection) return;
+    setIsDeletingSection(true);
     const secId = deletingSection.id;
     const title = deletingSection.title;
 
@@ -251,9 +287,13 @@ export function HomepageSectionManager({
     setDeletingSection(null);
 
     startTransition(async () => {
-      const res = await deleteHomepageSectionAction(secId);
-      if (res.success) {
-        showToast(`Seksi "${title}" berhasil dihapus.`);
+      try {
+        const res = await deleteHomepageSectionAction(secId);
+        if (res.success) {
+          showToast(`Seksi "${title}" berhasil dihapus.`);
+        }
+      } finally {
+        setIsDeletingSection(false);
       }
     });
   };

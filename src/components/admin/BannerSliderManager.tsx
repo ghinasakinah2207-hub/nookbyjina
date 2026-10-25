@@ -66,6 +66,9 @@ export function BannerSliderManager({
 
   // Delete modal state
   const [deletingBanner, setDeletingBanner] = useState<Banner | null>(null);
+  const [togglingBannerId, setTogglingBannerId] = useState<string | null>(null);
+  const [isReordering, setIsReordering] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -163,6 +166,7 @@ export function BannerSliderManager({
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isUploading) return;
     if (!uploadFile) {
       setUploadError("Pilih file foto banner terlebih dahulu.");
       return;
@@ -276,7 +280,7 @@ export function BannerSliderManager({
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingBanner) return;
+    if (isSavingEdit || !editingBanner) return;
 
     setEditError(null);
 
@@ -353,6 +357,8 @@ export function BannerSliderManager({
   // TOGGLE ACTIVE STATUS
   // ---------------------------------------------------------------------------
   const handleToggleStatus = (banner: Banner) => {
+    if (togglingBannerId === banner.id) return;
+    setTogglingBannerId(banner.id);
     const nextStatus = !banner.isActive;
     const updated = banners.map((b) =>
       b.id === banner.id ? { ...b, isActive: nextStatus } : b
@@ -360,17 +366,21 @@ export function BannerSliderManager({
     updateBannersState(updated);
 
     startTransition(async () => {
-      const res = await toggleBannerStatusAction(banner.id, nextStatus);
-      if (res.success) {
-        showToast(
-          nextStatus
-            ? "Slide banner sekarang AKTIF di beranda pelanggan."
-            : "Slide banner DISEMBUYIKAN dari beranda pelanggan."
-        );
-      } else {
-        // Revert on error
-        updateBannersState(banners);
-        showToast(`Gagal: ${res.error || "Gagal mengubah status slide banner."}`);
+      try {
+        const res = await toggleBannerStatusAction(banner.id, nextStatus);
+        if (res.success) {
+          showToast(
+            nextStatus
+              ? "Slide banner sekarang AKTIF di beranda pelanggan."
+              : "Slide banner DISEMBUYIKAN dari beranda pelanggan."
+          );
+        } else {
+          // Revert on error
+          updateBannersState(banners);
+          showToast(`Gagal: ${res.error || "Gagal mengubah status slide banner."}`);
+        }
+      } finally {
+        setTogglingBannerId(null);
       }
     });
   };
@@ -379,7 +389,8 @@ export function BannerSliderManager({
   // REORDER BANNERS (UP / DOWN)
   // ---------------------------------------------------------------------------
   const handleMoveUp = (index: number) => {
-    if (index <= 0) return;
+    if (isReordering || index <= 0) return;
+    setIsReordering(true);
     const next = [...banners];
     const temp = next[index - 1];
     next[index - 1] = next[index];
@@ -390,13 +401,18 @@ export function BannerSliderManager({
     updateBannersState(reindexed);
 
     startTransition(async () => {
-      await reorderHomeBannersAction(reindexed.map((b) => b.id));
-      showToast("Urutan banner diperbarui.");
+      try {
+        await reorderHomeBannersAction(reindexed.map((b) => b.id));
+        showToast("Urutan banner diperbarui.");
+      } finally {
+        setIsReordering(false);
+      }
     });
   };
 
   const handleMoveDown = (index: number) => {
-    if (index >= banners.length - 1) return;
+    if (isReordering || index >= banners.length - 1) return;
+    setIsReordering(true);
     const next = [...banners];
     const temp = next[index + 1];
     next[index + 1] = next[index];
@@ -406,8 +422,12 @@ export function BannerSliderManager({
     updateBannersState(reindexed);
 
     startTransition(async () => {
-      await reorderHomeBannersAction(reindexed.map((b) => b.id));
-      showToast("Urutan banner diperbarui.");
+      try {
+        await reorderHomeBannersAction(reindexed.map((b) => b.id));
+        showToast("Urutan banner diperbarui.");
+      } finally {
+        setIsReordering(false);
+      }
     });
   };
 
@@ -415,7 +435,8 @@ export function BannerSliderManager({
   // DELETE BANNER
   // ---------------------------------------------------------------------------
   const confirmDelete = () => {
-    if (!deletingBanner) return;
+    if (!deletingBanner || isDeleting) return;
+    setIsDeleting(true);
     const bannerId = deletingBanner.id;
 
     const filtered = banners
@@ -426,12 +447,16 @@ export function BannerSliderManager({
     setDeletingBanner(null);
 
     startTransition(async () => {
-      const res = await deleteHomeBannerAction(bannerId);
-      if (res.success) {
-        showToast("Slide banner berhasil dihapus.");
-      } else {
-        updateBannersState(banners);
-        showToast(`Gagal: ${res.error || "Gagal menghapus slide banner."}`);
+      try {
+        const res = await deleteHomeBannerAction(bannerId);
+        if (res.success) {
+          showToast("Slide banner berhasil dihapus.");
+        } else {
+          updateBannersState(banners);
+          showToast(`Gagal: ${res.error || "Gagal menghapus slide banner."}`);
+        }
+      } finally {
+        setIsDeleting(false);
       }
     });
   };

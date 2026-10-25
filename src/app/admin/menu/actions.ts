@@ -242,40 +242,67 @@ export async function createProductAction(
       }
     }
 
-    // 7. Insert Option Groups & Values if defined
+    // 7. Insert Option Groups & Values in optimized batches if defined
     if (input.optionGroups && input.optionGroups.length > 0) {
-      for (let gIdx = 0; gIdx < input.optionGroups.length; gIdx++) {
-        const group = input.optionGroups[gIdx];
-        const groupName = (group.name || "").trim();
-        if (!groupName) continue;
+      const validGroups = input.optionGroups.filter(
+        (g) => g.name && g.name.trim()
+      );
+      if (validGroups.length > 0) {
+        const groupRowsWithId = validGroups.map((g, gIdx) => ({
+          id: crypto.randomUUID(),
+          product_id: productId,
+          name: g.name.trim(),
+          is_required: Boolean(g.isRequired),
+          min_select: Number(g.minSelect) || (g.isRequired ? 1 : 0),
+          max_select: Number(g.maxSelect) || 1,
+          sort_order: gIdx + 1,
+          _rawGroup: g,
+        }));
 
-        const groupId = crypto.randomUUID();
+        const groupRows = groupRowsWithId.map(({ _rawGroup: _unused, ...row }) => {
+          void _unused;
+          return row;
+        });
+
         const { error: grpErr } = await supabase
           .from("product_option_groups")
-          .insert({
-            id: groupId,
-            product_id: productId,
-            name: groupName,
-            is_required: Boolean(group.isRequired),
-            min_select: Number(group.minSelect) || (group.isRequired ? 1 : 0),
-            max_select: Number(group.maxSelect) || 1,
-            sort_order: gIdx + 1,
-          });
+          .insert(groupRows);
 
-        if (!grpErr && group.values && group.values.length > 0) {
-          const valRows = group.values
+        if (grpErr) {
+          // Cleanup created product (cascades to product_images) to prevent orphaned catalog entry
+          await supabase.from("products").delete().eq("id", productId);
+          return {
+            success: false,
+            error: `Gagal menyimpan grup varian produk: ${grpErr.message}`,
+          };
+        }
+
+        const allValRows = groupRowsWithId.flatMap((gRow) => {
+          const values = gRow._rawGroup.values || [];
+          return values
             .filter((v) => v.name && v.name.trim())
             .map((v, vIdx) => ({
               id: crypto.randomUUID(),
-              group_id: groupId,
+              group_id: gRow.id,
               name: v.name.trim(),
               price_delta: Number(v.priceDelta) || 0,
               is_active: true,
               sort_order: vIdx + 1,
             }));
+        });
 
-          if (valRows.length > 0) {
-            await supabase.from("product_option_values").insert(valRows);
+        if (allValRows.length > 0) {
+          const { error: valErr } = await supabase
+            .from("product_option_values")
+            .insert(allValRows);
+
+          if (valErr) {
+            // Cleanup created product to prevent orphaned options with 0 values
+            await supabase.from("products").delete().eq("id", productId);
+            return {
+              success: false,
+              error: `Gagal menyimpan pilihan varian produk: ${valErr.message}`,
+            };
           }
         }
       }
@@ -289,7 +316,17 @@ export async function createProductAction(
         sort_order: aIdx + 1,
       }));
 
-      await supabase.from("product_addons").insert(addonRows);
+      const { error: addonErr } = await supabase
+        .from("product_addons")
+        .insert(addonRows);
+
+      if (addonErr) {
+        await supabase.from("products").delete().eq("id", productId);
+        return {
+          success: false,
+          error: `Gagal menghubungkan add-on produk: ${addonErr.message}`,
+        };
+      }
     }
 
     // 9. Invalidate cache and revalidate Next.js paths
@@ -503,47 +540,92 @@ export async function updateProductAction(
         .select("id")
         .eq("product_id", resolvedProductId);
 
-      if (existingGroups && existingGroups.length > 0) {
-        const groupIds = existingGroups.map((g) => g.id);
-        await supabase.from("product_option_values").delete().in("group_id", groupIds);
-        await supabase.from("product_option_groups").delete().eq("product_id", resolvedProductId);
-      }
+      const existingGroupIds = (existingGroups || []).map((g) => g.id);
 
       if (input.optionGroups && input.optionGroups.length > 0) {
-        for (let gIdx = 0; gIdx < input.optionGroups.length; gIdx++) {
-          const group = input.optionGroups[gIdx];
-          const groupName = (group.name || "").trim();
-          if (!groupName) continue;
+        const validGroups = input.optionGroups.filter(
+          (g) => g.name && g.name.trim()
+        );
+        if (validGroups.length > 0) {
+          const groupRowsWithId = validGroups.map((g, gIdx) => ({
+            id: crypto.randomUUID(),
+            product_id: resolvedProductId,
+            name: g.name.trim(),
+            is_required: Boolean(g.isRequired),
+            min_select: Number(g.minSelect) || (g.isRequired ? 1 : 0),
+            max_select: Number(g.maxSelect) || 1,
+            sort_order: gIdx + 1,
+            _rawGroup: g,
+          }));
 
-          const groupId = crypto.randomUUID();
+          const groupRows = groupRowsWithId.map(({ _rawGroup: _unused, ...row }) => {
+            void _unused;
+            return row;
+          });
+
+          // 1. Insert new groups first (preserves old groups if this fails)
           const { error: grpErr } = await supabase
             .from("product_option_groups")
-            .insert({
-              id: groupId,
-              product_id: resolvedProductId,
-              name: groupName,
-              is_required: Boolean(group.isRequired),
-              min_select: Number(group.minSelect) || (group.isRequired ? 1 : 0),
-              max_select: Number(group.maxSelect) || 1,
-              sort_order: gIdx + 1,
-            });
+            .insert(groupRows);
 
-          if (!grpErr && group.values && group.values.length > 0) {
-            const valRows = group.values
+          if (grpErr) {
+            return {
+              success: false,
+              error: `Gagal memperbarui grup varian produk: ${grpErr.message}`,
+            };
+          }
+
+          const allValRows = groupRowsWithId.flatMap((gRow) => {
+            const values = gRow._rawGroup.values || [];
+            return values
               .filter((v) => v.name && v.name.trim())
               .map((v, vIdx) => ({
                 id: crypto.randomUUID(),
-                group_id: groupId,
+                group_id: gRow.id,
                 name: v.name.trim(),
                 price_delta: Number(v.priceDelta) || 0,
                 is_active: true,
                 sort_order: vIdx + 1,
               }));
+          });
 
-            if (valRows.length > 0) {
-              await supabase.from("product_option_values").insert(valRows);
+          if (allValRows.length > 0) {
+            const { error: valErr } = await supabase
+              .from("product_option_values")
+              .insert(allValRows);
+
+            if (valErr) {
+              // Delete ONLY the newly created groups; old groups remain completely untouched
+              const newGroupIds = groupRowsWithId.map((g) => g.id);
+              await supabase
+                .from("product_option_groups")
+                .delete()
+                .in("id", newGroupIds);
+
+              return {
+                success: false,
+                error: `Gagal memperbarui pilihan varian produk: ${valErr.message}`,
+              };
             }
           }
+
+          // 2. Both new groups and values succeeded! Now safely remove the old groups
+          if (existingGroupIds.length > 0) {
+            await supabase.from("product_option_values").delete().in("group_id", existingGroupIds);
+            await supabase.from("product_option_groups").delete().in("id", existingGroupIds);
+          }
+        } else {
+          // Admin explicitly cleared all groups
+          if (existingGroupIds.length > 0) {
+            await supabase.from("product_option_values").delete().in("group_id", existingGroupIds);
+            await supabase.from("product_option_groups").delete().in("id", existingGroupIds);
+          }
+        }
+      } else {
+        // Admin passed empty optionGroups array
+        if (existingGroupIds.length > 0) {
+          await supabase.from("product_option_values").delete().in("group_id", existingGroupIds);
+          await supabase.from("product_option_groups").delete().in("id", existingGroupIds);
         }
       }
     }
@@ -551,6 +633,12 @@ export async function updateProductAction(
     // 6. Update linked Addons ONLY if explicitly provided in input
     // If input.addonIds is undefined, preserve all existing product_addons untouched
     if (input.addonIds !== undefined) {
+      // Snapshot existing addons before updating so we can restore if new insert fails
+      const { data: existingAddons } = await supabase
+        .from("product_addons")
+        .select("addon_id, sort_order")
+        .eq("product_id", resolvedProductId);
+
       await supabase.from("product_addons").delete().eq("product_id", resolvedProductId);
 
       if (input.addonIds && input.addonIds.length > 0) {
@@ -560,7 +648,26 @@ export async function updateProductAction(
           sort_order: aIdx + 1,
         }));
 
-        await supabase.from("product_addons").insert(addonRows);
+        const { error: addonErr } = await supabase
+          .from("product_addons")
+          .insert(addonRows);
+
+        if (addonErr) {
+          // Restore previous addons if new insert fails
+          if (existingAddons && existingAddons.length > 0) {
+            await supabase.from("product_addons").insert(
+              existingAddons.map((ea) => ({
+                product_id: resolvedProductId,
+                addon_id: ea.addon_id,
+                sort_order: ea.sort_order,
+              }))
+            );
+          }
+          return {
+            success: false,
+            error: `Gagal memperbarui add-on produk: ${addonErr.message}`,
+          };
+        }
       }
     }
 

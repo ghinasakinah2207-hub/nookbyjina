@@ -60,7 +60,10 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
 
   // Async transitions and notifications
   const [isPending, startTransition] = useTransition();
+  const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = React.useRef(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+  const isTogglingRef = React.useRef(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -122,6 +125,8 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
   // Handle Full Form Save
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingRef.current || isSaving || isPending) return;
+
     setErrorMessage(null);
     setSuccessMessage(null);
 
@@ -130,6 +135,9 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
       setErrorMessage(validationErr);
       return;
     }
+
+    isSavingRef.current = true;
+    setIsSaving(true);
 
     const igCheck = formState.instagramUrl && formState.instagramUrl.trim()
       ? normalizeInstagramUrl(formState.instagramUrl)
@@ -198,6 +206,9 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
             : "Terjadi kesalahan tidak terduga saat menyimpan.";
         setErrorMessage(msg);
         // Preserve user input on error (formState is untouched)
+      } finally {
+        isSavingRef.current = false;
+        setIsSaving(false);
       }
     });
   };
@@ -294,9 +305,17 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
   };
 
   const executeStatusChange = async (targetOpen: boolean) => {
+    if (isTogglingRef.current || isTogglingStatus) return;
     setShowCloseModal(false);
+    isTogglingRef.current = true;
     setIsTogglingStatus(true);
     setErrorMessage(null);
+
+    // Optimistically update UI so toggle responds instantaneously
+    const prevFormOpen = formState.isOpen;
+    const prevConfirmedOpen = confirmedSettings.isOpen;
+    setConfirmedSettings((prev) => ({ ...prev, isOpen: targetOpen }));
+    setFormState((prev) => ({ ...prev, isOpen: targetOpen }));
 
     try {
       const result = await toggleStoreStatusAction(targetOpen);
@@ -310,17 +329,24 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
         );
         setTimeout(() => setSuccessMessage(null), 4000);
       } else {
+        // Rollback on server error
+        setConfirmedSettings((prev) => ({ ...prev, isOpen: prevConfirmedOpen }));
+        setFormState((prev) => ({ ...prev, isOpen: prevFormOpen }));
         setErrorMessage(
           result.error || "Gagal memperbarui status toko di server."
         );
       }
     } catch (err: unknown) {
+      // Rollback on network failure
+      setConfirmedSettings((prev) => ({ ...prev, isOpen: prevConfirmedOpen }));
+      setFormState((prev) => ({ ...prev, isOpen: prevFormOpen }));
       const msg =
         err instanceof Error
           ? err.message
           : "Gagal menghubungkan ke server saat mengubah status.";
       setErrorMessage(msg);
     } finally {
+      isTogglingRef.current = false;
       setIsTogglingStatus(false);
     }
   };
@@ -1093,10 +1119,10 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
 
             <button
               type="submit"
-              disabled={isPending || isTogglingStatus}
+              disabled={isSaving || isPending || isTogglingStatus}
               className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[#111111] hover:bg-neutral-800 text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
             >
-              {isPending ? (
+              {isSaving || isPending ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   <span>Menyimpan...</span>

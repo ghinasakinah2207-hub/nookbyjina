@@ -304,6 +304,8 @@ function ProductFormModalContent({
   // Submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+
     setError(null);
     setSuccessMessage(null);
 
@@ -436,10 +438,7 @@ function ProductFormModalContent({
         };
 
         onProductUpdated?.(updatedUiProduct);
-
-        setTimeout(() => {
-          onClose();
-        }, 1000);
+        onClose();
       } else {
         // Safe explicit defaults for new product creation
         const payload: CreateProductInput = {
@@ -503,10 +502,7 @@ function ProductFormModalContent({
         };
 
         onProductCreated?.(newUiProduct);
-
-        setTimeout(() => {
-          onClose();
-        }, 1000);
+        onClose();
       }
     } catch (err: unknown) {
       const msg =

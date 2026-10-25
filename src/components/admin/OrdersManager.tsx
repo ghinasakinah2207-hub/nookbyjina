@@ -13,6 +13,7 @@ import {
   X,
   Printer,
   Banknote,
+  Loader2,
 } from "lucide-react";
 import { useOrder } from "@/context/OrderContext";
 import { Order, OrderStatus } from "@/types";
@@ -25,13 +26,15 @@ import { isQrisMethod, isPendingQrisStatus, isPendingCashStatus } from "@/lib/or
 type FilterTab = "semua" | "verifikasi" | "kas" | "berjalan" | "selesai" | "dibatalkan";
 
 export function OrdersManager() {
-  const { orders, updateOrderStatus, addOrder } = useOrder();
+  const { orders, updateOrderStatus, mergeOrders } = useOrder();
   const [activeTab, setActiveTab] = useState<FilterTab>("semua");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [confirmLunasOrder, setConfirmLunasOrder] = useState<Order | null>(null);
   const [confirmCashOrder, setConfirmCashOrder] = useState<Order | null>(null);
   const [confirmCashCompleteOrder, setConfirmCashCompleteOrder] = useState<Order | null>(null);
+  const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
+  const processingRef = React.useRef(false);
   const [receiptWidth, setReceiptWidth] = useState<"58mm" | "80mm">("58mm");
   const [printError, setPrintError] = useState<string | null>(null);
 
@@ -40,13 +43,11 @@ export function OrdersManager() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && data.success && Array.isArray(data.orders)) {
-          data.orders.forEach((serverOrder: Order) => {
-            addOrder(serverOrder);
-          });
+          mergeOrders(data.orders);
         }
       })
       .catch(() => {});
-  }, [addOrder]);
+  }, [mergeOrders]);
 
   const handlePrintReceipt = (order: Order) => {
     setPrintError(null);
@@ -127,78 +128,118 @@ export function OrdersManager() {
   }, [orders, activeTab, searchQuery]);
 
   const handleMarkLunas = async (orderId: string) => {
-    const res = await updateOrderStatus(orderId, "Diproses", "Lunas");
-    setConfirmLunasOrder(null);
-    if (!res.success) {
-      alert(res.error || "Gagal mengonfirmasi pembayaran lunas.");
-      return;
-    }
-    if (selectedOrder?.id === orderId) {
-      setSelectedOrder((prev) =>
-        prev ? { ...prev, orderStatus: "Diproses", paymentStatus: "Lunas" } : null
-      );
-    }
-  };
-
-  const handleConfirmCashLunas = async (orderId: string) => {
-    // When marking cash received, paymentStatus becomes Lunas; if orderStatus was Pesanan baru, transition to Diproses
-    const currentOrder = orders.find((o) => o.id === orderId);
-    const nextOrderStatus = currentOrder?.orderStatus === "Pesanan baru" ? "Diproses" : currentOrder?.orderStatus;
-    const res = await updateOrderStatus(orderId, nextOrderStatus, "Lunas");
-    setConfirmCashOrder(null);
-    if (!res.success) {
-      alert(res.error || "Gagal mengonfirmasi pembayaran tunai.");
-      return;
-    }
-    if (selectedOrder?.id === orderId) {
-      setSelectedOrder((prev) =>
-        prev
-          ? {
-              ...prev,
-              orderStatus: nextOrderStatus || prev.orderStatus,
-              paymentStatus: "Lunas",
-            }
-          : null
-      );
-    }
-  };
-
-  const handleConfirmCashComplete = async (orderId: string) => {
-    const res = await updateOrderStatus(orderId, "Selesai", "Lunas");
-    setConfirmCashCompleteOrder(null);
-    if (!res.success) {
-      alert(res.error || "Gagal menyelesaikan pesanan tunai.");
-      return;
-    }
-    if (selectedOrder?.id === orderId) {
-      setSelectedOrder((prev) =>
-        prev ? { ...prev, orderStatus: "Selesai", paymentStatus: "Lunas" } : null
-      );
-    }
-  };
-
-  const handleUpdateStatus = async (orderId: string, status: OrderStatus) => {
-    const res = await updateOrderStatus(orderId, status);
-    if (!res.success) {
-      alert(res.error || `Gagal mengubah status menjadi ${status}.`);
-      return;
-    }
-    if (selectedOrder?.id === orderId) {
-      setSelectedOrder((prev) => (prev ? { ...prev, orderStatus: status } : null));
-    }
-  };
-
-  const handleCancelOrder = async (orderId: string) => {
-    if (confirm("Apakah Anda yakin ingin membatalkan pesanan ini? Pesanan yang dibatalkan tidak otomatis aktif kembali.")) {
-      const res = await updateOrderStatus(orderId, "Dibatalkan", "Dibatalkan");
+    if (processingRef.current || processingOrderId) return;
+    processingRef.current = true;
+    setProcessingOrderId(orderId);
+    try {
+      const res = await updateOrderStatus(orderId, "Diproses", "Lunas");
+      setConfirmLunasOrder(null);
       if (!res.success) {
-        alert(res.error || "Gagal membatalkan pesanan.");
+        alert(res.error || "Gagal mengonfirmasi pembayaran lunas.");
         return;
       }
       if (selectedOrder?.id === orderId) {
         setSelectedOrder((prev) =>
-          prev ? { ...prev, orderStatus: "Dibatalkan", paymentStatus: "Dibatalkan" } : null
+          prev ? { ...prev, orderStatus: "Diproses", paymentStatus: "Lunas" } : null
         );
+      }
+    } finally {
+      processingRef.current = false;
+      setProcessingOrderId(null);
+    }
+  };
+
+  const handleConfirmCashLunas = async (orderId: string) => {
+    if (processingRef.current || processingOrderId) return;
+    processingRef.current = true;
+    setProcessingOrderId(orderId);
+    try {
+      // When marking cash received, paymentStatus becomes Lunas; if orderStatus was Pesanan baru, transition to Diproses
+      const currentOrder = orders.find((o) => o.id === orderId);
+      const nextOrderStatus = currentOrder?.orderStatus === "Pesanan baru" ? "Diproses" : currentOrder?.orderStatus;
+      const res = await updateOrderStatus(orderId, nextOrderStatus, "Lunas");
+      setConfirmCashOrder(null);
+      if (!res.success) {
+        alert(res.error || "Gagal mengonfirmasi pembayaran tunai.");
+        return;
+      }
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder((prev) =>
+          prev
+            ? {
+                ...prev,
+                orderStatus: nextOrderStatus || prev.orderStatus,
+                paymentStatus: "Lunas",
+              }
+            : null
+        );
+      }
+    } finally {
+      processingRef.current = false;
+      setProcessingOrderId(null);
+    }
+  };
+
+  const handleConfirmCashComplete = async (orderId: string) => {
+    if (processingRef.current || processingOrderId) return;
+    processingRef.current = true;
+    setProcessingOrderId(orderId);
+    try {
+      const res = await updateOrderStatus(orderId, "Selesai", "Lunas");
+      setConfirmCashCompleteOrder(null);
+      if (!res.success) {
+        alert(res.error || "Gagal menyelesaikan pesanan tunai.");
+        return;
+      }
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder((prev) =>
+          prev ? { ...prev, orderStatus: "Selesai", paymentStatus: "Lunas" } : null
+        );
+      }
+    } finally {
+      processingRef.current = false;
+      setProcessingOrderId(null);
+    }
+  };
+
+  const handleUpdateStatus = async (orderId: string, status: OrderStatus) => {
+    if (processingRef.current || processingOrderId) return;
+    processingRef.current = true;
+    setProcessingOrderId(orderId);
+    try {
+      const res = await updateOrderStatus(orderId, status);
+      if (!res.success) {
+        alert(res.error || `Gagal mengubah status menjadi ${status}.`);
+        return;
+      }
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder((prev) => (prev ? { ...prev, orderStatus: status } : null));
+      }
+    } finally {
+      processingRef.current = false;
+      setProcessingOrderId(null);
+    }
+  };
+
+  const handleCancelOrder = async (orderId: string) => {
+    if (processingRef.current || processingOrderId) return;
+    if (confirm("Apakah Anda yakin ingin membatalkan pesanan ini? Pesanan yang dibatalkan tidak otomatis aktif kembali.")) {
+      processingRef.current = true;
+      setProcessingOrderId(orderId);
+      try {
+        const res = await updateOrderStatus(orderId, "Dibatalkan", "Dibatalkan");
+        if (!res.success) {
+          alert(res.error || "Gagal membatalkan pesanan.");
+          return;
+        }
+        if (selectedOrder?.id === orderId) {
+          setSelectedOrder((prev) =>
+            prev ? { ...prev, orderStatus: "Dibatalkan", paymentStatus: "Dibatalkan" } : null
+          );
+        }
+      } finally {
+        processingRef.current = false;
+        setProcessingOrderId(null);
       }
     }
   };
@@ -503,26 +544,43 @@ export function OrdersManager() {
                     {/* Action 2: Process Order */}
                     {order.orderStatus === "Pesanan baru" && !needsQrisVerification && (
                       <button
+                        disabled={Boolean(processingOrderId)}
                         onClick={() => handleUpdateStatus(order.id, "Diproses")}
-                        className="px-3 py-1.5 rounded-xl bg-[#111111] hover:bg-neutral-800 text-white text-xs font-semibold transition-colors cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl bg-[#111111] hover:bg-neutral-800 text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                       >
-                        Proses Pesanan
+                        {processingOrderId === order.id ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Memproses...</span>
+                          </>
+                        ) : (
+                          <span>Proses Pesanan</span>
+                        )}
                       </button>
                     )}
 
                     {/* Action 3: Mark Ready */}
                     {order.orderStatus === "Diproses" && (
                       <button
+                        disabled={Boolean(processingOrderId)}
                         onClick={() => handleUpdateStatus(order.id, "Siap")}
-                        className="px-3 py-1.5 rounded-xl bg-[#F25B09] hover:bg-[#D94D06] text-white text-xs font-semibold transition-colors cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl bg-[#F25B09] hover:bg-[#D94D06] text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                       >
-                        Pesanan Siap
+                        {processingOrderId === order.id ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Menyiapkan...</span>
+                          </>
+                        ) : (
+                          <span>Pesanan Siap</span>
+                        )}
                       </button>
                     )}
 
                     {/* Action 4: Mark Completed */}
                     {order.orderStatus === "Siap" && (
                       <button
+                        disabled={Boolean(processingOrderId)}
                         onClick={() => {
                           if (order.paymentStatus === "Menunggu Pembayaran") {
                             setConfirmCashCompleteOrder(order);
@@ -532,17 +590,25 @@ export function OrdersManager() {
                             handleUpdateStatus(order.id, "Selesai");
                           }
                         }}
-                        className="px-3 py-1.5 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold transition-colors cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                       >
-                        Selesai
+                        {processingOrderId === order.id ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Menyelesaikan...</span>
+                          </>
+                        ) : (
+                          <span>Selesai</span>
+                        )}
                       </button>
                     )}
 
                     {/* Action 5: Cancel */}
                     {order.orderStatus !== "Selesai" && order.orderStatus !== "Dibatalkan" && (
                       <button
+                        disabled={Boolean(processingOrderId)}
                         onClick={() => handleCancelOrder(order.id)}
-                        className="px-2.5 py-1.5 rounded-xl border border-red-200 text-[#B42318] hover:bg-red-50 text-xs font-medium transition-colors cursor-pointer"
+                        className="px-2.5 py-1.5 rounded-xl border border-red-200 text-[#B42318] hover:bg-red-50 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Batalkan
                       </button>
@@ -612,17 +678,26 @@ export function OrdersManager() {
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
+                disabled={Boolean(processingOrderId)}
                 onClick={() => setConfirmLunasOrder(null)}
-                className="px-3.5 py-2 rounded-xl border border-[#E5E5E5] text-xs font-semibold text-[#737373] hover:text-[#111111]"
+                className="px-3.5 py-2 rounded-xl border border-[#E5E5E5] text-xs font-semibold text-[#737373] hover:text-[#111111] disabled:opacity-50"
               >
                 Batal
               </button>
               <button
                 type="button"
+                disabled={Boolean(processingOrderId)}
                 onClick={() => handleMarkLunas(confirmLunasOrder.id)}
-                className="px-4 py-2 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
               >
-                Sudah Dicek & Tandai Lunas
+                {processingOrderId === confirmLunasOrder.id ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Memverifikasi...</span>
+                  </>
+                ) : (
+                  <span>Sudah Dicek & Tandai Lunas</span>
+                )}
               </button>
             </div>
           </div>
@@ -671,17 +746,26 @@ export function OrdersManager() {
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
+                disabled={Boolean(processingOrderId)}
                 onClick={() => setConfirmCashOrder(null)}
-                className="px-3.5 py-2 rounded-xl border border-[#E5E5E5] text-xs font-semibold text-[#737373] hover:text-[#111111]"
+                className="px-3.5 py-2 rounded-xl border border-[#E5E5E5] text-xs font-semibold text-[#737373] hover:text-[#111111] disabled:opacity-50"
               >
                 Batal
               </button>
               <button
                 type="button"
+                disabled={Boolean(processingOrderId)}
                 onClick={() => handleConfirmCashLunas(confirmCashOrder.id)}
-                className="px-4 py-2 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
               >
-                Uang Tunai Diterima & Tandai Lunas
+                {processingOrderId === confirmCashOrder.id ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <span>Uang Tunai Diterima & Tandai Lunas</span>
+                )}
               </button>
             </div>
           </div>
@@ -725,17 +809,26 @@ export function OrdersManager() {
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
+                disabled={Boolean(processingOrderId)}
                 onClick={() => setConfirmCashCompleteOrder(null)}
-                className="px-3.5 py-2 rounded-xl border border-[#E5E5E5] text-xs font-semibold text-[#737373] hover:text-[#111111]"
+                className="px-3.5 py-2 rounded-xl border border-[#E5E5E5] text-xs font-semibold text-[#737373] hover:text-[#111111] disabled:opacity-50"
               >
                 Batal
               </button>
               <button
                 type="button"
+                disabled={Boolean(processingOrderId)}
                 onClick={() => handleConfirmCashComplete(confirmCashCompleteOrder.id)}
-                className="px-4 py-2 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
               >
-                Uang Tunai Diterima & Pesanan Selesai
+                {processingOrderId === confirmCashCompleteOrder.id ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Menyelesaikan...</span>
+                  </>
+                ) : (
+                  <span>Uang Tunai Diterima & Pesanan Selesai</span>
+                )}
               </button>
             </div>
           </div>

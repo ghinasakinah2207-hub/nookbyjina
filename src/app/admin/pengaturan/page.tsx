@@ -8,7 +8,7 @@ export const instant = false;
 
 export default async function AdminPengaturanPage() {
   const { user } = await requireAdminAuth();
-  const settings = await getStoreSettings();
+  const settings = await getStoreSettings(undefined, { fresh: true });
 
   return (
     <AdminShell

@@ -48,6 +48,7 @@ export function MenuManager({
   const [deleteProduct, setDeleteProduct] = useState<Product | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   // Filtered products
   const filteredProducts = useMemo(() => {
@@ -68,9 +69,14 @@ export function MenuManager({
   }, [products, selectedCategory, searchQuery]);
 
   const toggleAvailability = async (productId: string) => {
+    if (togglingId) return;
     const currentProd = products.find((p) => p.id === productId || p.slug === productId);
-    const nextVal = !currentProd?.isAvailable;
+    if (!currentProd) return;
+    const prevVal = currentProd.isAvailable;
+    const nextVal = !prevVal;
 
+    setTogglingId(productId);
+    // Optimistic UI update
     setProducts((prev) =>
       prev.map((p) => {
         if (p.id === productId || p.slug === productId) {
@@ -81,9 +87,31 @@ export function MenuManager({
     );
 
     try {
-      await toggleProductAvailabilityAction(productId, nextVal);
+      const res = await toggleProductAvailabilityAction(productId, nextVal);
+      if (res && !res.success) {
+        // Rollback
+        setProducts((prev) =>
+          prev.map((p) => {
+            if (p.id === productId || p.slug === productId) {
+              return { ...p, isAvailable: prevVal };
+            }
+            return p;
+          })
+        );
+        alert(res.error || "Gagal mengubah ketersediaan produk.");
+      }
     } catch {
-      // Local state already updated
+      // Rollback on network error
+      setProducts((prev) =>
+        prev.map((p) => {
+          if (p.id === productId || p.slug === productId) {
+            return { ...p, isAvailable: prevVal };
+          }
+          return p;
+        })
+      );
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -286,14 +314,22 @@ export function MenuManager({
                     {/* Availability toggle */}
                     <button
                       type="button"
+                      disabled={Boolean(togglingId)}
                       onClick={() => toggleAvailability(product.id)}
-                      className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 ${
                         isAvailable
                           ? "border border-neutral-200 text-[#737373] hover:text-[#B42318] hover:border-red-200 hover:bg-red-50"
                           : "bg-[#18794E] text-white hover:bg-emerald-700"
                       }`}
                     >
-                      {isAvailable ? "Tandai Habis" : "Tandai Tersedia"}
+                      {togglingId === product.id ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>Menyimpan...</span>
+                        </>
+                      ) : (
+                        <span>{isAvailable ? "Tandai Habis" : "Tandai Tersedia"}</span>
+                      )}
                     </button>
 
                     {/* Edit button */}

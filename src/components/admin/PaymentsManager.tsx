@@ -8,6 +8,7 @@ import {
   MessageCircle,
   Banknote,
   RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { useOrder } from "@/context/OrderContext";
 import { Order, StoreSettings } from "@/types";
@@ -20,9 +21,11 @@ import {
 } from "@/lib/order-normalizer";
 
 export function PaymentsManager() {
-  const { orders, updateOrderStatus, addOrder } = useOrder();
+  const { orders, updateOrderStatus, mergeOrders } = useOrder();
   const [confirmQrisOrder, setConfirmQrisOrder] = useState<Order | null>(null);
   const [confirmCashOrder, setConfirmCashOrder] = useState<Order | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const confirmingRef = React.useRef(false);
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -33,9 +36,7 @@ export function PaymentsManager() {
       if (res.ok) {
         const data = await res.json();
         if (data && data.success && Array.isArray(data.orders)) {
-          data.orders.forEach((serverOrder: Order) => {
-            addOrder(serverOrder);
-          });
+          mergeOrders(data.orders);
         }
       }
     } catch {
@@ -43,7 +44,7 @@ export function PaymentsManager() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [addOrder]);
+  }, [mergeOrders]);
 
   React.useEffect(() => {
     fetch("/api/store-settings")
@@ -62,9 +63,7 @@ export function PaymentsManager() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!ignore && data && data.success && Array.isArray(data.orders)) {
-          data.orders.forEach((serverOrder: Order) => {
-            addOrder(serverOrder);
-          });
+          mergeOrders(data.orders);
         }
       })
       .catch(() => {});
@@ -72,7 +71,7 @@ export function PaymentsManager() {
     return () => {
       ignore = true;
     };
-  }, [addOrder]);
+  }, [mergeOrders]);
 
   const pendingQrisPayments = orders.filter(
     (o) => isQrisMethod(o.paymentMethod) && isPendingQrisStatus(o.paymentStatus)
@@ -85,25 +84,37 @@ export function PaymentsManager() {
   const verifiedPayments = orders.filter((o) => isPaidStatus(o.paymentStatus));
 
   const handleConfirmQrisLunas = async (orderId: string) => {
-    const res = await updateOrderStatus(orderId, "Diproses", "Lunas");
-    setConfirmQrisOrder(null);
-    if (!res.success) {
-      alert(res.error || "Gagal memverifikasi pembayaran QRIS.");
-    } else {
-      fetchOrders();
+    if (confirmingRef.current || confirmingId) return;
+    confirmingRef.current = true;
+    setConfirmingId(orderId);
+    try {
+      const res = await updateOrderStatus(orderId, "Diproses", "Lunas");
+      setConfirmQrisOrder(null);
+      if (!res.success) {
+        alert(res.error || "Gagal memverifikasi pembayaran QRIS.");
+      }
+    } finally {
+      confirmingRef.current = false;
+      setConfirmingId(null);
     }
   };
 
   const handleConfirmCashLunas = async (orderId: string) => {
-    const currentOrder = orders.find((o) => o.id === orderId);
-    const nextOrderStatus =
-      currentOrder?.orderStatus === "Pesanan baru" ? "Diproses" : currentOrder?.orderStatus;
-    const res = await updateOrderStatus(orderId, nextOrderStatus, "Lunas");
-    setConfirmCashOrder(null);
-    if (!res.success) {
-      alert(res.error || "Gagal mengonfirmasi pembayaran tunai.");
-    } else {
-      fetchOrders();
+    if (confirmingRef.current || confirmingId) return;
+    confirmingRef.current = true;
+    setConfirmingId(orderId);
+    try {
+      const currentOrder = orders.find((o) => o.id === orderId);
+      const nextOrderStatus =
+        currentOrder?.orderStatus === "Pesanan baru" ? "Diproses" : currentOrder?.orderStatus;
+      const res = await updateOrderStatus(orderId, nextOrderStatus, "Lunas");
+      setConfirmCashOrder(null);
+      if (!res.success) {
+        alert(res.error || "Gagal mengonfirmasi pembayaran tunai.");
+      }
+    } finally {
+      confirmingRef.current = false;
+      setConfirmingId(null);
     }
   };
 
@@ -526,17 +537,26 @@ export function PaymentsManager() {
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
+                disabled={Boolean(confirmingId)}
                 onClick={() => setConfirmQrisOrder(null)}
-                className="px-3.5 py-2 rounded-xl border border-[#E5E5E5] text-xs font-semibold text-[#737373] hover:text-[#111111]"
+                className="px-3.5 py-2 rounded-xl border border-[#E5E5E5] text-xs font-semibold text-[#737373] hover:text-[#111111] disabled:opacity-50"
               >
                 Batal
               </button>
               <button
                 type="button"
+                disabled={Boolean(confirmingId)}
                 onClick={() => handleConfirmQrisLunas(confirmQrisOrder.id)}
-                className="px-4 py-2 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
               >
-                Sudah Dicek & Tandai Lunas
+                {confirmingId === confirmQrisOrder.id ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Memverifikasi...</span>
+                  </>
+                ) : (
+                  <span>Sudah Dicek & Tandai Lunas</span>
+                )}
               </button>
             </div>
           </div>
@@ -575,17 +595,26 @@ export function PaymentsManager() {
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
+                disabled={Boolean(confirmingId)}
                 onClick={() => setConfirmCashOrder(null)}
-                className="px-3.5 py-2 rounded-xl border border-[#E5E5E5] text-xs font-semibold text-[#737373] hover:text-[#111111]"
+                className="px-3.5 py-2 rounded-xl border border-[#E5E5E5] text-xs font-semibold text-[#737373] hover:text-[#111111] disabled:opacity-50"
               >
                 Batal
               </button>
               <button
                 type="button"
+                disabled={Boolean(confirmingId)}
                 onClick={() => handleConfirmCashLunas(confirmCashOrder.id)}
-                className="px-4 py-2 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
               >
-                Uang Tunai Diterima & Tandai Lunas
+                {confirmingId === confirmCashOrder.id ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <span>Uang Tunai Diterima & Tandai Lunas</span>
+                )}
               </button>
             </div>
           </div>

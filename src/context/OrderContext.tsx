@@ -23,6 +23,7 @@ interface OrderContextType {
   isHydrated: boolean;
   createOrder: (params: CreateOrderParams) => Order;
   addOrder: (order: Order) => void;
+  mergeOrders: (incomingOrders: Order[]) => void;
   getOrderById: (id: string) => Order | undefined;
   getOrderByToken: (token: string) => Order | undefined;
   refreshOrderByToken: (token: string) => Promise<Order | null>;
@@ -253,6 +254,27 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const mergeOrders = (incomingOrders: Order[]) => {
+    if (!Array.isArray(incomingOrders) || incomingOrders.length === 0) return;
+    setOrders((prev) => {
+      const existingMap = new Map(prev.map((o) => [o.id, o]));
+      for (const order of incomingOrders) {
+        const existing = existingMap.get(order.id);
+        const resolvedToken = order.token || existing?.token || getOrderToken(order.id) || "";
+        if (resolvedToken && order.id) {
+          saveOrderToken(order.id, resolvedToken);
+        }
+        existingMap.set(order.id, {
+          ...order,
+          token: resolvedToken,
+        });
+      }
+      return Array.from(existingMap.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    });
+  };
+
   const getOrderById = (id: string) => {
     return orders.find((o) => o.id === id);
   };
@@ -345,6 +367,7 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
         isHydrated,
         createOrder,
         addOrder,
+        mergeOrders,
         getOrderById,
         getOrderByToken,
         refreshOrderByToken,

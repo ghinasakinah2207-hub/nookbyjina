@@ -394,15 +394,12 @@ export async function saveStoreSettingsAction(
     return { success: false, error: message };
   }
 
-  // 4. Revalidate all storefront and admin pages and invalidate data cache
+  // 4. Invalidate data cache and revalidate storefront pages
   try {
     revalidateTag("store-settings", { expire: 0 });
   } catch {
     // Graceful fallback if called outside Next.js request
   }
-  revalidatePath("/admin/pengaturan");
-  revalidatePath("/admin/pembayaran");
-  revalidatePath("/pembayaran", "layout");
   revalidatePath("/home");
   revalidatePath("/menu");
   revalidatePath("/keranjang");
@@ -485,7 +482,6 @@ export async function toggleStoreStatusAction(
   } catch {
     // Graceful fallback if called outside Next.js request
   }
-  revalidatePath("/admin/pengaturan");
   revalidatePath("/home");
   revalidatePath("/menu");
   revalidatePath("/keranjang");
