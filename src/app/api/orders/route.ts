@@ -444,6 +444,7 @@ export async function POST(request: Request) {
       err instanceof Error
         ? err.message
         : "Terjadi kesalahan saat memvalidasi dan membuat pesanan.";
+    console.error("[POST /api/orders] Order creation failed:", message);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

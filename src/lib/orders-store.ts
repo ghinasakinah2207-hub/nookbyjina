@@ -146,11 +146,35 @@ export async function saveOrder(order: Order): Promise<Order> {
   }
 
   // Fail closed: do not attempt direct table inserts that bypass validation.
-  const safeMsg = rpcErr?.message || "create_order_atomic RPC gagal.";
-  console.error("[saveOrder] Atomic RPC failed:", safeMsg);
-  throw new Error(
-    "Gagal menyimpan pesanan ke database. Silakan coba lagi dalam beberapa saat."
-  );
+  const rawMsg = rpcErr?.message || "";
+  console.error("[saveOrder] Atomic RPC failed:", {
+    code: rpcErr?.code,
+    message: rawMsg,
+    details: rpcErr?.details,
+    hint: rpcErr?.hint,
+    orderId: order.id,
+    fulfillmentType: order.fulfillmentType,
+    total: order.total,
+    itemsCount: order.items?.length,
+  });
+
+  const isIntentionalMessage =
+    rawMsg.includes("tidak valid") ||
+    rawMsg.includes("tidak ditemukan") ||
+    rawMsg.includes("tidak tersedia") ||
+    rawMsg.includes("belum dipilih") ||
+    rawMsg.includes("belum terkonfigurasi") ||
+    rawMsg.includes("wajib") ||
+    rawMsg.includes("tidak didukung") ||
+    rawMsg.includes("melebihi") ||
+    rawMsg.includes("Akses ditolak") ||
+    rawMsg.includes("dicabut") ||
+    rawMsg.includes("kedaluwarsa");
+
+  const safeMsg = isIntentionalMessage
+    ? rawMsg
+    : "Gagal menyimpan pesanan ke database. Silakan coba lagi dalam beberapa saat.";
+  throw new Error(safeMsg);
 }
 
 /**
