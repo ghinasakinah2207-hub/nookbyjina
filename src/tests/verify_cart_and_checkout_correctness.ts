@@ -89,7 +89,7 @@ async function runCartAndCheckoutTests() {
     "SIMULATED FIXTURE"
   );
 
-  // Delivery exactly at threshold: Rp0 free shipping
+  // Delivery exactly at threshold: strictly greater than Rp50,000 required, so Rp50,000 incurs fee
   const atThresholdCalc = calculateDeliveryFee({
     fulfillmentType: "delivery",
     deliveryArea: "Lhoksukon",
@@ -97,8 +97,8 @@ async function runCartAndCheckoutTests() {
     deliveryConfig: standardConfig,
   });
   testAssert(
-    atThresholdCalc.shippingFee === 0 && atThresholdCalc.isFree,
-    "Delivery exactly at threshold (Rp50.000) qualifies for free shipping (Rp0)",
+    atThresholdCalc.shippingFee === 4000 && !atThresholdCalc.isFree,
+    "Delivery exactly at threshold (Rp50.000) incurs standard fee (Rp4.000) because threshold is strictly > Rp50.000",
     "SIMULATED FIXTURE"
   );
 

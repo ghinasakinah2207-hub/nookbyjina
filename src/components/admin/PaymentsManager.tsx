@@ -54,17 +54,23 @@ export function PaymentsManager() {
 
   const verifiedPayments = orders.filter((o) => o.paymentStatus === "Lunas");
 
-  const handleConfirmQrisLunas = (orderId: string) => {
-    updateOrderStatus(orderId, "Diproses", "Lunas");
+  const handleConfirmQrisLunas = async (orderId: string) => {
+    const res = await updateOrderStatus(orderId, "Diproses", "Lunas");
     setConfirmQrisOrder(null);
+    if (!res.success) {
+      alert(res.error || "Gagal memverifikasi pembayaran QRIS.");
+    }
   };
 
-  const handleConfirmCashLunas = (orderId: string) => {
+  const handleConfirmCashLunas = async (orderId: string) => {
     const currentOrder = orders.find((o) => o.id === orderId);
     const nextOrderStatus =
       currentOrder?.orderStatus === "Pesanan baru" ? "Diproses" : currentOrder?.orderStatus;
-    updateOrderStatus(orderId, nextOrderStatus, "Lunas");
+    const res = await updateOrderStatus(orderId, nextOrderStatus, "Lunas");
     setConfirmCashOrder(null);
+    if (!res.success) {
+      alert(res.error || "Gagal mengonfirmasi pembayaran tunai.");
+    }
   };
 
   const getCleanWhatsappLink = (

@@ -11,7 +11,6 @@ import {
   MessageCircle,
   QrCode,
   CreditCard,
-  Banknote,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { useCart } from "@/context/CartContext";
@@ -51,30 +50,16 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
   // Stable idempotency token for this checkout session to defend against duplicate orders on retry
   const [checkoutToken, setCheckoutToken] = useState<string>(() => generateOrderToken());
 
-  // Payment methods availability and customer selection
-  const isQrisEnabled = storeSettings?.paymentMethods ? storeSettings.paymentMethods.qris : true;
-  const isCashEnabled = storeSettings?.paymentMethods ? storeSettings.paymentMethods.cash : true;
+  // MVP: Only QRIS Statis is available as a payment method.
+  // Cash support is planned for a future release.
+  const availablePaymentMethods: PaymentMethod[] = useMemo(() => {
+    return ["QRIS Statis" as PaymentMethod];
+  }, []);
 
-  const availablePaymentMethods = useMemo(() => {
-    const list: PaymentMethod[] = [];
-    if (isQrisEnabled) list.push("QRIS Statis");
-    if (isCashEnabled) list.push("Cash");
-    return list;
-  }, [isQrisEnabled, isCashEnabled]);
+  const selectedPaymentMethod: PaymentMethod = "QRIS Statis";
 
-  const [userSelectedMethod, setUserSelectedMethod] = useState<PaymentMethod | null>(null);
-
-  // Automatically derive selected payment method:
-  // If user selected a valid available method, use it; otherwise fallback to the first available method (or null if none)
-  const selectedPaymentMethod: PaymentMethod | null = useMemo(() => {
-    if (availablePaymentMethods.length === 0) return null;
-    if (userSelectedMethod && availablePaymentMethods.includes(userSelectedMethod)) {
-      return userSelectedMethod;
-    }
-    return availablePaymentMethods[0];
-  }, [availablePaymentMethods, userSelectedMethod]);
-
-  const setSelectedPaymentMethod = setUserSelectedMethod;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const setSelectedPaymentMethod = (_method: PaymentMethod) => { /* MVP: QRIS-only, no-op */ };
 
   // Revalidate with freshest store settings on mount (no-store cache)
   useEffect(() => {
@@ -255,12 +240,8 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
       // Clear shopping cart
       clearCart();
 
-      // Navigate according to selected payment method
-      if (data.order.paymentMethod === "Cash") {
-        router.push(`/pesanan/${data.order.token}`);
-      } else {
-        router.push(`/pembayaran/${data.order.id}`);
-      }
+      // Always navigate to QRIS payment page (MVP is QRIS-only)
+      router.push(`/pembayaran/${data.order.id}`);
     } catch (err: unknown) {
       const msg =
         err instanceof Error
@@ -751,70 +732,37 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
             ) : (
               <div className="space-y-2">
                 {/* Option 1: QRIS Statis */}
-                {isQrisEnabled && (
-                  <label
-                    className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
-                      selectedPaymentMethod === "QRIS Statis"
-                        ? "border-[#F25B09] bg-orange-50/40 ring-1 ring-[#F25B09]"
-                        : "border-[#E5E5E5] bg-white hover:border-neutral-300"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="paymentMethodOption"
-                      value="QRIS Statis"
-                      checked={selectedPaymentMethod === "QRIS Statis"}
-                      onChange={() => setSelectedPaymentMethod("QRIS Statis")}
-                      className="w-4 h-4 mt-0.5 text-[#F25B09] focus:ring-[#F25B09] accent-[#F25B09]"
-                    />
-                    <div className="space-y-0.5 min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <QrCode className="w-3.5 h-3.5 text-[#F25B09]" />
-                        <span className="text-xs font-bold text-[#111111]">
-                          QRIS Statis
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-[#737373] leading-relaxed">
-                        Pembayaran non-tunai melalui QRIS merchant (
-                        {storeSettings?.qrisMerchantName || "Nook by Jina"}). Kode QR dan
-                        panduan transfer akan ditampilkan setelah pesanan dibuat.
-                      </p>
+                <label
+                  className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                    selectedPaymentMethod === "QRIS Statis"
+                      ? "border-[#F25B09] bg-orange-50/40 ring-1 ring-[#F25B09]"
+                      : "border-[#E5E5E5] bg-white hover:border-neutral-300"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="paymentMethodOption"
+                    value="QRIS Statis"
+                    checked={selectedPaymentMethod === "QRIS Statis"}
+                    onChange={() => setSelectedPaymentMethod("QRIS Statis")}
+                    className="w-4 h-4 mt-0.5 text-[#F25B09] focus:ring-[#F25B09] accent-[#F25B09]"
+                  />
+                  <div className="space-y-0.5 min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <QrCode className="w-3.5 h-3.5 text-[#F25B09]" />
+                      <span className="text-xs font-bold text-[#111111]">
+                        QRIS Statis
+                      </span>
                     </div>
-                  </label>
-                )}
+                    <p className="text-[11px] text-[#737373] leading-relaxed">
+                      Pembayaran non-tunai melalui QRIS merchant (
+                      {storeSettings?.qrisMerchantName || "Nook by Jina"}). Kode QR dan
+                      panduan transfer akan ditampilkan setelah pesanan dibuat.
+                    </p>
+                  </div>
+                </label>
 
-                {/* Option 2: Cash (Tunai) */}
-                {isCashEnabled && (
-                  <label
-                    className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
-                      selectedPaymentMethod === "Cash"
-                        ? "border-[#F25B09] bg-orange-50/40 ring-1 ring-[#F25B09]"
-                        : "border-[#E5E5E5] bg-white hover:border-neutral-300"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="paymentMethodOption"
-                      value="Cash"
-                      checked={selectedPaymentMethod === "Cash"}
-                      onChange={() => setSelectedPaymentMethod("Cash")}
-                      className="w-4 h-4 mt-0.5 text-[#F25B09] focus:ring-[#F25B09] accent-[#F25B09]"
-                    />
-                    <div className="space-y-0.5 min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <Banknote className="w-3.5 h-3.5 text-emerald-600" />
-                        <span className="text-xs font-bold text-[#111111]">
-                          Cash (Tunai)
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-[#737373] leading-relaxed">
-                        {fulfillmentType === "pickup"
-                          ? "Pembayaran tunai dilakukan langsung di kasir toko saat mengambil pesanan."
-                          : "Pembayaran tunai diserahkan langsung kepada kurir saat pesanan tiba di alamat Anda. Harap siapkan uang pas."}
-                      </p>
-                    </div>
-                  </label>
-                )}
+                {/* Cash (Tunai) is disabled in MVP — QRIS Statis only */}
               </div>
             )}
           </div>

@@ -1,5 +1,6 @@
 -- ==============================================================================
 -- Migration: Production Order Persistence & Concurrency-Safe Daily Sequencing
+-- Review revision: completed orders now reject ALL payment-status changes, not only cancellation.
 -- File: supabase/migrations/20261022000000_production_order_persistence.sql
 -- Project: Nook by Jina
 --
@@ -7,12 +8,31 @@
 --   1. Provision atomic daily sequence counter for TJ-YYMMDD-NNN order numbering
 --      under high concurrent load using Asia/Jakarta (WIB) store timezone.
 --   2. Add missing order snapshot columns (delivery_area, items_snapshot, merchant_name)
---      and unique constraint on orders.order_number.
+--      and unique constraint on orders.order_number with preflight duplicate diagnostics.
 --   3. Index anonymous_order_tokens(token_hash) for sub-millisecond lookup.
---   4. Implement atomic RPC transaction public.create_order_atomic(p_order, p_token_hash)
---      to guarantee order + items + options + token_hash + payment are committed together
---      with zero orphaned records.
---   5. Implement secure token lookup and admin synchronization RPC functions.
+--   4. Read-only preflight diagnostics of triggers and trigger functions on
+--      public.payments and all mutation tables directly from PostgreSQL system catalogs,
+--      explicitly distinguishing ENABLED, DISABLED, ALWAYS, and REPLICA activation states.
+--   5. Implement atomic RPC transaction public.create_order_atomic(p_order, p_token_hash)
+--      with savepoint-decoupled daily order number progression ensuring collision retries
+--      never repeat collided numbers, strictly complying with verified production constraints:
+--        - orders.payment_method & payments.method strictly store 'QRIS'.
+--        - payments.amount_due strictly stores authoritative v_total (exact integer alignment with orders.total).
+--        - order_items.line_total strictly stores unit_price * quantity (exact integer alignment with items_snapshot.itemTotal).
+--        - order_item_options.option_type strictly stores 'variant' or 'addon'.
+--        - orders.payment_status & payments.status strictly store production enums
+--          ('Menunggu verifikasi admin', 'Menunggu pembayaran', 'Lunas', 'Gagal', 'Dibatalkan').
+--        - subtotal, delivery_fee, and total are guaranteed NOT NULL integer values in IDR currency.
+--        - delivery_areas.fee and free_shipping_threshold are staged into numeric variables to reject
+--          fractional sen before casting to integer, strictly enforcing subtotal > threshold for free delivery.
+--        - total = subtotal + delivery_fee holds invariant; pickup always has delivery_fee = 0.
+--        - payment_deadline is guaranteed valid and NOT NULL (30 minutes from creation).
+--   6. Implement secure token lookup and admin synchronization RPC functions with
+--      seamless bidirectional mapping to application TypeScript contract:
+--        - admin_update_order_status acquires exclusive row lock (SELECT FOR UPDATE) to serialize concurrent updates.
+--        - transition rules prevent invalid cancellation of paid orders (Lunas) and forbid resurrected/unpaid Lunas.
+--        - rejects contradictory combinations (Diproses/Siap/Selesai with Dibatalkan payment).
+--        - strictly synchronizes single-status updates between orders and payments tables.
 -- ==============================================================================
 
 BEGIN;
@@ -43,26 +63,56 @@ AS $$
 DECLARE
   v_date text;
   v_seq integer;
+  v_order_number text;
 BEGIN
   -- 1. Derive date part 'YYMMDD' in store-local WIB timezone (Asia/Jakarta)
   v_date := to_char(timezone('Asia/Jakarta', now()), 'YYMMDD');
 
-  -- 2. Atomically upsert counter row with row-level lock
+  -- 2. Concurrency-safe initialization and reconciliation:
+  -- Seed or reconcile the counter row for today's WIB date with the
+  -- MAXIMUM sequence number already present in public.orders for today's date.
+  -- This guarantees zero collisions even if orders were already created today
+  -- before migration or out-of-band.
   INSERT INTO public.daily_order_counters (order_date, last_sequence, updated_at)
-  VALUES (v_date, 1, timezone('utc'::text, now()))
+  SELECT 
+    v_date,
+    COALESCE(MAX(
+      CASE 
+        WHEN substring(order_number from '^TJ-[0-9]{6}-([0-9]+)$') ~ '^[0-9]+$' 
+        THEN substring(order_number from '^TJ-[0-9]{6}-([0-9]+)$')::integer 
+        ELSE 0 
+      END
+    ), 0),
+    timezone('utc'::text, now())
+  FROM public.orders
+  WHERE order_number LIKE 'TJ-' || v_date || '-%'
   ON CONFLICT (order_date) DO UPDATE
+    SET last_sequence = GREATEST(daily_order_counters.last_sequence, EXCLUDED.last_sequence);
+
+  -- 3. Atomically increment sequence with row-level lock and verify no collision
+  LOOP
+    UPDATE public.daily_order_counters
     SET last_sequence = public.daily_order_counters.last_sequence + 1,
         updated_at = timezone('utc'::text, now())
-  RETURNING last_sequence INTO v_seq;
+    WHERE order_date = v_date
+    RETURNING last_sequence INTO v_seq;
 
-  -- 3. Format order number:
-  -- Sequence 1..999 is zero-padded to 3 digits (e.g. TJ-261021-001)
-  -- Sequence >= 1000 dynamically expands (e.g. TJ-261021-1000) preventing collisions or truncation
-  IF v_seq <= 999 THEN
-    RETURN 'TJ-' || v_date || '-' || lpad(v_seq::text, 3, '0');
-  ELSE
-    RETURN 'TJ-' || v_date || '-' || v_seq::text;
-  END IF;
+    -- Format order number:
+    -- Sequence 1..999 is zero-padded to 3 digits (e.g. TJ-261021-001)
+    -- Sequence >= 1000 dynamically expands (e.g. TJ-261021-1000) preventing collisions or truncation
+    IF v_seq <= 999 THEN
+      v_order_number := 'TJ-' || v_date || '-' || lpad(v_seq::text, 3, '0');
+    ELSE
+      v_order_number := 'TJ-' || v_date || '-' || v_seq::text;
+    END IF;
+
+    -- Collision defense: exit only if this number is NOT already used in public.orders
+    EXIT WHEN NOT EXISTS (
+      SELECT 1 FROM public.orders WHERE order_number = v_order_number
+    );
+  END LOOP;
+
+  RETURN v_order_number;
 END;
 $$;
 
@@ -70,8 +120,210 @@ REVOKE ALL ON FUNCTION public.generate_daily_order_number() FROM PUBLIC, anon, a
 GRANT EXECUTE ON FUNCTION public.generate_daily_order_number() TO service_role, postgres;
 
 -- ------------------------------------------------------------------------------
--- 3. ENHANCE PUBLIC.ORDERS TABLE (SCHEMA PRESERVATION & CONSTRAINTS)
+-- 3. ENHANCE PUBLIC.ORDERS TABLE & COMPREHENSIVE DEPENDENCY PREFLIGHT
 -- ------------------------------------------------------------------------------
+-- Preflight: Comprehensive validation of all database tables, columns, and functions
+-- required by the migration's executable SQL and atomic order RPCs.
+DO $$
+DECLARE
+  v_table_rec record;
+  v_col_rec record;
+BEGIN
+  -- 1. Core tables existence preflight (13 required tables)
+  FOR v_table_rec IN
+    SELECT unnest(ARRAY[
+      'orders',
+      'order_items',
+      'order_item_options',
+      'payments',
+      'anonymous_order_tokens',
+      'store_settings',
+      'products',
+      'product_option_groups',
+      'product_option_values',
+      'addons',
+      'product_addons',
+      'delivery_areas',
+      'daily_order_counters'
+    ]) AS table_name
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.tables 
+      WHERE table_schema = 'public' AND table_name = v_table_rec.table_name
+    ) THEN
+      RAISE EXCEPTION 'Migration preflight failed: Tabel public.% tidak ditemukan di database.', v_table_rec.table_name
+        USING ERRCODE = '42P01';
+    END IF;
+  END LOOP;
+
+  -- 2. Verified production columns existence preflight
+  FOR v_col_rec IN
+    SELECT * FROM (VALUES
+      -- public.products
+      ('products', 'id'),
+      ('products', 'name'),
+      ('products', 'price'),
+      ('products', 'is_available'),
+      ('products', 'is_archived'),
+      ('products', 'slug'),
+      -- public.product_option_groups
+      ('product_option_groups', 'id'),
+      ('product_option_groups', 'product_id'),
+      ('product_option_groups', 'name'),
+      ('product_option_groups', 'is_required'),
+      ('product_option_groups', 'min_select'),
+      ('product_option_groups', 'max_select'),
+      ('product_option_groups', 'sort_order'),
+      -- public.product_option_values
+      ('product_option_values', 'id'),
+      ('product_option_values', 'group_id'),
+      ('product_option_values', 'name'),
+      ('product_option_values', 'price_delta'),
+      ('product_option_values', 'is_active'),
+      -- public.addons
+      ('addons', 'id'),
+      ('addons', 'name'),
+      ('addons', 'price'),
+      ('addons', 'is_active'),
+      -- public.product_addons
+      ('product_addons', 'addon_id'),
+      ('product_addons', 'product_id'),
+      -- public.delivery_areas
+      ('delivery_areas', 'name'),
+      ('delivery_areas', 'fee'),
+      ('delivery_areas', 'free_shipping_threshold'),
+      ('delivery_areas', 'is_active'),
+      ('delivery_areas', 'sort_order'),
+      -- public.store_settings
+      ('store_settings', 'store_name'),
+      -- public.orders
+      ('orders', 'id'),
+      ('orders', 'order_number'),
+      ('orders', 'order_status'),
+      ('orders', 'payment_status'),
+      ('orders', 'payment_method'),
+      ('orders', 'payment_deadline'),
+      ('orders', 'subtotal'),
+      ('orders', 'delivery_fee'),
+      ('orders', 'total'),
+      ('orders', 'customer_name'),
+      ('orders', 'customer_whatsapp'),
+      ('orders', 'customer_note'),
+      ('orders', 'delivery_address'),
+      ('orders', 'fulfillment_method'),
+      ('orders', 'created_at'),
+      ('orders', 'updated_at'),
+      ('orders', 'paid_at'),
+      ('orders', 'cancelled_at'),
+      -- public.order_items
+      ('order_items', 'id'),
+      ('order_items', 'order_id'),
+      ('order_items', 'product_id'),
+      ('order_items', 'product_name'),
+      ('order_items', 'quantity'),
+      ('order_items', 'unit_price'),
+      ('order_items', 'line_total'),
+      ('order_items', 'created_at'),
+      -- public.order_item_options
+      ('order_item_options', 'id'),
+      ('order_item_options', 'order_item_id'),
+      ('order_item_options', 'option_type'),
+      ('order_item_options', 'option_name'),
+      ('order_item_options', 'option_value'),
+      ('order_item_options', 'price_delta'),
+      ('order_item_options', 'created_at'),
+      -- public.payments
+      ('payments', 'id'),
+      ('payments', 'order_id'),
+      ('payments', 'method'),
+      ('payments', 'amount_due'),
+      ('payments', 'status'),
+      ('payments', 'created_at'),
+      ('payments', 'updated_at'),
+      -- public.anonymous_order_tokens
+      ('anonymous_order_tokens', 'id'),
+      ('anonymous_order_tokens', 'order_id'),
+      ('anonymous_order_tokens', 'token_hash'),
+      ('anonymous_order_tokens', 'revoked_at'),
+      ('anonymous_order_tokens', 'created_at'),
+      -- public.daily_order_counters
+      ('daily_order_counters', 'order_date'),
+      ('daily_order_counters', 'last_sequence'),
+      ('daily_order_counters', 'created_at'),
+      ('daily_order_counters', 'updated_at')
+    ) AS req(table_name, column_name)
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+        AND table_name = v_col_rec.table_name 
+        AND column_name = v_col_rec.column_name
+    ) THEN
+      RAISE EXCEPTION 'Migration preflight failed: Kolom % pada public.% tidak ditemukan.',
+        v_col_rec.column_name, v_col_rec.table_name
+        USING ERRCODE = '42703';
+    END IF;
+  END LOOP;
+
+  -- 2b. Verified monetary column types compatibility preflight (integer or numeric)
+  -- Validates all 12 monetary source and destination columns used by checkout and pricing logic
+  FOR v_col_rec IN
+    SELECT * FROM (VALUES
+      -- Catalog & pricing source columns
+      ('products', 'price'),
+      ('product_option_values', 'price_delta'),
+      ('addons', 'price'),
+      ('delivery_areas', 'fee'),
+      ('delivery_areas', 'free_shipping_threshold'),
+      -- Order & persistence destination columns
+      ('orders', 'subtotal'),
+      ('orders', 'delivery_fee'),
+      ('orders', 'total'),
+      ('order_items', 'unit_price'),
+      ('order_items', 'line_total'),
+      ('order_item_options', 'price_delta'),
+      ('payments', 'amount_due')
+    ) AS m(table_name, column_name)
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+        AND table_name = v_col_rec.table_name 
+        AND column_name = v_col_rec.column_name
+        AND data_type IN ('integer', 'bigint', 'smallint', 'numeric', 'double precision', 'real')
+    ) THEN
+      RAISE EXCEPTION 'Migration preflight failed: Kolom moneter public.%.% tidak memiliki tipe data numerik atau integer yang valid.',
+        v_col_rec.table_name, v_col_rec.column_name
+        USING ERRCODE = '42804';
+    END IF;
+  END LOOP;
+
+  -- 3. Dependent authorization functions existence preflight
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_proc p
+    JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname = 'is_admin'
+      AND p.pronargs = 0
+      AND p.prorettype = 'boolean'::regtype
+  ) THEN
+    RAISE EXCEPTION 'Migration preflight failed: Fungsi public.is_admin() yang mengembalikan boolean tidak ditemukan di database. Pastikan migrasi keamanan admin (20261012181500_harden_rls_and_admin_security.sql) telah diterapkan.'
+      USING ERRCODE = '42883';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_proc p
+    JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'auth'
+      AND p.proname = 'role'
+      AND p.pronargs = 0
+      AND p.prorettype = 'text'::regtype
+  ) THEN
+    RAISE EXCEPTION 'Migration preflight failed: Fungsi auth.role() yang mengembalikan text tidak ditemukan di skema auth. Pastikan ekstensi auth Supabase aktif.'
+      USING ERRCODE = '42883';
+  END IF;
+END $$;
+
 ALTER TABLE IF EXISTS public.orders
   ADD COLUMN IF NOT EXISTS delivery_area text,
   ADD COLUMN IF NOT EXISTS items_snapshot jsonb,
@@ -149,6 +401,124 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_anonymous_order_tokens_active_hash
   WHERE revoked_at IS NULL;
 
 -- ------------------------------------------------------------------------------
+-- 4b. PREFLIGHT AUDIT: READ-ONLY TRIGGER DIAGNOSTICS (PAYMENTS & RELATED TABLES)
+-- Inspect all user-defined triggers on public.payments and related transaction
+-- tables (orders, order_items, order_item_options, anonymous_order_tokens,
+-- daily_order_counters) directly from PostgreSQL system catalogs.
+-- Explicitly distinguishes trigger activation status (ENABLED, DISABLED, ALWAYS, REPLICA).
+-- Strictly read-only: does NOT drop, alter, or disable any existing triggers.
+-- ------------------------------------------------------------------------------
+DO $$
+DECLARE
+  v_trig_rec RECORD;
+  v_total_count integer := 0;
+  v_enabled_count integer := 0;
+  v_disabled_count integer := 0;
+  v_always_count integer := 0;
+  v_replica_count integer := 0;
+  v_payments_total_count integer := 0;
+  v_payments_enabled_count integer := 0;
+  v_payments_disabled_count integer := 0;
+  v_payments_always_count integer := 0;
+  v_payments_replica_count integer := 0;
+BEGIN
+  RAISE NOTICE '=== PREFLIGHT: Memeriksa trigger pada tabel transaksi pesanan & pembayaran ===';
+
+  FOR v_trig_rec IN
+    SELECT
+      n.nspname AS schema_name,
+      c.relname AS table_name,
+      t.tgname AS trigger_name,
+      p.proname AS function_name,
+      pn.nspname AS function_schema,
+      CASE t.tgenabled
+        WHEN 'O' THEN 'ENABLED'
+        WHEN 'D' THEN 'DISABLED'
+        WHEN 'A' THEN 'ALWAYS'
+        WHEN 'R' THEN 'REPLICA'
+        ELSE 'UNKNOWN (' || t.tgenabled::text || ')'
+      END AS trigger_status,
+      CASE 
+        WHEN (t.tgtype & 2) != 0 THEN 'BEFORE'
+        WHEN (t.tgtype & 64) != 0 THEN 'INSTEAD OF'
+        ELSE 'AFTER'
+      END AS trigger_timing,
+      concat_ws(' OR ',
+        CASE WHEN (t.tgtype & 4) != 0 THEN 'INSERT' END,
+        CASE WHEN (t.tgtype & 8) != 0 THEN 'DELETE' END,
+        CASE WHEN (t.tgtype & 16) != 0 THEN 'UPDATE' END,
+        CASE WHEN (t.tgtype & 32) != 0 THEN 'TRUNCATE' END
+      ) AS trigger_events,
+      CASE WHEN (t.tgtype & 1) != 0 THEN 'ROW' ELSE 'STATEMENT' END AS trigger_level,
+      pg_catalog.pg_get_triggerdef(t.oid) AS trigger_def
+    FROM pg_catalog.pg_trigger t
+    JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid
+    JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_catalog.pg_proc p ON p.oid = t.tgfoid
+    JOIN pg_catalog.pg_namespace pn ON pn.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND c.relname IN ('payments', 'orders', 'order_items', 'order_item_options', 'anonymous_order_tokens', 'daily_order_counters')
+      AND NOT t.tgisinternal
+    ORDER BY c.relname, t.tgname
+  LOOP
+    v_total_count := v_total_count + 1;
+
+    -- Track status distribution across all target tables
+    IF v_trig_rec.trigger_status = 'ENABLED' THEN
+      v_enabled_count := v_enabled_count + 1;
+    ELSIF v_trig_rec.trigger_status = 'DISABLED' THEN
+      v_disabled_count := v_disabled_count + 1;
+    ELSIF v_trig_rec.trigger_status = 'ALWAYS' THEN
+      v_always_count := v_always_count + 1;
+    ELSIF v_trig_rec.trigger_status = 'REPLICA' THEN
+      v_replica_count := v_replica_count + 1;
+    END IF;
+
+    -- Track status distribution specifically on public.payments
+    IF v_trig_rec.table_name = 'payments' THEN
+      v_payments_total_count := v_payments_total_count + 1;
+      IF v_trig_rec.trigger_status = 'ENABLED' THEN
+        v_payments_enabled_count := v_payments_enabled_count + 1;
+      ELSIF v_trig_rec.trigger_status = 'DISABLED' THEN
+        v_payments_disabled_count := v_payments_disabled_count + 1;
+      ELSIF v_trig_rec.trigger_status = 'ALWAYS' THEN
+        v_payments_always_count := v_payments_always_count + 1;
+      ELSIF v_trig_rec.trigger_status = 'REPLICA' THEN
+        v_payments_replica_count := v_payments_replica_count + 1;
+      END IF;
+    END IF;
+
+    RAISE NOTICE '[TRIGGER AUDIT] Tabel: public.%, Trigger: %, Status: %, Timing: % %, Level: FOR EACH %, Fungsi: %.%(), Definisi: %',
+      v_trig_rec.table_name,
+      v_trig_rec.trigger_name,
+      v_trig_rec.trigger_status,
+      v_trig_rec.trigger_timing,
+      v_trig_rec.trigger_events,
+      v_trig_rec.trigger_level,
+      v_trig_rec.function_schema,
+      v_trig_rec.function_name,
+      COALESCE(v_trig_rec.trigger_def, '(definisi tidak tersedia)');
+  END LOOP;
+
+  IF v_total_count = 0 THEN
+    RAISE NOTICE 'Audit Trigger: Tidak ditemukan user-defined trigger pada tabel transaksi pesanan & pembayaran.';
+  ELSE
+    RAISE NOTICE 'Audit Trigger Selesai (Semua Tabel Transaksi): Total % user-defined trigger ditemukan (ENABLED: %, ALWAYS: %, REPLICA: %, DISABLED: %).',
+      v_total_count, v_enabled_count, v_always_count, v_replica_count, v_disabled_count;
+    RAISE NOTICE 'Audit Trigger public.payments: Total % trigger pada public.payments (ENABLED: %, ALWAYS: %, REPLICA: %, DISABLED: %).',
+      v_payments_total_count,
+      v_payments_enabled_count,
+      v_payments_always_count,
+      v_payments_replica_count,
+      v_payments_disabled_count;
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE EXCEPTION 'Audit trigger preflight gagal mengeksekusi pemeriksaan katalog: % (SQLSTATE: %)',
+      SQLERRM, SQLSTATE;
+END $$;
+
+-- ------------------------------------------------------------------------------
 -- 5. ATOMIC ORDER CREATION RPC (SINGLE TRANSACTION — ZERO ORPHANED ROWS)
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.create_order_atomic(
@@ -164,6 +534,8 @@ DECLARE
   v_existing_order jsonb;
   v_order_id uuid := gen_random_uuid();
   v_order_number text;
+  v_attempt integer;
+  v_err_constraint text;
   v_item jsonb;
   v_item_id uuid;
   v_opt jsonb;
@@ -188,23 +560,25 @@ DECLARE
   v_seen_addon_ids text[];
   v_qty integer;
   v_opt_val_id text;
-  v_opt_delta numeric;
-  v_opt_delta_sum numeric;
+  v_opt_delta_sum integer := 0;
   v_addon_id text;
-  v_addon_price numeric;
-  v_unit_price numeric;
-  v_calculated_subtotal numeric := 0;
-  v_shipping_fee numeric := 0;
-  v_total numeric := 0;
+  v_unit_price integer;
+  v_line_total integer;
+  v_calculated_subtotal integer := 0;
+  v_shipping_fee integer := 0;
+  v_total integer := 0;
   v_deadline timestamptz := NULL;
   v_created_at timestamptz := now();
+  v_raw_payment_method text;
   v_payment_method text;
-  v_is_cash boolean;
   v_fulfillment_type text;
   v_delivery_area text;
-  v_area_fee numeric;
-  v_free_thresh numeric;
+  v_area_fee_raw numeric;
+  v_free_thresh_raw numeric;
+  v_area_fee integer;
+  v_free_thresh integer;
   v_order_status text := 'Pesanan baru';
+  v_raw_payment_status text;
   v_payment_status text;
   v_merchant_name text;
 BEGIN
@@ -252,8 +626,16 @@ BEGIN
     'shippingFee', o.delivery_fee,
     'total', o.total,
     'orderStatus', o.order_status,
-    'paymentStatus', o.payment_status,
-    'paymentMethod', COALESCE(o.payment_method, 'QRIS Statis'),
+    'paymentStatus', CASE 
+      WHEN o.payment_status = 'Menunggu verifikasi admin' THEN 'Menunggu Verifikasi'
+      WHEN o.payment_status = 'Menunggu pembayaran' THEN 'Menunggu Pembayaran'
+      WHEN o.payment_status = 'Gagal' THEN 'Dibatalkan'
+      ELSE o.payment_status 
+    END,
+    'paymentMethod', CASE 
+      WHEN o.payment_method = 'QRIS' THEN 'QRIS Statis' 
+      ELSE COALESCE(o.payment_method, 'QRIS Statis') 
+    END,
     'paymentDeadline', CASE WHEN o.payment_deadline IS NOT NULL THEN to_char(timezone('utc', o.payment_deadline), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') ELSE '' END,
     'merchantName', COALESCE(o.merchant_name, 'Nook by Jina')
   ) INTO v_existing_order
@@ -278,7 +660,7 @@ BEGIN
       USING ERRCODE = '22000';
   END IF;
 
-  -- 2c. Validate customer info (aligns with API contract)
+  -- 2c. Validate customer info & order note (aligns with API contract)
   IF p_order->>'customerName' IS NULL OR length(trim(p_order->>'customerName')) < 2 THEN
     RAISE EXCEPTION 'Nama lengkap pelanggan wajib diisi (minimal 2 karakter).' USING ERRCODE = '22000';
   END IF;
@@ -287,44 +669,44 @@ BEGIN
     RAISE EXCEPTION 'Nomor WhatsApp pelanggan tidak valid (minimal 9 digit angka).' USING ERRCODE = '22000';
   END IF;
 
-  -- 3. Validate payment method
-  v_payment_method := trim(COALESCE(p_order->>'paymentMethod', 'QRIS Statis'));
-  IF v_payment_method NOT IN ('QRIS Statis', 'Cash') THEN
-    RAISE EXCEPTION 'Metode pembayaran "%" tidak didukung (harus "QRIS Statis" atau "Cash").', v_payment_method USING ERRCODE = '22000';
+  IF p_order->>'orderNote' IS NOT NULL AND length(p_order->>'orderNote') > 200 THEN
+    RAISE EXCEPTION 'Catatan pesanan (orderNote) tidak boleh melebihi 200 karakter (terdeteksi % karakter).',
+      length(p_order->>'orderNote')
+      USING ERRCODE = '22000';
   END IF;
-  v_is_cash := (v_payment_method = 'Cash');
 
-  -- 4. Enforce strict initial statuses: prevent client-side payment bypass
+  -- 3. Validate payment method against production payment model (strictly QRIS)
+  v_raw_payment_method := trim(COALESCE(p_order->>'paymentMethod', 'QRIS'));
+  IF upper(v_raw_payment_method) IN ('QRIS', 'QRIS STATIS') THEN
+    v_payment_method := 'QRIS';
+  ELSE
+    RAISE EXCEPTION 'Metode pembayaran "%" tidak didukung pada skema database produksi (hanya "QRIS" yang didukung).', v_raw_payment_method
+      USING ERRCODE = '22000';
+  END IF;
+
+  -- 4. Enforce strict initial statuses matching production constraints
+  -- Production orders.payment_status only accepts:
+  -- 'Menunggu pembayaran', 'Menunggu verifikasi admin', 'Lunas', 'Gagal', 'Dibatalkan'
   IF p_order->>'orderStatus' IS NOT NULL AND p_order->>'orderStatus' != 'Pesanan baru' THEN
     RAISE EXCEPTION 'Status pesanan awal tidak valid (harus "Pesanan baru").' USING ERRCODE = '22000';
   END IF;
 
-  IF v_is_cash THEN
-    IF p_order->>'paymentStatus' IS NOT NULL AND p_order->>'paymentStatus' != 'Menunggu Pembayaran' THEN
-      RAISE EXCEPTION 'Status pembayaran awal untuk Cash harus "Menunggu Pembayaran".' USING ERRCODE = '22000';
-    END IF;
-    v_payment_status := 'Menunggu Pembayaran';
+  v_raw_payment_status := trim(COALESCE(p_order->>'paymentStatus', 'Menunggu verifikasi admin'));
+  IF v_raw_payment_status IN ('Menunggu Verifikasi', 'Menunggu verifikasi admin') THEN
+    v_payment_status := 'Menunggu verifikasi admin';
+  ELSIF v_raw_payment_status IN ('Menunggu Pembayaran', 'Menunggu pembayaran') THEN
+    v_payment_status := 'Menunggu pembayaran';
   ELSE
-    IF p_order->>'paymentStatus' IS NOT NULL AND p_order->>'paymentStatus' != 'Menunggu Verifikasi' THEN
-      RAISE EXCEPTION 'Status pembayaran awal untuk QRIS Statis harus "Menunggu Verifikasi".' USING ERRCODE = '22000';
-    END IF;
-    v_payment_status := 'Menunggu Verifikasi';
+    RAISE EXCEPTION 'Status pembayaran awal "%" tidak valid untuk pesanan baru.', v_raw_payment_status
+      USING ERRCODE = '22000';
   END IF;
 
-  -- 4b. Authoritative 30-minute payment deadline (satisfies orders.payment_deadline NOT NULL)
-  -- Accepts valid client timestamp or authoritatively derives 30 minutes from creation
-  IF p_order->>'paymentDeadline' IS NOT NULL AND length(trim(p_order->>'paymentDeadline')) > 0 THEN
-    BEGIN
-      v_deadline := (p_order->>'paymentDeadline')::timestamptz;
-    EXCEPTION WHEN OTHERS THEN
-      v_deadline := v_created_at + interval '30 minutes';
-    END;
-  ELSE
-    v_deadline := v_created_at + interval '30 minutes';
-  END IF;
-
-  -- 5. Generate unique concurrency-safe daily order number
-  v_order_number := public.generate_daily_order_number();
+  -- 4b. Authoritative 30-minute payment deadline (strictly server-enforced)
+  -- Per application design contract (src/app/api/orders/route.ts:421-422 and src/types/index.ts:124),
+  -- the payment deadline is an authoritative store policy strictly defined as 30 minutes
+  -- from creation. Client-supplied timestamps are rejected from determining the deadline
+  -- to prevent arbitrary, tampered, or already-expired deadlines.
+  v_deadline := v_created_at + interval '30 minutes';
 
   -- ============================================================================
   -- EXECUTION STEP 1: VALIDATE ALL PRODUCTS, OPTIONS, ADD-ONS & PRICES IN MEMORY
@@ -358,6 +740,16 @@ BEGIN
     -- Verify product availability and archive status
     IF v_prod_rec.is_archived OR NOT v_prod_rec.is_available THEN
       RAISE EXCEPTION 'Produk "%" saat ini tidak tersedia atau telah diarsipkan.', v_prod_rec.name USING ERRCODE = '22000';
+    END IF;
+
+    -- Validate product price in IDR integer currency model (no fractional sen allowed)
+    IF v_prod_rec.price IS NULL OR v_prod_rec.price < 0 THEN
+      RAISE EXCEPTION 'Harga produk "%" tidak valid.', v_prod_rec.name USING ERRCODE = '22000';
+    END IF;
+
+    IF v_prod_rec.price != trunc(v_prod_rec.price) THEN
+      RAISE EXCEPTION 'Harga produk "%" tidak valid: mengandung nilai desimal (%). Skema mata uang Rupiah (IDR) mengharuskan bilangan bulat.',
+        v_prod_rec.name, v_prod_rec.price USING ERRCODE = '22000';
     END IF;
 
     v_qty := COALESCE((v_item->>'quantity')::integer, 1);
@@ -405,6 +797,12 @@ BEGIN
           USING ERRCODE = '22000';
         END IF;
 
+        -- Validate option price delta in IDR integer currency model
+        IF v_opt_val_rec.price_delta IS NULL OR v_opt_val_rec.price_delta != trunc(v_opt_val_rec.price_delta) THEN
+          RAISE EXCEPTION 'Delta harga varian "%" tidak valid: mengandung nilai desimal (%). Skema mata uang Rupiah (IDR) mengharuskan bilangan bulat.',
+            v_opt_val_rec.name, v_opt_val_rec.price_delta USING ERRCODE = '22000';
+        END IF;
+
         -- Reject duplicate option-value IDs in the same item
         IF v_opt_val_rec.id::text = ANY(v_seen_opt_val_ids) THEN
           RAISE EXCEPTION 'Pilihan varian "%" tidak boleh dipilih lebih dari satu kali dalam item yang sama.',
@@ -415,15 +813,16 @@ BEGIN
         v_seen_opt_val_ids := array_append(v_seen_opt_val_ids, v_opt_val_rec.id::text);
         v_selected_group_ids := array_append(v_selected_group_ids, v_opt_val_rec.group_id::text);
 
-        v_opt_delta_sum := v_opt_delta_sum + v_opt_val_rec.price_delta;
+        v_opt_delta_sum := v_opt_delta_sum + (v_opt_val_rec.price_delta::integer);
 
         -- Buffer child option snapshot in memory (for order_item_options table, associating with v_item_id)
         v_validated_options := v_validated_options || jsonb_build_object(
           'id', gen_random_uuid(),
           'order_item_id', v_item_id,
+          'option_type', 'variant',
           'option_name', v_opt_val_rec.group_name,
           'option_value', v_opt_val_rec.name,
-          'price_delta', v_opt_val_rec.price_delta
+          'price_delta', (v_opt_val_rec.price_delta::integer)
         );
 
         -- Buffer authoritative option for customer-facing item snapshot
@@ -432,7 +831,7 @@ BEGIN
           'groupName', v_opt_val_rec.group_name,
           'valueId', v_opt_val_rec.id::text,
           'valueName', v_opt_val_rec.name,
-          'priceDelta', v_opt_val_rec.price_delta
+          'priceDelta', (v_opt_val_rec.price_delta::integer)
         );
       END LOOP;
     END IF;
@@ -514,6 +913,12 @@ BEGIN
           USING ERRCODE = '22000';
         END IF;
 
+        -- Validate addon price in IDR integer currency model
+        IF v_addon_rec.price IS NULL OR v_addon_rec.price < 0 OR v_addon_rec.price != trunc(v_addon_rec.price) THEN
+          RAISE EXCEPTION 'Harga add-on "%" tidak valid: mengandung nilai desimal (%). Skema mata uang Rupiah (IDR) mengharuskan bilangan bulat.',
+            v_addon_rec.name, v_addon_rec.price USING ERRCODE = '22000';
+        END IF;
+
         -- Reject duplicate add-on IDs in the same item
         IF v_addon_rec.id::text = ANY(v_seen_addon_ids) THEN
           RAISE EXCEPTION 'Ekstra add-on "%" tidak boleh dipilih lebih dari satu kali dalam item yang sama.',
@@ -523,28 +928,30 @@ BEGIN
 
         v_seen_addon_ids := array_append(v_seen_addon_ids, v_addon_rec.id::text);
 
-        v_opt_delta_sum := v_opt_delta_sum + v_addon_rec.price;
+        v_opt_delta_sum := v_opt_delta_sum + (v_addon_rec.price::integer);
 
         -- Buffer child addon snapshot in memory (stored in order_item_options table, associating with v_item_id)
         v_validated_options := v_validated_options || jsonb_build_object(
           'id', gen_random_uuid(),
           'order_item_id', v_item_id,
+          'option_type', 'addon',
           'option_name', 'Add-on',
           'option_value', v_addon_rec.name,
-          'price_delta', v_addon_rec.price
+          'price_delta', (v_addon_rec.price::integer)
         );
 
         -- Buffer authoritative addon for customer-facing item snapshot
         v_item_addons := v_item_addons || jsonb_build_object(
           'addonId', v_addon_rec.id::text,
           'addonName', v_addon_rec.name,
-          'price', v_addon_rec.price
+          'price', (v_addon_rec.price::integer)
         );
       END LOOP;
     END IF;
 
-    v_unit_price := v_prod_rec.price + v_opt_delta_sum;
-    v_calculated_subtotal := v_calculated_subtotal + (v_unit_price * v_qty);
+    v_unit_price := (v_prod_rec.price::integer) + v_opt_delta_sum;
+    v_line_total := v_unit_price * v_qty;
+    v_calculated_subtotal := v_calculated_subtotal + v_line_total;
 
     -- Buffer validated parent item in memory (for order_items table)
     v_validated_items := v_validated_items || jsonb_build_object(
@@ -554,7 +961,7 @@ BEGIN
       'product_name', v_prod_rec.name,
       'quantity', v_qty,
       'unit_price', v_unit_price,
-      'item_note', COALESCE(v_item->>'itemNote', '')
+      'line_total', v_line_total
     );
 
     -- Buffer authoritative customer-facing item snapshot
@@ -564,9 +971,9 @@ BEGIN
       'productId', v_prod_rec.id::text,
       'productName', v_prod_rec.name,
       'productImage', COALESCE(v_item->>'productImage', ''),
-      'basePrice', v_prod_rec.price,
+      'basePrice', (v_prod_rec.price::integer),
       'unitPrice', v_unit_price,
-      'itemTotal', (v_unit_price * v_qty),
+      'itemTotal', v_line_total,
       'quantity', v_qty,
       'itemNote', COALESCE(v_item->>'itemNote', ''),
       'isAvailable', true,
@@ -592,19 +999,38 @@ BEGIN
       RAISE EXCEPTION 'Alamat atau area pengantaran wajib diisi untuk layanan delivery.' USING ERRCODE = '22000';
     END IF;
     v_delivery_area := trim(COALESCE(p_order->>'deliveryArea', 'Lhoksukon'));
-    SELECT fee, free_shipping_threshold INTO v_area_fee, v_free_thresh
+    SELECT fee, free_shipping_threshold INTO v_area_fee_raw, v_free_thresh_raw
     FROM public.delivery_areas
     WHERE is_active = true
       AND (lower(name) = lower(v_delivery_area) OR (lower(name) LIKE '%lhoksukon%' AND lower(v_delivery_area) LIKE '%lhoksukon%'))
     ORDER BY sort_order ASC
     LIMIT 1;
 
-    IF v_area_fee IS NULL THEN
+    IF v_area_fee_raw IS NULL THEN
       RAISE EXCEPTION 'Area pengantaran "%" belum terkonfigurasi atau tidak aktif.', v_delivery_area USING ERRCODE = '22000';
     END IF;
 
-    -- Free delivery applies when subtotal >= free_shipping_threshold
-    IF v_calculated_subtotal >= COALESCE(v_free_thresh, 50000) THEN
+    -- Validate area fee and free threshold in IDR integer currency model (reject fractional values)
+    IF v_area_fee_raw < 0 OR v_area_fee_raw != trunc(v_area_fee_raw) THEN
+      RAISE EXCEPTION 'Ongkir area pengantaran "%" tidak valid: mengandung nilai desimal (%). Skema mata uang Rupiah (IDR) mengharuskan bilangan bulat.',
+        v_delivery_area, v_area_fee_raw USING ERRCODE = '22000';
+    END IF;
+
+    IF v_free_thresh_raw IS NOT NULL AND (v_free_thresh_raw < 0 OR v_free_thresh_raw != trunc(v_free_thresh_raw)) THEN
+      RAISE EXCEPTION 'Ambang batas gratis ongkir tidak valid: mengandung nilai desimal (%). Skema mata uang Rupiah (IDR) mengharuskan bilangan bulat.',
+        v_free_thresh_raw USING ERRCODE = '22000';
+    END IF;
+
+    -- Convert to integer only after successful validation
+    v_area_fee := v_area_fee_raw::integer;
+    IF v_free_thresh_raw IS NOT NULL THEN
+      v_free_thresh := v_free_thresh_raw::integer;
+    ELSE
+      v_free_thresh := NULL;
+    END IF;
+
+    -- Free delivery applies only when subtotal strictly exceeds the configured threshold (> threshold)
+    IF v_calculated_subtotal > COALESCE(v_free_thresh, 50000) THEN
       v_shipping_fee := 0;
     ELSE
       v_shipping_fee := v_area_fee;
@@ -614,168 +1040,231 @@ BEGIN
   v_total := v_calculated_subtotal + v_shipping_fee;
 
   -- ============================================================================
-  -- EXECUTION STEP 3: INSERT PARENT PUBLIC.ORDERS ROW
-  -- (Must exist before order_items, anonymous_order_tokens, and payments)
+  -- ATOMIC TRANSACTION EXECUTION: STEPS 3, 4, 5, 6 IN UNIFIED SUBTRANSACTION
+  -- Ensures that if any conflict or unique_violation occurs (token_hash or order_number),
+  -- the entire operation (orders, order_items, order_item_options, anonymous_order_tokens, payments)
+  -- is rolled back to the savepoint, guaranteeing ZERO orphaned or duplicate rows.
+  --
+  -- NOTE ON COUNTER PROGRESSION:
+  -- public.generate_daily_order_number() is invoked OUTSIDE the BEGIN ... EXCEPTION
+  -- subtransaction. This guarantees that if an insertion collision triggers a rollback
+  -- to the savepoint, the counter increment in public.daily_order_counters is NOT undone.
+  -- Subsequent retry attempts are guaranteed to increment and acquire a strictly different,
+  -- higher sequence number without repeating collided numbers.
   -- ============================================================================
-  INSERT INTO public.orders (
-    id,
-    order_number,
-    order_status,
-    payment_status,
-    payment_method,
-    payment_deadline,
-    subtotal,
-    delivery_fee,
-    total,
-    customer_name,
-    customer_whatsapp,
-    customer_note,
-    delivery_address,
-    delivery_area,
-    fulfillment_method,
-    items_snapshot,
-    merchant_name,
-    created_at,
-    updated_at
-  ) VALUES (
-    v_order_id,
-    v_order_number,
-    v_order_status,
-    v_payment_status,
-    v_payment_method,
-    v_deadline,
-    v_calculated_subtotal,
-    v_shipping_fee,
-    v_total,
-    p_order->>'customerName',
-    p_order->>'customerWhatsapp',
-    COALESCE(p_order->>'orderNote', ''),
-    COALESCE(p_order->>'deliveryAddress', v_delivery_area),
-    v_delivery_area,
-    v_fulfillment_type,
-    v_items_snapshot,
-    v_merchant_name,
-    v_created_at,
-    v_created_at
-  );
+  FOR v_attempt IN 1..3 LOOP
+    -- 1. Generate unique concurrency-safe daily order number OUTSIDE the rollback savepoint.
+    -- Calling this before BEGIN ensures that if an insertion collision occurs and rolls back
+    -- to the savepoint, the counter progression in public.daily_order_counters is NOT undone.
+    -- The next retry attempt is guaranteed to acquire a strictly higher and distinct order number.
+    v_order_number := public.generate_daily_order_number();
 
-  -- ============================================================================
-  -- EXECUTION STEP 4: INSERT EACH PARENT PUBLIC.ORDER_ITEMS ROW
-  -- (ALL parent order_items rows are inserted BEFORE any child order_item_options rows)
-  -- ============================================================================
-  FOR v_val_item IN SELECT * FROM jsonb_array_elements(v_validated_items)
-  LOOP
-    INSERT INTO public.order_items (
-      id,
-      order_id,
-      product_id,
-      product_name,
-      quantity,
-      unit_price,
-      item_note,
-      created_at
-    ) VALUES (
-      (v_val_item->>'id')::uuid,
-      (v_val_item->>'order_id')::uuid,
-      (v_val_item->>'product_id')::uuid,
-      v_val_item->>'product_name',
-      (v_val_item->>'quantity')::integer,
-      (v_val_item->>'unit_price')::numeric,
-      COALESCE(v_val_item->>'item_note', ''),
-      v_created_at
-    );
-  END LOOP;
-
-  -- ============================================================================
-  -- EXECUTION STEP 5: INSERT CORRESPONDING CHILD PUBLIC.ORDER_ITEM_OPTIONS ROWS
-  -- (Guaranteed that referenced order_item_id already exists in public.order_items)
-  -- ============================================================================
-  IF jsonb_array_length(v_validated_options) > 0 THEN
-    FOR v_val_opt IN SELECT * FROM jsonb_array_elements(v_validated_options)
-    LOOP
-      INSERT INTO public.order_item_options (
+    BEGIN
+      -- ============================================================================
+      -- EXECUTION STEP 3: INSERT PARENT PUBLIC.ORDERS ROW
+      -- (Must exist before order_items, anonymous_order_tokens, and payments)
+      -- ============================================================================
+      INSERT INTO public.orders (
         id,
-        order_item_id,
-        option_name,
-        option_value,
-        price_delta,
-        created_at
+        order_number,
+        order_status,
+        payment_status,
+        payment_method,
+        payment_deadline,
+        subtotal,
+        delivery_fee,
+        total,
+        customer_name,
+        customer_whatsapp,
+        customer_note,
+        delivery_address,
+        delivery_area,
+        fulfillment_method,
+        items_snapshot,
+        merchant_name,
+        created_at,
+        updated_at
       ) VALUES (
-        (v_val_opt->>'id')::uuid,
-        (v_val_opt->>'order_item_id')::uuid,
-        v_val_opt->>'option_name',
-        v_val_opt->>'option_value',
-        (v_val_opt->>'price_delta')::numeric,
+        v_order_id,
+        v_order_number,
+        v_order_status,
+        v_payment_status,
+        v_payment_method,
+        v_deadline,
+        v_calculated_subtotal,
+        v_shipping_fee,
+        v_total,
+        p_order->>'customerName',
+        p_order->>'customerWhatsapp',
+        COALESCE(p_order->>'orderNote', ''),
+        COALESCE(p_order->>'deliveryAddress', v_delivery_area),
+        v_delivery_area,
+        v_fulfillment_type,
+        v_items_snapshot,
+        v_merchant_name,
+        v_created_at,
         v_created_at
       );
-    END LOOP;
-  END IF;
 
-  -- ============================================================================
-  -- EXECUTION STEP 6: INSERT ANONYMOUS_ORDER_TOKENS AND PAYMENTS
-  -- ============================================================================
-  BEGIN
-    INSERT INTO public.anonymous_order_tokens (
-      id,
-      order_id,
-      token_hash,
-      created_at
-    ) VALUES (
-      gen_random_uuid(),
-      v_order_id,
-      lower(trim(p_token_hash)),
-      v_created_at
-    );
-  EXCEPTION WHEN unique_violation THEN
-    -- Fallback for concurrency: another worker committed this token hash
-    SELECT jsonb_build_object(
-      'id', o.order_number,
-      'uuid', o.id,
-      'orderNumber', o.order_number,
-      'createdAt', to_char(timezone('utc', o.created_at), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
-      'customerName', o.customer_name,
-      'customerWhatsapp', o.customer_whatsapp,
-      'fulfillmentType', COALESCE(o.fulfillment_method, 'delivery'),
-      'deliveryArea', COALESCE(o.delivery_area, 'Lhoksukon'),
-      'orderNote', COALESCE(o.customer_note, ''),
-      'items', COALESCE(o.items_snapshot, '[]'::jsonb),
-      'subtotal', o.subtotal,
-      'shippingFee', o.delivery_fee,
-      'total', o.total,
-      'orderStatus', o.order_status,
-      'paymentStatus', o.payment_status,
-      'paymentMethod', COALESCE(o.payment_method, 'QRIS Statis'),
-      'paymentDeadline', CASE WHEN o.payment_deadline IS NOT NULL THEN to_char(timezone('utc', o.payment_deadline), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') ELSE '' END,
-      'merchantName', COALESCE(o.merchant_name, v_merchant_name)
-    ) INTO v_existing_order
-    FROM public.anonymous_order_tokens aot
-    JOIN public.orders o ON o.id = aot.order_id
-    WHERE aot.token_hash = lower(trim(p_token_hash))
-      AND aot.revoked_at IS NULL
-    LIMIT 1;
+      -- ============================================================================
+      -- EXECUTION STEP 4: INSERT EACH PARENT PUBLIC.ORDER_ITEMS ROW
+      -- (ALL parent order_items rows are inserted BEFORE any child order_item_options rows)
+      -- ============================================================================
+      FOR v_val_item IN SELECT * FROM jsonb_array_elements(v_validated_items)
+      LOOP
+        INSERT INTO public.order_items (
+          id,
+          order_id,
+          product_id,
+          product_name,
+          quantity,
+          unit_price,
+          line_total,
+          created_at
+        ) VALUES (
+          (v_val_item->>'id')::uuid,
+          (v_val_item->>'order_id')::uuid,
+          CASE 
+            WHEN v_val_item->>'product_id' IS NOT NULL AND trim(v_val_item->>'product_id') != '' 
+            THEN (v_val_item->>'product_id')::uuid 
+            ELSE NULL 
+          END,
+          v_val_item->>'product_name',
+          (v_val_item->>'quantity')::integer,
+          (v_val_item->>'unit_price')::integer,
+          (v_val_item->>'line_total')::integer,
+          v_created_at
+        );
+      END LOOP;
 
-    IF v_existing_order IS NOT NULL THEN
-      RETURN v_existing_order;
-    ELSE
+      -- ============================================================================
+      -- EXECUTION STEP 5: INSERT CORRESPONDING CHILD PUBLIC.ORDER_ITEM_OPTIONS ROWS
+      -- (Guaranteed that referenced order_item_id already exists in public.order_items)
+      -- ============================================================================
+      IF jsonb_array_length(v_validated_options) > 0 THEN
+        FOR v_val_opt IN SELECT * FROM jsonb_array_elements(v_validated_options)
+        LOOP
+          INSERT INTO public.order_item_options (
+            id,
+            order_item_id,
+            option_type,
+            option_name,
+            option_value,
+            price_delta,
+            created_at
+          ) VALUES (
+            (v_val_opt->>'id')::uuid,
+            (v_val_opt->>'order_item_id')::uuid,
+            v_val_opt->>'option_type',
+            v_val_opt->>'option_name',
+            v_val_opt->>'option_value',
+            COALESCE((v_val_opt->>'price_delta')::numeric, 0),
+            v_created_at
+          );
+        END LOOP;
+      END IF;
+
+      -- ============================================================================
+      -- EXECUTION STEP 6: INSERT ANONYMOUS_ORDER_TOKENS AND PAYMENTS
+      -- ============================================================================
+      INSERT INTO public.anonymous_order_tokens (
+        id,
+        order_id,
+        token_hash,
+        created_at
+      ) VALUES (
+        gen_random_uuid(),
+        v_order_id,
+        lower(trim(p_token_hash)),
+        v_created_at
+      );
+
+      INSERT INTO public.payments (
+        id,
+        order_id,
+        method,
+        amount_due,
+        status,
+        created_at,
+        updated_at
+      ) VALUES (
+        gen_random_uuid(),
+        v_order_id,
+        v_payment_method,
+        v_total,
+        v_payment_status,
+        v_created_at,
+        v_created_at
+      );
+
+      -- Successfully inserted all records without unique violation: exit retry loop
+      EXIT;
+
+    EXCEPTION WHEN unique_violation THEN
+      -- Concurrency fallback: PostgreSQL has cleanly rolled back Steps 3, 4, 5, 6 to the savepoint!
+      -- Orders, order_items, order_item_options, anonymous_order_tokens, and payments
+      -- inserted above are COMPLETELY UNDONE, guaranteeing zero orphaned rows.
+      -- Notice: The counter increment in daily_order_counters was performed outside this savepoint,
+      -- so it remains safely advanced and will NOT be repeated on retry.
+      GET STACKED DIAGNOSTICS v_err_constraint = CONSTRAINT_NAME;
+
+      -- Check if another concurrent transaction successfully committed this exact token_hash:
+      SELECT jsonb_build_object(
+        'id', o.order_number,
+        'uuid', o.id,
+        'orderNumber', o.order_number,
+        'createdAt', to_char(timezone('utc', o.created_at), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+        'customerName', o.customer_name,
+        'customerWhatsapp', o.customer_whatsapp,
+        'fulfillmentType', COALESCE(o.fulfillment_method, 'delivery'),
+        'deliveryArea', COALESCE(o.delivery_area, 'Lhoksukon'),
+        'orderNote', COALESCE(o.customer_note, ''),
+        'items', COALESCE(o.items_snapshot, '[]'::jsonb),
+        'subtotal', o.subtotal,
+        'shippingFee', o.delivery_fee,
+        'total', o.total,
+        'orderStatus', o.order_status,
+        'paymentStatus', CASE 
+          WHEN o.payment_status = 'Menunggu verifikasi admin' THEN 'Menunggu Verifikasi'
+          WHEN o.payment_status = 'Menunggu pembayaran' THEN 'Menunggu Pembayaran'
+          WHEN o.payment_status = 'Gagal' THEN 'Dibatalkan'
+          ELSE o.payment_status 
+        END,
+        'paymentMethod', CASE 
+          WHEN o.payment_method = 'QRIS' THEN 'QRIS Statis' 
+          ELSE COALESCE(o.payment_method, 'QRIS Statis') 
+        END,
+        'paymentDeadline', CASE WHEN o.payment_deadline IS NOT NULL THEN to_char(timezone('utc', o.payment_deadline), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') ELSE '' END,
+        'merchantName', COALESCE(o.merchant_name, v_merchant_name)
+      ) INTO v_existing_order
+      FROM public.anonymous_order_tokens aot
+      JOIN public.orders o ON o.id = aot.order_id
+      WHERE aot.token_hash = lower(trim(p_token_hash))
+        AND aot.revoked_at IS NULL
+      LIMIT 1;
+
+      IF v_existing_order IS NOT NULL THEN
+        RETURN v_existing_order;
+      END IF;
+
+      -- If token_hash did NOT collide, check if collision occurred on orders.order_number:
+      IF v_err_constraint = 'orders_order_number_key'
+         OR EXISTS (SELECT 1 FROM public.orders WHERE order_number = v_order_number) THEN
+        IF v_attempt < 3 THEN
+          -- Steps 3-6 were completely rolled back by PostgreSQL subtransaction savepoint.
+          -- Because generate_daily_order_number() was called OUTSIDE this savepoint,
+          -- the counter was not rolled back. The next iteration will call
+          -- generate_daily_order_number() again and obtain a strictly new, higher number.
+          CONTINUE;
+        ELSE
+          RAISE EXCEPTION 'Gagal membuat pesanan: Terjadi konflik nomor pesanan berulang kali.' USING ERRCODE = '23505';
+        END IF;
+      END IF;
+
+      -- Unique violation was from another unexpected constraint: re-raise fail-closed
       RAISE;
-    END IF;
-  END;
-
-  INSERT INTO public.payments (
-    id,
-    order_id,
-    method,
-    status,
-    created_at,
-    updated_at
-  ) VALUES (
-    gen_random_uuid(),
-    v_order_id,
-    v_payment_method,
-    v_payment_status,
-    v_created_at,
-    v_created_at
-  );
+    END;
+  END LOOP;
 
   -- Return complete persisted order matching Next.js Order type
   RETURN jsonb_build_object(
@@ -793,8 +1282,12 @@ BEGIN
     'shippingFee', v_shipping_fee,
     'total', v_total,
     'orderStatus', v_order_status,
-    'paymentStatus', v_payment_status,
-    'paymentMethod', v_payment_method,
+    'paymentStatus', CASE 
+      WHEN v_payment_status = 'Menunggu verifikasi admin' THEN 'Menunggu Verifikasi'
+      WHEN v_payment_status = 'Menunggu pembayaran' THEN 'Menunggu Pembayaran'
+      ELSE v_payment_status 
+    END,
+    'paymentMethod', 'QRIS Statis',
     'paymentDeadline', CASE WHEN v_deadline IS NOT NULL THEN to_char(timezone('utc', v_deadline), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') ELSE '' END,
     'merchantName', v_merchant_name
   );
@@ -835,8 +1328,16 @@ BEGIN
     'shippingFee', o.delivery_fee,
     'total', o.total,
     'orderStatus', o.order_status,
-    'paymentStatus', o.payment_status,
-    'paymentMethod', COALESCE(o.payment_method, 'QRIS Statis'),
+    'paymentStatus', CASE 
+      WHEN o.payment_status = 'Menunggu verifikasi admin' THEN 'Menunggu Verifikasi'
+      WHEN o.payment_status = 'Menunggu pembayaran' THEN 'Menunggu Pembayaran'
+      WHEN o.payment_status = 'Gagal' THEN 'Dibatalkan'
+      ELSE o.payment_status 
+    END,
+    'paymentMethod', CASE 
+      WHEN o.payment_method = 'QRIS' THEN 'QRIS Statis' 
+      ELSE COALESCE(o.payment_method, 'QRIS Statis') 
+    END,
     'paymentDeadline', CASE WHEN o.payment_deadline IS NOT NULL THEN to_char(timezone('utc', o.payment_deadline), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') ELSE '' END,
     'merchantName', COALESCE(o.merchant_name, 'Nook by Jina')
   ) INTO v_res
@@ -885,8 +1386,16 @@ BEGIN
       'shippingFee', o.delivery_fee,
       'total', o.total,
       'orderStatus', o.order_status,
-      'paymentStatus', o.payment_status,
-      'paymentMethod', COALESCE(o.payment_method, 'QRIS Statis'),
+      'paymentStatus', CASE 
+        WHEN o.payment_status = 'Menunggu verifikasi admin' THEN 'Menunggu Verifikasi'
+        WHEN o.payment_status = 'Menunggu pembayaran' THEN 'Menunggu Pembayaran'
+        WHEN o.payment_status = 'Gagal' THEN 'Dibatalkan'
+        ELSE o.payment_status 
+      END,
+      'paymentMethod', CASE 
+        WHEN o.payment_method = 'QRIS' THEN 'QRIS Statis' 
+        ELSE COALESCE(o.payment_method, 'QRIS Statis') 
+      END,
       'paymentDeadline', CASE WHEN o.payment_deadline IS NOT NULL THEN to_char(timezone('utc', o.payment_deadline), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') ELSE '' END,
       'merchantName', COALESCE(o.merchant_name, 'Nook by Jina')
     ) ORDER BY o.created_at DESC
@@ -924,6 +1433,7 @@ DECLARE
   v_existing_id uuid;
   v_existing_order_status text;
   v_existing_payment_status text;
+  v_db_payment_status text;
   v_res jsonb;
 BEGIN
   -- Security Guard: Fail-closed authorization check
@@ -938,67 +1448,122 @@ BEGIN
     RAISE EXCEPTION 'Status pesanan "%" tidak valid.', p_order_status USING ERRCODE = '22000';
   END IF;
 
-  IF p_payment_status IS NOT NULL AND p_payment_status NOT IN ('Menunggu Pembayaran', 'Menunggu Verifikasi', 'Lunas', 'Dibatalkan') THEN
-    RAISE EXCEPTION 'Status pembayaran "%" tidak valid.', p_payment_status USING ERRCODE = '22000';
+  -- Normalize & validate payment status against production schema & application contract
+  IF p_payment_status IS NOT NULL THEN
+    IF p_payment_status IN ('Menunggu Verifikasi', 'Menunggu verifikasi admin') THEN
+      v_db_payment_status := 'Menunggu verifikasi admin';
+    ELSIF p_payment_status IN ('Menunggu Pembayaran', 'Menunggu pembayaran') THEN
+      v_db_payment_status := 'Menunggu pembayaran';
+    ELSIF p_payment_status = 'Lunas' THEN
+      v_db_payment_status := 'Lunas';
+    ELSIF p_payment_status IN ('Dibatalkan', 'Gagal') THEN
+      v_db_payment_status := 'Dibatalkan';
+    ELSE
+      RAISE EXCEPTION 'Status pembayaran "%" tidak valid.', p_payment_status USING ERRCODE = '22000';
+    END IF;
   END IF;
 
-  -- Query existing order state
+  -- Concurrency-Safe Row Locking:
+  -- Acquire exclusive row lock on target order row with FOR UPDATE before evaluating any transition rules.
+  -- This serializes concurrent updates for the same order and ensures evaluation uses the latest committed state,
+  -- preventing race conditions or stale-read state bypasses.
   SELECT id, order_status, payment_status
   INTO v_existing_id, v_existing_order_status, v_existing_payment_status
   FROM public.orders
-  WHERE order_number = p_order_id OR id::text = p_order_id;
+  WHERE order_number = p_order_id OR id::text = p_order_id
+  FOR UPDATE;
 
   IF v_existing_id IS NULL THEN
     RETURN NULL;
   END IF;
 
-  -- Transition Rules:
-  -- 1. Cancelled orders cannot be resurrected
+  -- Transition Rule 1: Paid Orders Cannot Be Cancelled (No refunds without business rule)
+  -- Reject cancelling an order whose existing payment status is 'Lunas'
+  IF v_existing_payment_status = 'Lunas' THEN
+    IF p_order_status = 'Dibatalkan' THEN
+      RAISE EXCEPTION 'Pesanan yang telah berstatus Lunas tidak dapat dibatalkan.' USING ERRCODE = '22000';
+    END IF;
+    IF v_db_payment_status = 'Dibatalkan' THEN
+      RAISE EXCEPTION 'Pembayaran yang telah berstatus Lunas tidak dapat dibatalkan.' USING ERRCODE = '22000';
+    END IF;
+  END IF;
+
+  -- Transition Rule 2: Cancelled Orders Cannot Be Resurrected
+  -- An order already marked 'Dibatalkan' cannot transition back to active order states
   IF v_existing_order_status = 'Dibatalkan' AND p_order_status IS NOT NULL AND p_order_status != 'Dibatalkan' THEN
     RAISE EXCEPTION 'Pesanan yang telah dibatalkan tidak dapat diaktifkan kembali.' USING ERRCODE = '22000';
   END IF;
 
-  -- 1b. Cancelled orders cannot receive payment
-  IF (v_existing_order_status = 'Dibatalkan' OR v_existing_payment_status = 'Dibatalkan')
-     AND p_payment_status = 'Lunas' THEN
-    RAISE EXCEPTION 'Pesanan yang telah dibatalkan tidak dapat diubah status pembayarannya menjadi Lunas.'
-      USING ERRCODE = '22000';
+  -- Transition Rule 3: Cancelled Orders or Payments Cannot Receive Payment
+  -- Reject changing a cancelled payment or cancelled order to 'Lunas'
+  IF v_db_payment_status = 'Lunas' THEN
+    IF p_order_status = 'Dibatalkan' OR v_existing_order_status = 'Dibatalkan' THEN
+      RAISE EXCEPTION 'Pesanan yang dibatalkan tidak dapat menerima status pembayaran Lunas.' USING ERRCODE = '22000';
+    END IF;
+    IF v_existing_payment_status IN ('Dibatalkan', 'Gagal') THEN
+      RAISE EXCEPTION 'Pembayaran yang telah dibatalkan tidak dapat diubah statusnya menjadi Lunas.' USING ERRCODE = '22000';
+    END IF;
   END IF;
 
-  -- 2. Completed orders cannot be reverted to preliminary states
-  IF v_existing_order_status = 'Selesai' AND p_order_status IS NOT NULL AND p_order_status NOT IN ('Selesai', 'Dibatalkan') THEN
-    RAISE EXCEPTION 'Pesanan yang telah selesai tidak dapat dikembalikan ke status persiapan.' USING ERRCODE = '22000';
+  -- Transition Rule 4: Completed Orders Are Immutable
+  -- Once an order is completed, neither its order status nor its payment status
+  -- may be changed. Re-sending the same status is allowed as an idempotent update.
+  IF v_existing_order_status = 'Selesai' THEN
+    IF p_order_status IS NOT NULL AND p_order_status IS DISTINCT FROM 'Selesai' THEN
+      RAISE EXCEPTION 'Pesanan yang telah selesai tidak dapat diubah statusnya.' USING ERRCODE = '22000';
+    END IF;
+    IF v_db_payment_status IS NOT NULL
+       AND v_db_payment_status IS DISTINCT FROM v_existing_payment_status THEN
+      RAISE EXCEPTION 'Status pembayaran pesanan yang telah selesai tidak dapat diubah (status saat ini: %).',
+        v_existing_payment_status USING ERRCODE = '22000';
+    END IF;
   END IF;
 
-  -- 3. Cannot mark an order completed if its payment is cancelled
-  IF (p_order_status = 'Selesai' OR (p_order_status IS NULL AND v_existing_order_status = 'Selesai'))
-     AND (p_payment_status = 'Dibatalkan' OR (p_payment_status IS NULL AND v_existing_payment_status = 'Dibatalkan')) THEN
-    RAISE EXCEPTION 'Pesanan dengan status pembayaran "Dibatalkan" tidak dapat diselesaikan.' USING ERRCODE = '22000';
+  -- Transition Rule 5: Reject Contradictory Active and Cancelled Status Combinations
+  -- 5a. A cancelled payment cannot coexist with active order statuses ('Pesanan baru', 'Diproses', 'Siap', 'Selesai')
+  IF (v_db_payment_status = 'Dibatalkan' OR (v_db_payment_status IS NULL AND v_existing_payment_status IN ('Dibatalkan', 'Gagal'))) THEN
+    IF p_order_status IS NOT NULL AND p_order_status != 'Dibatalkan' THEN
+      RAISE EXCEPTION 'Status pesanan "%" tidak dapat digabungkan dengan status pembayaran "Dibatalkan". Pesanan dengan pembayaran dibatalkan harus berstatus "Dibatalkan".',
+        p_order_status
+        USING ERRCODE = '22000';
+    END IF;
   END IF;
 
-  -- 4. Synchronize payment cancellation if order is cancelled while awaiting payment
-  IF p_order_status = 'Dibatalkan' AND p_payment_status IS NULL AND v_existing_payment_status IN ('Menunggu Pembayaran', 'Menunggu Verifikasi') THEN
-    p_payment_status := 'Dibatalkan';
+  -- 5b. A cancelled order cannot coexist with active payment statuses ('Menunggu verifikasi admin', 'Menunggu pembayaran', 'Lunas')
+  IF (p_order_status = 'Dibatalkan' OR (p_order_status IS NULL AND v_existing_order_status = 'Dibatalkan')) THEN
+    IF v_db_payment_status IS NOT NULL AND v_db_payment_status != 'Dibatalkan' THEN
+      RAISE EXCEPTION 'Status pesanan "Dibatalkan" tidak dapat digabungkan dengan status pembayaran aktif ("%").',
+        v_db_payment_status
+        USING ERRCODE = '22000';
+    END IF;
   END IF;
 
-  -- 5. Synchronize order cancellation if payment is cancelled while order is in preliminary or ready state
-  IF p_payment_status = 'Dibatalkan' AND p_order_status IS NULL AND v_existing_order_status IN ('Pesanan baru', 'Diproses', 'Siap') THEN
+  -- Transition Rule 6: Single-Status Synchronization Policy
+  -- When only one status is provided, synchronize the counterpart to prevent orphaned or contradictory states:
+  -- 6a. If caller supplies ONLY order_status = 'Dibatalkan', automatically synchronize payment to 'Dibatalkan'
+  IF p_order_status = 'Dibatalkan' AND v_db_payment_status IS NULL THEN
+    v_db_payment_status := 'Dibatalkan';
+  END IF;
+
+  -- 6b. If caller supplies ONLY payment_status = 'Dibatalkan', automatically synchronize order to 'Dibatalkan'
+  --     for preliminary and ready orders ('Pesanan baru', 'Diproses', 'Siap')
+  IF v_db_payment_status = 'Dibatalkan' AND p_order_status IS NULL AND v_existing_order_status IN ('Pesanan baru', 'Diproses', 'Siap') THEN
     p_order_status := 'Dibatalkan';
   END IF;
 
   UPDATE public.orders
   SET
     order_status = COALESCE(p_order_status, order_status),
-    payment_status = COALESCE(p_payment_status, payment_status),
-    paid_at = CASE WHEN p_payment_status = 'Lunas' THEN now() ELSE paid_at END,
-    cancelled_at = CASE WHEN p_order_status = 'Dibatalkan' OR p_payment_status = 'Dibatalkan' THEN now() ELSE cancelled_at END,
+    payment_status = COALESCE(v_db_payment_status, payment_status),
+    paid_at = CASE WHEN v_db_payment_status = 'Lunas' THEN COALESCE(paid_at, now()) ELSE paid_at END,
+    cancelled_at = CASE WHEN p_order_status = 'Dibatalkan' OR v_db_payment_status = 'Dibatalkan' THEN COALESCE(cancelled_at, now()) ELSE cancelled_at END,
     updated_at = now()
   WHERE id = v_existing_id;
 
   -- Synchronize payments table
-  IF p_payment_status IS NOT NULL THEN
+  IF v_db_payment_status IS NOT NULL THEN
     UPDATE public.payments
-    SET status = p_payment_status, updated_at = now()
+    SET status = v_db_payment_status, updated_at = now()
     WHERE order_id = v_existing_id;
   END IF;
 
@@ -1017,8 +1582,16 @@ BEGIN
     'shippingFee', o.delivery_fee,
     'total', o.total,
     'orderStatus', o.order_status,
-    'paymentStatus', o.payment_status,
-    'paymentMethod', COALESCE(o.payment_method, 'QRIS Statis'),
+    'paymentStatus', CASE 
+      WHEN o.payment_status = 'Menunggu verifikasi admin' THEN 'Menunggu Verifikasi'
+      WHEN o.payment_status = 'Menunggu pembayaran' THEN 'Menunggu Pembayaran'
+      WHEN o.payment_status = 'Gagal' THEN 'Dibatalkan'
+      ELSE o.payment_status 
+    END,
+    'paymentMethod', CASE 
+      WHEN o.payment_method = 'QRIS' THEN 'QRIS Statis' 
+      ELSE COALESCE(o.payment_method, 'QRIS Statis') 
+    END,
     'paymentDeadline', CASE WHEN o.payment_deadline IS NOT NULL THEN to_char(timezone('utc', o.payment_deadline), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') ELSE '' END,
     'merchantName', COALESCE(o.merchant_name, 'Nook by Jina')
   ) INTO v_res
@@ -1067,8 +1640,16 @@ BEGIN
       'shippingFee', o.delivery_fee,
       'total', o.total,
       'orderStatus', o.order_status,
-      'paymentStatus', o.payment_status,
-      'paymentMethod', COALESCE(o.payment_method, 'QRIS Statis'),
+      'paymentStatus', CASE 
+        WHEN o.payment_status = 'Menunggu verifikasi admin' THEN 'Menunggu Verifikasi'
+        WHEN o.payment_status = 'Menunggu pembayaran' THEN 'Menunggu Pembayaran'
+        WHEN o.payment_status = 'Gagal' THEN 'Dibatalkan'
+        ELSE o.payment_status 
+      END,
+      'paymentMethod', CASE 
+        WHEN o.payment_method = 'QRIS' THEN 'QRIS Statis' 
+        ELSE COALESCE(o.payment_method, 'QRIS Statis') 
+      END,
       'paymentDeadline', CASE WHEN o.payment_deadline IS NOT NULL THEN to_char(timezone('utc', o.payment_deadline), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') ELSE '' END,
       'merchantName', COALESCE(o.merchant_name, 'Nook by Jina')
     ) ORDER BY o.created_at DESC

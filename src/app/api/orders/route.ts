@@ -34,44 +34,18 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2b. Validate payment methods availability & selection
-    const paymentMethods = storeSettings.paymentMethods || { qris: true, cash: true };
-    if (!paymentMethods.qris && !paymentMethods.cash) {
+    // 2b. MVP: Only QRIS Statis is accepted.
+    // The database RPC (create_order_atomic) also strictly enforces QRIS-only.
+    // Cash is planned for a future release; do not silently convert or accept it.
+    const selectedPaymentMethod = (paymentMethod as string) || "";
+    if (selectedPaymentMethod !== "QRIS Statis") {
       return NextResponse.json(
         {
           success: false,
-          error: "Saat ini tidak ada metode pembayaran yang aktif. Pemesanan tidak dapat diproses.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const selectedPaymentMethod = paymentMethod as string;
-    if (selectedPaymentMethod !== "QRIS Statis" && selectedPaymentMethod !== "Cash") {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Metode pembayaran wajib dipilih dan harus berupa QRIS Statis atau Cash.",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (selectedPaymentMethod === "QRIS Statis" && !paymentMethods.qris) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Metode pembayaran QRIS Statis sedang dinonaktifkan oleh toko.",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (selectedPaymentMethod === "Cash" && !paymentMethods.cash) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Metode pembayaran Cash (Tunai) sedang dinonaktifkan oleh toko.",
+          error:
+            selectedPaymentMethod === "Cash"
+              ? "Metode pembayaran Cash (Tunai) belum tersedia pada tahap MVP ini. Silakan gunakan QRIS Statis."
+              : "Metode pembayaran wajib dipilih dan harus berupa QRIS Statis.",
         },
         { status: 400 }
       );
@@ -417,7 +391,6 @@ export async function POST(request: Request) {
         : generateSecureOrderToken();
 
     const now = new Date();
-    const isCash = selectedPaymentMethod === "Cash";
     const PAYMENT_DEADLINE_MS = 30 * 60 * 1000;
     const deadline = new Date(now.getTime() + PAYMENT_DEADLINE_MS);
 
@@ -440,8 +413,8 @@ export async function POST(request: Request) {
       shippingFee: authoritativeShippingFee,
       total: authoritativeTotal,
       orderStatus: "Pesanan baru",
-      paymentStatus: isCash ? "Menunggu Pembayaran" : "Menunggu Verifikasi",
-      paymentMethod: isCash ? "Cash" : "QRIS Statis",
+      paymentStatus: "Menunggu Verifikasi",
+      paymentMethod: "QRIS Statis",
       paymentDeadline: deadline.toISOString(),
       merchantName: storeSettings.qrisMerchantName || "Nook by Jina",
     };

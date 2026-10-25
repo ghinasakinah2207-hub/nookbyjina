@@ -40,7 +40,7 @@ ALTER TABLE IF EXISTS public.store_settings
   ADD COLUMN IF NOT EXISTS qris_nmid text DEFAULT 'ID1020038829101',
   ADD COLUMN IF NOT EXISTS tagline text DEFAULT 'Makanan homemade dibuat dengan penuh rasa dan kehangatan.',
   ADD COLUMN IF NOT EXISTS instagram_url text DEFAULT 'https://www.instagram.com/nookbyjina/',
-  ADD COLUMN IF NOT EXISTS payment_methods jsonb DEFAULT '{"qris": true, "cash": true}'::jsonb;
+  ADD COLUMN IF NOT EXISTS payment_methods jsonb DEFAULT '{"qris": true, "cash": false}'::jsonb;
 
 ALTER TABLE IF EXISTS public.delivery_areas
   ADD COLUMN IF NOT EXISTS free_shipping_threshold numeric DEFAULT 50000;
@@ -97,7 +97,7 @@ BEGIN
       'ID1020038829101',
       '',
       'https://www.instagram.com/nookbyjina/',
-      '{"qris": true, "cash": true}'::jsonb
+      '{"qris": true, "cash": false}'::jsonb
     );
   END IF;
 
@@ -114,7 +114,7 @@ BEGIN
     VALUES (
       'd0000001-0000-4000-8000-000000000001',
       'Lhoksukon',
-      4000,
+      3000,
       50000,
       true,
       1

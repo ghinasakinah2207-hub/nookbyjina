@@ -75,12 +75,14 @@ export function calculateDeliveryFee({
     };
   }
 
-  // Free delivery applies when subtotal is greater than or equal to freeShippingThreshold
-  const isFree = subtotal >= freeShippingThreshold;
+  // Free delivery applies when subtotal is strictly greater than freeShippingThreshold (> threshold)
+  // This matches the database RPC and the business rule:
+  // "Free delivery applies when the item subtotal is strictly greater than Rp50,000."
+  const isFree = subtotal > freeShippingThreshold;
   const shippingFee = isFree ? 0 : standardFee;
   const remainingToFreeShipping = isFree
     ? 0
-    : Math.max(0, freeShippingThreshold - subtotal);
+    : Math.max(0, freeShippingThreshold - subtotal + 1);
 
   return {
     shippingFee,

@@ -31,7 +31,7 @@ interface OrderContextType {
     orderStatus?: OrderStatus,
     paymentStatus?: PaymentStatus,
     token?: string
-  ) => Promise<void>;
+  ) => Promise<{ success: boolean; error?: string; order?: Order }>;
 }
 
 const OrderContext = createContext<OrderContextType | undefined>(undefined);
@@ -232,22 +232,24 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
     orderStatus?: OrderStatus,
     paymentStatus?: PaymentStatus,
     token?: string
-  ) => {
-    // 1. Optimistic local update
-    setOrders((prev) =>
-      prev.map((order) => {
+  ): Promise<{ success: boolean; error?: string; order?: Order }> => {
+    // 1. Snapshot previous state for rollback on failure
+    let previousOrder: Order | undefined;
+    setOrders((prev) => {
+      previousOrder = prev.find((o) => o.id === orderId || o.token === orderId);
+      return prev.map((order) => {
         if (order.id !== orderId && order.token !== orderId) return order;
         return {
           ...order,
           orderStatus: orderStatus || order.orderStatus,
           paymentStatus: paymentStatus || order.paymentStatus,
         };
-      })
-    );
+      });
+    });
 
     // 2. Persist to authoritative backend
     try {
-      await fetch("/api/orders/status", {
+      const res = await fetch("/api/orders/status", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -257,8 +259,44 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
           paymentStatus,
         }),
       });
-    } catch {
-      // Backend error will be reflected on next refresh
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        const errorMsg = data.error || "Gagal memperbarui status pesanan.";
+        // Revert optimistic update to prevent false success in UI
+        if (previousOrder) {
+          const snapshot = previousOrder;
+          setOrders((prev) =>
+            prev.map((order) =>
+              order.id === orderId || order.token === orderId ? snapshot : order
+            )
+          );
+        }
+        return { success: false, error: errorMsg };
+      }
+
+      // If backend returned authoritative updated order, synchronize it
+      if (data.order) {
+        setOrders((prev) =>
+          prev.map((order) =>
+            order.id === orderId || order.token === orderId ? data.order : order
+          )
+        );
+      }
+      return { success: true, order: data.order };
+    } catch (err: unknown) {
+      const errorMsg =
+        err instanceof Error ? err.message : "Gagal menghubungi server.";
+      // Revert optimistic update on network failure
+      if (previousOrder) {
+        const snapshot = previousOrder;
+        setOrders((prev) =>
+          prev.map((order) =>
+            order.id === orderId || order.token === orderId ? snapshot : order
+          )
+        );
+      }
+      return { success: false, error: errorMsg };
     }
   };
 

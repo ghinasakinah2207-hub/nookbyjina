@@ -39,43 +39,24 @@ export async function generateDailyOrderNumber(): Promise<string> {
         "Atur environment variable SUPABASE_SERVICE_ROLE_KEY di .env.local dan Vercel Project Settings."
       );
     }
+    // Development-only fallback when no database is configured
     return `TJ-${wibDate}-001`;
   }
 
-  // 1. Try PostgreSQL RPC generate_daily_order_number()
+  // Atomic PostgreSQL RPC — the only safe source of daily order numbers.
+  // No client-side fallbacks: count-based or upsert-based strategies cannot
+  // guarantee uniqueness under concurrent requests.
   const { data: rpcNumber, error: rpcErr } = await client.rpc("generate_daily_order_number");
   if (!rpcErr && rpcNumber && typeof rpcNumber === "string") {
     return rpcNumber;
   }
 
-  // 2. Fallback to transactional upsert on public.daily_order_counters
-  const { data: upsertData, error: upsertErr } = await client
-    .from("daily_order_counters")
-    .upsert(
-      { order_date: wibDate, last_sequence: 1 },
-      { onConflict: "order_date", ignoreDuplicates: false }
-    )
-    .select("last_sequence")
-    .maybeSingle();
-
-  if (!upsertErr && upsertData && typeof upsertData.last_sequence === "number") {
-    const seq = upsertData.last_sequence;
-    return seq <= 999
-      ? `TJ-${wibDate}-${String(seq).padStart(3, "0")}`
-      : `TJ-${wibDate}-${seq}`;
-  }
-
-  // 3. Fallback: Count existing orders for today + 1
-  const todayPrefix = `TJ-${wibDate}-`;
-  const { count, error: countErr } = await client
-    .from("orders")
-    .select("*", { count: "exact", head: true })
-    .like("order_number", `${todayPrefix}%`);
-
-  const nextSeq = countErr || count === null ? 1 : count + 1;
-  return nextSeq <= 999
-    ? `TJ-${wibDate}-${String(nextSeq).padStart(3, "0")}`
-    : `TJ-${wibDate}-${nextSeq}`;
+  // Fail closed: do not fabricate a potentially duplicate order number.
+  const safeMsg = rpcErr?.message || "RPC generate_daily_order_number gagal.";
+  console.error("[generateDailyOrderNumber] RPC failed:", safeMsg);
+  throw new Error(
+    "Gagal menghasilkan nomor pesanan harian. Silakan coba lagi dalam beberapa saat."
+  );
 }
 
 /**
@@ -129,8 +110,6 @@ export async function saveOrder(order: Order): Promise<Order> {
   }
 
   const tokenHash = hashOrderToken(order.token);
-  const createdAt = order.createdAt || new Date().toISOString();
-  const isCash = order.paymentMethod === "Cash";
 
   // Always keep in-memory fallback up to date for dev / test lookups and idempotency
   const devOrderEntry: Order = { ...order };
@@ -148,7 +127,12 @@ export async function saveOrder(order: Order): Promise<Order> {
     return order;
   }
 
-  // 1. Try atomic PostgreSQL RPC create_order_atomic
+  // Atomic PostgreSQL RPC — the only safe way to persist orders.
+  // The RPC validates prices, calculates totals from the catalog, persists all
+  // related rows (order, items, options, token, payment) in a single transaction,
+  // and handles idempotency via advisory lock on the token hash.
+  // NO direct-insert fallback: it would omit required fields (subtotal, etc.),
+  // create partial/orphaned data, and bypass server-side price validation.
   const { data: rpcResult, error: rpcErr } = await client.rpc("create_order_atomic", {
     p_order: order,
     p_token_hash: tokenHash,
@@ -161,61 +145,12 @@ export async function saveOrder(order: Order): Promise<Order> {
     };
   }
 
-  // 2. Direct Supabase Table Inserts (Fallback if migration RPC not yet applied)
-  const orderUuid = crypto.randomUUID();
-  const orderNumber = order.id;
-
-  const { error: insOrderErr } = await client.from("orders").insert({
-    id: orderUuid,
-    order_number: orderNumber,
-    order_status: order.orderStatus || "Pesanan baru",
-    payment_status: order.paymentStatus || (isCash ? "Menunggu Pembayaran" : "Menunggu Verifikasi"),
-    payment_deadline:
-      order.paymentDeadline && !isNaN(Date.parse(order.paymentDeadline))
-        ? order.paymentDeadline
-        : new Date(new Date(createdAt).getTime() + 30 * 60 * 1000).toISOString(),
-    delivery_fee: order.shippingFee || 0,
-    total: order.total || 0,
-    customer_name: order.customerName || "",
-    customer_whatsapp: order.customerWhatsapp || "",
-    customer_note: order.orderNote || "",
-    delivery_address: order.deliveryArea || "Lhoksukon",
-    delivery_area: order.deliveryArea || "Lhoksukon",
-    fulfillment_method: order.fulfillmentType || "delivery",
-    items_snapshot: order.items || [],
-    merchant_name: order.merchantName || "Nook by Jina",
-    created_at: createdAt,
-    updated_at: createdAt,
-  });
-
-  if (insOrderErr) {
-    throw new Error(`Gagal menyimpan pesanan ke database: ${insOrderErr.message}`);
-  }
-
-  // Insert token hash into anonymous_order_tokens
-  if (tokenHash) {
-    const { error: insTokenErr } = await client.from("anonymous_order_tokens").insert({
-      id: crypto.randomUUID(),
-      order_id: orderUuid,
-      token_hash: tokenHash,
-      created_at: createdAt,
-    });
-    if (insTokenErr) {
-      console.warn("Peringatan saat menyimpan token hash pesanan:", insTokenErr.message);
-    }
-  }
-
-  // Insert initial payment record
-  await client.from("payments").insert({
-    id: crypto.randomUUID(),
-    order_id: orderUuid,
-    method: order.paymentMethod || "QRIS Statis",
-    status: order.paymentStatus || (isCash ? "Menunggu Pembayaran" : "Menunggu Verifikasi"),
-    created_at: createdAt,
-    updated_at: createdAt,
-  });
-
-  return order;
+  // Fail closed: do not attempt direct table inserts that bypass validation.
+  const safeMsg = rpcErr?.message || "create_order_atomic RPC gagal.";
+  console.error("[saveOrder] Atomic RPC failed:", safeMsg);
+  throw new Error(
+    "Gagal menyimpan pesanan ke database. Silakan coba lagi dalam beberapa saat."
+  );
 }
 
 /**
@@ -373,8 +308,68 @@ export async function updateOrderStatusServer(
     }
     const devOrder = devOrdersById.get(identifier);
     if (devOrder) {
-      if (orderStatus) devOrder.orderStatus = orderStatus;
-      if (paymentStatus) devOrder.paymentStatus = paymentStatus;
+      const existingOrderStatus = devOrder.orderStatus;
+      const existingPaymentStatus = devOrder.paymentStatus;
+      let targetPaymentStatus = paymentStatus;
+      let targetOrderStatus = orderStatus;
+
+      // Transition Rule 1: Paid Orders Cannot Be Cancelled
+      if (existingPaymentStatus === "Lunas") {
+        if (targetOrderStatus === "Dibatalkan") {
+          throw new Error("Pesanan yang telah berstatus Lunas tidak dapat dibatalkan.");
+        }
+        if (targetPaymentStatus === "Dibatalkan") {
+          throw new Error("Pembayaran yang telah berstatus Lunas tidak dapat dibatalkan.");
+        }
+      }
+
+      // Transition Rule 2: Cancelled Orders Cannot Be Resurrected
+      if (existingOrderStatus === "Dibatalkan" && targetOrderStatus && targetOrderStatus !== "Dibatalkan") {
+        throw new Error("Pesanan yang telah dibatalkan tidak dapat diaktifkan kembali.");
+      }
+
+      // Transition Rule 3: Cancelled Orders or Payments Cannot Receive Payment
+      if (targetPaymentStatus === "Lunas") {
+        if (targetOrderStatus === "Dibatalkan" || existingOrderStatus === "Dibatalkan") {
+          throw new Error("Pesanan yang dibatalkan tidak dapat menerima status pembayaran Lunas.");
+        }
+        if (existingPaymentStatus === "Dibatalkan") {
+          throw new Error("Pembayaran yang telah dibatalkan tidak dapat diubah statusnya menjadi Lunas.");
+        }
+      }
+
+      // Transition Rule 4: Completed Orders and Their Payment Status Are Immutable
+      if (existingOrderStatus === "Selesai") {
+        if (targetOrderStatus && targetOrderStatus !== "Selesai") {
+          throw new Error("Pesanan yang telah selesai tidak dapat diubah statusnya.");
+        }
+        if (targetPaymentStatus && targetPaymentStatus !== existingPaymentStatus) {
+          throw new Error("Status pembayaran pesanan yang telah selesai tidak dapat diubah.");
+        }
+      }
+
+      // Transition Rule 5: Reject Contradictory Active and Cancelled Status Combinations
+      if (targetPaymentStatus === "Dibatalkan" || (!targetPaymentStatus && existingPaymentStatus === "Dibatalkan")) {
+        if (targetOrderStatus && targetOrderStatus !== "Dibatalkan") {
+          throw new Error(`Status pesanan "${targetOrderStatus}" tidak dapat digabungkan dengan status pembayaran "Dibatalkan".`);
+        }
+      }
+      if (targetOrderStatus === "Dibatalkan" || (!targetOrderStatus && existingOrderStatus === "Dibatalkan")) {
+        if (targetPaymentStatus && targetPaymentStatus !== "Dibatalkan") {
+          throw new Error(`Status pesanan "Dibatalkan" tidak dapat digabungkan dengan status pembayaran aktif ("${targetPaymentStatus}").`);
+        }
+      }
+
+      // Transition Rule 6: Single-Status Synchronization Policy
+      if (targetOrderStatus === "Dibatalkan" && !targetPaymentStatus) {
+        targetPaymentStatus = "Dibatalkan";
+      }
+      if (targetPaymentStatus === "Dibatalkan" && !targetOrderStatus && ["Pesanan baru", "Diproses", "Siap"].includes(existingOrderStatus)) {
+        targetOrderStatus = "Dibatalkan";
+      }
+
+      if (targetOrderStatus) devOrder.orderStatus = targetOrderStatus;
+      if (targetPaymentStatus) devOrder.paymentStatus = targetPaymentStatus;
       if (devOrder.token) {
         const hash = hashOrderToken(devOrder.token);
         devOrdersByHash.set(hash, devOrder);
@@ -384,7 +379,10 @@ export async function updateOrderStatusServer(
     return null;
   }
 
-  // 1. Try admin_update_order_status RPC
+  // Atomic PostgreSQL RPC — the only safe way to update order/payment status.
+  // The RPC enforces transition rules (immutable completed orders, no resurrection
+  // of cancelled orders, no cancellation of paid orders, status synchronization).
+  // NO direct-update fallback: it would bypass all transition enforcement.
   const { data: rpcResult, error: rpcErr } = await client.rpc(
     "admin_update_order_status",
     {
@@ -398,47 +396,25 @@ export async function updateOrderStatusServer(
     return rpcResult as Order;
   }
 
-  // 2. Direct update fallback
-  const now = new Date().toISOString();
-  const updatePayload: Record<string, unknown> = { updated_at: now };
-  if (orderStatus) updatePayload.order_status = orderStatus;
-  if (paymentStatus) updatePayload.payment_status = paymentStatus;
-  if (paymentStatus === "Lunas") updatePayload.paid_at = now;
-  if (orderStatus === "Dibatalkan" || paymentStatus === "Dibatalkan") {
-    updatePayload.cancelled_at = now;
-  }
-
-  // Query order first
-  const { data: existing } = await client
-    .from("orders")
-    .select("*")
-    .or(`order_number.eq.${identifier},id.eq.${identifier}`)
-    .maybeSingle();
-
-  if (!existing) {
+  // RPC returned null → order not found
+  if (!rpcErr && rpcResult === null) {
     return null;
   }
 
-  const { data: updatedRow, error: updateErr } = await client
-    .from("orders")
-    .update(updatePayload)
-    .eq("id", existing.id)
-    .select()
-    .maybeSingle();
+  // Fail closed: return safe message for system crashes, but preserve intentional business & auth invariant messages
+  const rawMsg = rpcErr?.message || "";
+  const isIntentionalMessage =
+    rawMsg.includes("tidak dapat") ||
+    rawMsg.includes("tidak valid") ||
+    rawMsg.includes("Akses ditolak") ||
+    rawMsg.includes("dibatalkan") ||
+    rawMsg.includes("selesai");
 
-  if (updateErr || !updatedRow) {
-    return null;
-  }
-
-  // Synchronize payment status
-  if (paymentStatus) {
-    await client
-      .from("payments")
-      .update({ status: paymentStatus, updated_at: now })
-      .eq("order_id", existing.id);
-  }
-
-  return mapDatabaseRowToOrder(updatedRow as Record<string, unknown>);
+  const safeMsg = isIntentionalMessage
+    ? rawMsg
+    : "Gagal memperbarui status pesanan. Silakan coba lagi dalam beberapa saat.";
+  console.error("[updateOrderStatusServer] RPC failed:", rawMsg || safeMsg);
+  throw new Error(safeMsg);
 }
 
 /**

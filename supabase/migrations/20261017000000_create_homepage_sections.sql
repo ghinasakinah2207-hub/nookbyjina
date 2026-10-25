@@ -135,40 +135,21 @@ GRANT SELECT ON TABLE public.homepage_sections, public.homepage_section_products
 GRANT INSERT, UPDATE, DELETE ON TABLE public.homepage_sections, public.homepage_section_products TO authenticated;
 
 -- ------------------------------------------------------------------------------
--- 7. OPTIONAL SEED DATA: INITIAL HOMEPAGE SECTIONS (ONLY IF TABLE IS EMPTY)
+-- 7. OPTIONAL SEED DATA: INITIAL HOMEPAGE SECTIONS
+-- Seed section definitions only. Product IDs are project-specific and must not be
+-- hard-coded into a migration; admins can assign existing products from the dashboard.
 -- ------------------------------------------------------------------------------
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.homepage_sections LIMIT 1) THEN
-    INSERT INTO public.homepage_sections (id, title, subtitle, is_active, sort_order, max_products, view_all_url)
+    INSERT INTO public.homepage_sections
+      (id, title, subtitle, is_active, sort_order, max_products, view_all_url)
     VALUES
-      ('c0000001-0000-4000-8000-000000000001', 'Menu Pilihan Pelanggan', 'Paling sering dipesan di Lhoksukon', true, 1, 6, '/menu'),
+      ('c0000001-0000-4000-8000-000000000001', 'Menu Pilihan Pelanggan', 'Menu favorit dari Nook by Jina', true, 1, 6, '/menu'),
       ('c0000001-0000-4000-8000-000000000002', 'Makanan Utama', 'Olahan homemade gurih & mengenyangkan', true, 2, 6, '/menu'),
-      ('c0000001-0000-4000-8000-000000000003', 'Snack & Camilan', 'Camilan renyah & lumer teman santai', true, 3, 6, '/menu'),
-      ('c0000001-0000-4000-8000-000000000004', 'Minuman Segar', 'Kopi aren & minuman pelepas dahaga', true, 4, 6, '/menu')
+      ('c0000001-0000-4000-8000-000000000003', 'Snack & Camilan', 'Camilan untuk teman santai', true, 3, 6, '/menu'),
+      ('c0000001-0000-4000-8000-000000000004', 'Minuman Segar', 'Minuman segar pelepas dahaga', true, 4, 6, '/menu')
     ON CONFLICT (id) DO NOTHING;
-
-    -- Link existing catalog products to initial sections (idempotent)
-    INSERT INTO public.homepage_section_products (section_id, product_id, sort_order)
-    VALUES
-      -- Menu Pilihan Pelanggan (Favorites across categories)
-      ('c0000001-0000-4000-8000-000000000001', 'b0000001-0000-4000-8000-000000000001', 1),
-      ('c0000001-0000-4000-8000-000000000001', 'b0000001-0000-4000-8000-000000000002', 2),
-      ('c0000001-0000-4000-8000-000000000001', 'b0000001-0000-4000-8000-000000000003', 3),
-      ('c0000001-0000-4000-8000-000000000001', 'b0000001-0000-4000-8000-000000000004', 4),
-
-      -- Makanan Utama (Category: Makanan)
-      ('c0000001-0000-4000-8000-000000000002', 'b0000001-0000-4000-8000-000000000001', 1),
-      ('c0000001-0000-4000-8000-000000000002', 'b0000001-0000-4000-8000-000000000002', 2),
-
-      -- Snack & Camilan (Category: Snack)
-      ('c0000001-0000-4000-8000-000000000003', 'b0000001-0000-4000-8000-000000000003', 1),
-      ('c0000001-0000-4000-8000-000000000003', 'b0000001-0000-4000-8000-000000000004', 2),
-      ('c0000001-0000-4000-8000-000000000003', 'b0000001-0000-4000-8000-000000000005', 3),
-
-      -- Minuman Segar (Category: Minuman)
-      ('c0000001-0000-4000-8000-000000000004', 'b0000001-0000-4000-8000-000000000006', 1)
-    ON CONFLICT (section_id, product_id) DO NOTHING;
   END IF;
 END $$;
 

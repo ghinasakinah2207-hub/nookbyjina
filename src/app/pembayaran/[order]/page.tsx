@@ -128,8 +128,8 @@ function PaymentContent() {
   useEffect(() => {
     if (!order || order.paymentMethod === "Cash" || !order.paymentDeadline) return;
 
-    // Verified paid orders ("Lunas") never expire
-    if (order.paymentStatus === "Lunas") return;
+    // Verified paid orders ("Lunas") and cancelled orders never expire
+    if (order.paymentStatus === "Lunas" || order.paymentStatus === "Dibatalkan" || order.orderStatus === "Dibatalkan") return;
 
     const deadline = new Date(order.paymentDeadline).getTime();
     const updateCountdown = () => {
@@ -137,9 +137,11 @@ function PaymentContent() {
       const diff = Math.max(0, Math.floor((deadline - now) / 1000));
       setTimeLeftSeconds(diff);
 
-      // Auto cancel unpaid order if timer expired and still pending verification
-      if (diff <= 0 && order.paymentStatus === "Menunggu Verifikasi") {
-        updateOrderStatus(order.id, "Dibatalkan", "Dibatalkan");
+      // Auto cancel unpaid order if timer expired and still pending payment or verification
+      const isUnpaidPending =
+        order.paymentStatus === "Menunggu Verifikasi" || order.paymentStatus === "Menunggu Pembayaran";
+      if (diff <= 0 && isUnpaidPending) {
+        updateOrderStatus(order.id, "Dibatalkan", "Dibatalkan", order.token);
       }
     };
 

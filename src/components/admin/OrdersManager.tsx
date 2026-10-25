@@ -130,9 +130,13 @@ export function OrdersManager() {
     return result;
   }, [orders, activeTab, searchQuery]);
 
-  const handleMarkLunas = (orderId: string) => {
-    updateOrderStatus(orderId, "Diproses", "Lunas");
+  const handleMarkLunas = async (orderId: string) => {
+    const res = await updateOrderStatus(orderId, "Diproses", "Lunas");
     setConfirmLunasOrder(null);
+    if (!res.success) {
+      alert(res.error || "Gagal mengonfirmasi pembayaran lunas.");
+      return;
+    }
     if (selectedOrder?.id === orderId) {
       setSelectedOrder((prev) =>
         prev ? { ...prev, orderStatus: "Diproses", paymentStatus: "Lunas" } : null
@@ -140,12 +144,16 @@ export function OrdersManager() {
     }
   };
 
-  const handleConfirmCashLunas = (orderId: string) => {
+  const handleConfirmCashLunas = async (orderId: string) => {
     // When marking cash received, paymentStatus becomes Lunas; if orderStatus was Pesanan baru, transition to Diproses
     const currentOrder = orders.find((o) => o.id === orderId);
     const nextOrderStatus = currentOrder?.orderStatus === "Pesanan baru" ? "Diproses" : currentOrder?.orderStatus;
-    updateOrderStatus(orderId, nextOrderStatus, "Lunas");
+    const res = await updateOrderStatus(orderId, nextOrderStatus, "Lunas");
     setConfirmCashOrder(null);
+    if (!res.success) {
+      alert(res.error || "Gagal mengonfirmasi pembayaran tunai.");
+      return;
+    }
     if (selectedOrder?.id === orderId) {
       setSelectedOrder((prev) =>
         prev
@@ -159,16 +167,24 @@ export function OrdersManager() {
     }
   };
 
-  const handleUpdateStatus = (orderId: string, status: OrderStatus) => {
-    updateOrderStatus(orderId, status);
+  const handleUpdateStatus = async (orderId: string, status: OrderStatus) => {
+    const res = await updateOrderStatus(orderId, status);
+    if (!res.success) {
+      alert(res.error || `Gagal mengubah status menjadi ${status}.`);
+      return;
+    }
     if (selectedOrder?.id === orderId) {
       setSelectedOrder((prev) => (prev ? { ...prev, orderStatus: status } : null));
     }
   };
 
-  const handleCancelOrder = (orderId: string) => {
+  const handleCancelOrder = async (orderId: string) => {
     if (confirm("Apakah Anda yakin ingin membatalkan pesanan ini? Pesanan yang dibatalkan tidak otomatis aktif kembali.")) {
-      updateOrderStatus(orderId, "Dibatalkan", "Dibatalkan");
+      const res = await updateOrderStatus(orderId, "Dibatalkan", "Dibatalkan");
+      if (!res.success) {
+        alert(res.error || "Gagal membatalkan pesanan.");
+        return;
+      }
       if (selectedOrder?.id === orderId) {
         setSelectedOrder((prev) =>
           prev ? { ...prev, orderStatus: "Dibatalkan", paymentStatus: "Dibatalkan" } : null

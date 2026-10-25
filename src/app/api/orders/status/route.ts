@@ -93,6 +93,20 @@ export async function PATCH(request: Request) {
             { status: 404 }
           );
         }
+        // Reject cancellation of paid or completed orders before attempting mutation
+        if (existing.paymentStatus === "Lunas") {
+          return NextResponse.json(
+            { success: false, error: "Pesanan yang telah berstatus Lunas tidak dapat dibatalkan." },
+            { status: 400 }
+          );
+        }
+        if (existing.orderStatus === "Selesai") {
+          return NextResponse.json(
+            { success: false, error: "Pesanan yang telah selesai tidak dapat dibatalkan." },
+            { status: 400 }
+          );
+        }
+
         // Allow cancellation of unpaid orders
         if (orderStatus === "Dibatalkan" || paymentStatus === "Dibatalkan") {
           const updated = await updateOrderStatusServer(
@@ -134,9 +148,13 @@ export async function PATCH(request: Request) {
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : "Gagal memperbarui status pesanan.";
+    const isClientError =
+      message.includes("tidak dapat") ||
+      message.includes("tidak valid") ||
+      message.includes("Akses ditolak");
     return NextResponse.json(
       { success: false, error: message },
-      { status: 500 }
+      { status: isClientError ? 400 : 500 }
     );
   }
 }

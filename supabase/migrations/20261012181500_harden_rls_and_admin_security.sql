@@ -265,15 +265,17 @@ REVOKE ALL ON TABLE
   public.admin_users
 FROM anon, PUBLIC;
 
--- Berikan hak operasional untuk authenticated (dibatasi penuh oleh RLS public.is_admin())
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+-- Authenticated admins may read operational records, but order/payment mutations
+-- must go through trusted server-side RPCs using service_role. Direct table writes
+-- could bypass price snapshots and order/payment transition invariants.
+GRANT SELECT ON TABLE
   public.orders,
   public.order_items,
   public.order_item_options,
   public.payments,
-  public.anonymous_order_tokens,
-  public.admin_read_state
+  public.anonymous_order_tokens
 TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.admin_read_state TO authenticated;
 
 -- Admin users: hanya SELECT untuk authenticated (strictly gated by RLS auth.uid() = user_id), mutasi dilarang dari client
 REVOKE ALL ON TABLE public.admin_users FROM anon, PUBLIC;
@@ -496,10 +498,12 @@ CREATE POLICY "Public read active banners"
   USING (is_active = true);
 
 -- Store Settings: publik dapat membaca informasi toko
+-- Anonymous storefront reads are column-limited by GRANTs. Authenticated users
+-- must pass the separate admin-management policy; do not expose internal settings.
 CREATE POLICY "Public read store settings"
   ON public.store_settings
   FOR SELECT
-  TO public
+  TO anon
   USING (true);
 
 -- Delivery Areas: publik hanya dapat membaca area pengiriman aktif
