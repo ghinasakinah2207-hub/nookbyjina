@@ -17,6 +17,7 @@ import { StatusBadge } from "@/components/ui/Badge";
 import { useOrder } from "@/context/OrderContext";
 import { formatRupiah, STORE_SETTINGS } from "@/data/dummy-data";
 import { saveOrderToken, getOrderToken } from "@/lib/order-token-vault";
+import { isPendingQrisStatus, isPendingCashStatus } from "@/lib/order-normalizer";
 import { Order } from "@/types";
 import { Suspense } from "react";
 
@@ -405,7 +406,7 @@ Terima kasih telah memesan di Nook by Jina!`;
         </section>
 
         {/* Payment Banner if pending or lunas */}
-        {order.paymentStatus === "Menunggu Verifikasi" ? (
+        {isPendingQrisStatus(order.paymentStatus) ? (
           <div className="p-3.5 bg-[#FFF4E5] border border-[#FBD38D] rounded-xl flex items-center justify-between text-xs text-[#8A4B08]">
             <div>
               <p className="font-semibold">Pembayaran Menunggu Verifikasi</p>
@@ -421,7 +422,7 @@ Terima kasih telah memesan di Nook by Jina!`;
               <span>QRIS</span>
             </Link>
           </div>
-        ) : order.paymentMethod === "Cash" && order.paymentStatus === "Menunggu Pembayaran" ? (
+        ) : order.paymentMethod === "Cash" && isPendingCashStatus(order.paymentStatus) ? (
           <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-1 text-xs text-[#8A4B08]">
             <div className="flex items-center gap-1.5 font-semibold text-amber-900">
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />

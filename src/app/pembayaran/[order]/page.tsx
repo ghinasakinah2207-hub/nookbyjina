@@ -20,6 +20,7 @@ import { useOrder } from "@/context/OrderContext";
 import { formatRupiah, STORE_SETTINGS } from "@/data/dummy-data";
 import { StoreSettings } from "@/types";
 import { getOrderToken } from "@/lib/order-token-vault";
+import { isPendingQrisStatus, isPendingCashStatus, isPaidStatus } from "@/lib/order-normalizer";
 
 function PaymentContent() {
   const params = useParams();
@@ -146,7 +147,7 @@ function PaymentContent() {
 
       // Auto cancel unpaid order if timer expired and still pending payment or verification
       const isUnpaidPending =
-        order.paymentStatus === "Menunggu Verifikasi" || order.paymentStatus === "Menunggu Pembayaran";
+        isPendingQrisStatus(order.paymentStatus) || isPendingCashStatus(order.paymentStatus);
       if (diff <= 0 && isUnpaidPending) {
         updateOrderStatus(order.id, "Dibatalkan", "Dibatalkan", order.token);
       }
@@ -217,10 +218,13 @@ function PaymentContent() {
   }
 
   // Order status flags
-  const isPaid = order.paymentStatus === "Lunas";
-  const isCancelled = order.paymentStatus === "Dibatalkan" || order.orderStatus === "Dibatalkan";
+  const isPaid = isPaidStatus(order.paymentStatus);
+  const isCancelled =
+    order.paymentStatus === "Dibatalkan" ||
+    order.orderStatus === "Dibatalkan" ||
+    String(order.paymentStatus || "").toLowerCase() === "dibatalkan";
   const isExpired = !isPaid && (isCancelled || timeLeftSeconds <= 0);
-  const isAwaitingVerification = !isPaid && !isExpired && order.paymentStatus === "Menunggu Verifikasi";
+  const isAwaitingVerification = !isPaid && !isExpired && isPendingQrisStatus(order.paymentStatus);
 
   // Authoritative merchant details
   const merchantName = storeSettings?.qrisMerchantName || order.merchantName || "Nook by Jina";

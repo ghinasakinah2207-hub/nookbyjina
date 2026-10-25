@@ -20,6 +20,7 @@ import { StatusBadge } from "@/components/ui/Badge";
 import { formatRupiah } from "@/data/dummy-data";
 import { OrderReceipt } from "./OrderReceipt";
 import { printThermalReceipt } from "@/lib/print-receipt";
+import { isQrisMethod, isPendingQrisStatus, isPendingCashStatus } from "@/lib/order-normalizer";
 
 type FilterTab = "semua" | "verifikasi" | "kas" | "berjalan" | "selesai" | "dibatalkan";
 
@@ -62,10 +63,8 @@ export function OrdersManager() {
   const tabCounts = useMemo(() => {
     return {
       semua: orders.length,
-      verifikasi: orders.filter(
-        (o) => (o.paymentMethod === "QRIS Statis" || !o.paymentMethod) && o.paymentStatus === "Menunggu Verifikasi"
-      ).length,
-      kas: orders.filter((o) => o.paymentMethod === "Cash" && o.paymentStatus === "Menunggu Pembayaran").length,
+      verifikasi: orders.filter((o) => isQrisMethod(o.paymentMethod) && isPendingQrisStatus(o.paymentStatus)).length,
+      kas: orders.filter((o) => o.paymentMethod === "Cash" && isPendingCashStatus(o.paymentStatus)).length,
       berjalan: orders.filter(
         (o) => o.orderStatus === "Pesanan baru" || o.orderStatus === "Diproses" || o.orderStatus === "Siap"
       ).length,
@@ -80,13 +79,9 @@ export function OrdersManager() {
 
     // Filter by tab
     if (activeTab === "verifikasi") {
-      result = result.filter(
-        (o) => (o.paymentMethod === "QRIS Statis" || !o.paymentMethod) && o.paymentStatus === "Menunggu Verifikasi"
-      );
+      result = result.filter((o) => isQrisMethod(o.paymentMethod) && isPendingQrisStatus(o.paymentStatus));
     } else if (activeTab === "kas") {
-      result = result.filter(
-        (o) => o.paymentMethod === "Cash" && o.paymentStatus === "Menunggu Pembayaran"
-      );
+      result = result.filter((o) => o.paymentMethod === "Cash" && isPendingCashStatus(o.paymentStatus));
     } else if (activeTab === "berjalan") {
       result = result.filter(
         (o) => o.orderStatus === "Pesanan baru" || o.orderStatus === "Diproses" || o.orderStatus === "Siap"

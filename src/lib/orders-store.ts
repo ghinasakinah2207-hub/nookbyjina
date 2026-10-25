@@ -1,6 +1,13 @@
 import { Order, OrderStatus, PaymentStatus } from "@/types";
 import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
 import { hashOrderToken, isValidTokenFormat } from "@/lib/token-security";
+import {
+  normalizeOrder,
+  normalizePaymentMethod,
+  normalizePaymentStatus,
+} from "./order-normalizer";
+
+export * from "./order-normalizer";
 
 /**
  * Derives current date string in store-local Asia/Jakarta (WIB) timezone: 'YYMMDD'
@@ -59,28 +66,14 @@ export async function generateDailyOrderNumber(): Promise<string> {
   );
 }
 
+export * from "./order-normalizer";
+
 /**
  * Maps a raw Supabase database row to the application's Order type.
  */
 function mapDatabaseRowToOrder(row: Record<string, unknown>, rawToken?: string): Order {
-  const isCash = (row.payment_method as string) === "Cash";
-  const rawStatus = String(row.payment_status || "");
-  const normalizedPaymentStatus: PaymentStatus =
-    rawStatus === "Menunggu verifikasi admin" || rawStatus === "Menunggu Verifikasi"
-      ? "Menunggu Verifikasi"
-      : rawStatus === "Menunggu pembayaran" || rawStatus === "Menunggu Pembayaran"
-      ? "Menunggu Pembayaran"
-      : rawStatus === "Lunas"
-      ? "Lunas"
-      : rawStatus === "Dibatalkan" || rawStatus === "Gagal"
-      ? "Dibatalkan"
-      : isCash
-      ? "Menunggu Pembayaran"
-      : "Menunggu Verifikasi";
-
-  const rawMethod = String(row.payment_method || "");
-  const normalizedMethod: Order["paymentMethod"] =
-    rawMethod === "Cash" ? "Cash" : "QRIS Statis";
+  const normalizedMethod = normalizePaymentMethod(row.payment_method);
+  const normalizedPaymentStatus = normalizePaymentStatus(row.payment_status, normalizedMethod);
 
   return {
     id: (row.order_number as string) || (row.id as string),
@@ -218,11 +211,11 @@ export async function saveOrder(order: Order): Promise<Order> {
         }))
       : [];
 
-    return {
+    return normalizeOrder({
       ...rawOrder,
       items: normalizedItems,
       token: order.token, // preserve raw token for customer checkout response
-    };
+    });
   }
 
   // Fail closed: do not attempt direct table inserts that bypass validation.
@@ -284,10 +277,10 @@ export async function getOrderByToken(token: string): Promise<Order | null> {
   );
 
   if (!rpcErr && rpcResult && typeof rpcResult === "object") {
-    return {
+    return normalizeOrder({
       ...(rpcResult as Order),
       token: cleanToken,
-    };
+    });
   }
 
   // 2. Direct relational query fallback
@@ -366,10 +359,10 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
     return (rpcResult as Order[]).map((o) => {
       // Restore client's own token for matching
       const token = validTokens.find((t) => hashOrderToken(t) === o.id) || "";
-      return {
+      return normalizeOrder({
         ...o,
         token,
-      };
+      });
     });
   }
 
@@ -527,7 +520,7 @@ export async function updateOrderStatusServer(
   );
 
   if (!rpcErr && rpcResult && typeof rpcResult === "object") {
-    return rpcResult as Order;
+    return normalizeOrder(rpcResult as Order);
   }
 
   // RPC returned null → order not found
@@ -569,15 +562,15 @@ export async function getAdminOrdersServer(): Promise<Order[]> {
     if (process.env.NODE_ENV === "production") {
       throw new Error("SUPABASE_SERVICE_ROLE_KEY belum dikonfigurasi.");
     }
-    return Array.from(devOrdersById.values()).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+    return Array.from(devOrdersById.values())
+      .map(normalizeOrder)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   // 1. Try get_admin_orders RPC
   const { data: rpcResult, error: rpcErr } = await client.rpc("get_admin_orders");
   if (!rpcErr && Array.isArray(rpcResult)) {
-    return rpcResult as Order[];
+    return (rpcResult as Order[]).map(normalizeOrder);
   }
 
   // 2. Direct query fallback
@@ -635,7 +628,7 @@ export async function getAdminOrdersServer(): Promise<Order[]> {
     if ((!mapped.items || mapped.items.length === 0) && itemsByOrderId.has(String(row.id))) {
       mapped.items = itemsByOrderId.get(String(row.id)) || [];
     }
-    return mapped;
+    return normalizeOrder(mapped);
   });
 }
 

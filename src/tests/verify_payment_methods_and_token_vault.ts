@@ -1,5 +1,5 @@
 import assert from "assert";
-import { saveOrder, updateOrderStatusServer, getOrderByToken, getOrdersByTokens } from "@/lib/orders-store";
+import { saveOrder, updateOrderStatusServer, getOrderByToken, getOrdersByTokens, normalizeOrder } from "@/lib/orders-store";
 import { generateSecureOrderToken } from "@/lib/token-security";
 import { Order } from "@/types";
 
@@ -315,6 +315,120 @@ async function runTests() {
     "Retrieved option has non-empty optionValue/valueName"
   );
   console.log("✅ PASSED: Variant option and addon regression verified successfully.");
+
+  // 6. Verification Queue Segregation & Raw Database Status Normalization
+  console.log("\n=== 6. Testing Verification Queue Segregation (Pending QRIS vs Cash) ===");
+  // Test case A: Pending QRIS with raw database status 'Menunggu verifikasi admin' and method 'QRIS'
+  const rawQrisOrder = normalizeOrder({
+    id: "TJ-261025-RAW-QRIS",
+    token: generateSecureOrderToken(),
+    createdAt: new Date().toISOString(),
+    customerName: "Pelanggan Raw QRIS",
+    customerWhatsapp: "081234567890",
+    fulfillmentType: "delivery",
+    deliveryArea: "Lhoksukon",
+    orderNote: "",
+    items: [],
+    subtotal: 22000,
+    shippingFee: 0,
+    total: 22000,
+    orderStatus: "Pesanan baru",
+    paymentStatus: "Menunggu verifikasi admin",
+    paymentMethod: "QRIS",
+    paymentDeadline: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    merchantName: "Nook by Jina",
+  });
+
+  assert.strictEqual(
+    rawQrisOrder.paymentStatus,
+    "Menunggu Verifikasi",
+    "Raw 'Menunggu verifikasi admin' normalizes to 'Menunggu Verifikasi'"
+  );
+  assert.strictEqual(
+    rawQrisOrder.paymentMethod,
+    "QRIS Statis",
+    "Raw 'QRIS' normalizes to 'QRIS Statis'"
+  );
+
+  // Test case B: Pending Cash order with raw database status 'Menunggu pembayaran' and method 'Cash'
+  const rawCashOrder = normalizeOrder({
+    id: "TJ-261025-RAW-CASH",
+    token: generateSecureOrderToken(),
+    createdAt: new Date().toISOString(),
+    customerName: "Pelanggan Raw Cash",
+    customerWhatsapp: "081234567891",
+    fulfillmentType: "pickup",
+    deliveryArea: "Pickup Toko (Lhoksukon)",
+    orderNote: "",
+    items: [],
+    subtotal: 18000,
+    shippingFee: 0,
+    total: 18000,
+    orderStatus: "Pesanan baru",
+    paymentStatus: "Menunggu pembayaran",
+    paymentMethod: "Cash",
+    paymentDeadline: "",
+    merchantName: "Nook by Jina",
+  });
+
+  assert.strictEqual(
+    rawCashOrder.paymentStatus,
+    "Menunggu Pembayaran",
+    "Raw 'Menunggu pembayaran' normalizes to 'Menunggu Pembayaran'"
+  );
+  assert.strictEqual(
+    rawCashOrder.paymentMethod,
+    "Cash",
+    "Cash method is strictly preserved"
+  );
+
+  // Test queue segregation filters against both raw and normalized objects
+  const testOrders = [rawQrisOrder, rawCashOrder];
+
+  const isQrisMethod = (method?: string) =>
+    !method || method === "QRIS Statis" || method === "QRIS" || method.toLowerCase().includes("qris");
+  const isPendingVerificationStatus = (status?: string) => {
+    const s = String(status || "").toLowerCase().trim();
+    return s === "menunggu verifikasi" || s === "menunggu verifikasi admin" || s.includes("verifikasi");
+  };
+  const isPendingCashStatus = (status?: string) => {
+    const s = String(status || "").toLowerCase().trim();
+    return s === "menunggu pembayaran" || s.includes("pembayaran");
+  };
+
+  const qrisQueue = testOrders.filter(
+    (o) => isQrisMethod(o.paymentMethod) && isPendingVerificationStatus(o.paymentStatus)
+  );
+  const cashQueue = testOrders.filter(
+    (o) => o.paymentMethod === "Cash" && isPendingCashStatus(o.paymentStatus)
+  );
+
+  assert.strictEqual(qrisQueue.length, 1, "Exactly 1 order in QRIS verification queue");
+  assert.strictEqual(qrisQueue[0].id, "TJ-261025-RAW-QRIS", "Only QRIS order appears in QRIS verification queue");
+
+  assert.strictEqual(cashQueue.length, 1, "Exactly 1 order in Cash payment queue");
+  assert.strictEqual(cashQueue[0].id, "TJ-261025-RAW-CASH", "Only Cash order appears in Cash payment queue");
+
+  // Verify transition to Lunas updates verified queue and removes from pending
+  const paidQrisOrder = normalizeOrder({
+    ...rawQrisOrder,
+    orderStatus: "Diproses",
+    paymentStatus: "Lunas",
+  });
+  const updatedOrders = [paidQrisOrder, rawCashOrder];
+
+  const updatedQrisQueue = updatedOrders.filter(
+    (o) => isQrisMethod(o.paymentMethod) && isPendingVerificationStatus(o.paymentStatus)
+  );
+  const verifiedQueue = updatedOrders.filter(
+    (o) => o.paymentStatus === "Lunas" || String(o.paymentStatus || "").toLowerCase() === "lunas"
+  );
+
+  assert.strictEqual(updatedQrisQueue.length, 0, "QRIS order removed from pending verification after marked Lunas");
+  assert.strictEqual(verifiedQueue.length, 1, "QRIS order appears in verified Lunas history");
+  assert.strictEqual(verifiedQueue[0].id, "TJ-261025-RAW-QRIS");
+
+  console.log("✅ PASSED: Verification queue segregation and normalization invariants verified successfully.");
 
   console.log("\n==================================================================");
   console.log("🎉 ALL PAYMENT & TOKEN VAULT INVARIANT TESTS PASSED (0 FAILURES)!");

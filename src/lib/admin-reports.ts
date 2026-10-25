@@ -1,7 +1,13 @@
 import { Order } from "@/types";
 import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getAdminOrdersServer } from "@/lib/orders-store";
+import {
+  getAdminOrdersServer,
+  isQrisMethod,
+  isPendingQrisStatus,
+  isPendingCashStatus,
+  isPaidStatus,
+} from "@/lib/orders-store";
 
 export type ReportTimeRange = "today" | "7days" | "30days" | "all";
 
@@ -192,24 +198,30 @@ export function calculateDashboardMetrics(
       cancelledCount++;
     }
 
+    const isQris = isQrisMethod(order.paymentMethod);
+    const isPendingVerifikasi = isPendingQrisStatus(order.paymentStatus);
+    const isPendingPembayaran = isPendingCashStatus(order.paymentStatus);
+    const isPaidOrder = isPaidStatus(order.paymentStatus);
+
     // Payment verification antrean
-    if (
-      (order.paymentMethod === "QRIS Statis" || !order.paymentMethod) &&
-      order.paymentStatus === "Menunggu Verifikasi"
-    ) {
+    if (isQris && isPendingVerifikasi) {
       pendingQrisCount++;
     }
 
     // Payment status distribution
-    if (order.paymentStatus === "Lunas") {
+    if (isPaidOrder) {
       lunas++;
-    } else if (order.paymentStatus === "Menunggu Verifikasi") {
+    } else if (isPendingVerifikasi) {
       menungguVerifikasi++;
       unpaidOrdersCount++;
-    } else if (order.paymentStatus === "Menunggu Pembayaran") {
+    } else if (isPendingPembayaran) {
       menungguPembayaran++;
       unpaidOrdersCount++;
-    } else if (order.paymentStatus === "Dibatalkan") {
+    } else if (
+      order.paymentStatus === "Dibatalkan" ||
+      String(order.paymentStatus || "").toLowerCase() === "dibatalkan" ||
+      String(order.paymentStatus || "").toLowerCase() === "gagal"
+    ) {
       dibatalkanPayment++;
     }
 

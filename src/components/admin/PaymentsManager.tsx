@@ -7,16 +7,43 @@ import {
   AlertTriangle,
   MessageCircle,
   Banknote,
+  RefreshCw,
 } from "lucide-react";
 import { useOrder } from "@/context/OrderContext";
 import { Order, StoreSettings } from "@/types";
 import { formatRupiah, STORE_SETTINGS } from "@/data/dummy-data";
+import {
+  isQrisMethod,
+  isPendingQrisStatus,
+  isPendingCashStatus,
+  isPaidStatus,
+} from "@/lib/order-normalizer";
 
 export function PaymentsManager() {
   const { orders, updateOrderStatus, addOrder } = useOrder();
   const [confirmQrisOrder, setConfirmQrisOrder] = useState<Order | null>(null);
   const [confirmCashOrder, setConfirmCashOrder] = useState<Order | null>(null);
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchOrders = React.useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch("/api/admin/orders");
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.orders)) {
+          data.orders.forEach((serverOrder: Order) => {
+            addOrder(serverOrder);
+          });
+        }
+      }
+    } catch {
+      // Ignore background fetch errors
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [addOrder]);
 
   React.useEffect(() => {
     fetch("/api/store-settings")
@@ -30,35 +57,40 @@ export function PaymentsManager() {
   }, []);
 
   React.useEffect(() => {
+    let ignore = false;
     fetch("/api/admin/orders")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data && data.success && Array.isArray(data.orders)) {
+        if (!ignore && data && data.success && Array.isArray(data.orders)) {
           data.orders.forEach((serverOrder: Order) => {
             addOrder(serverOrder);
           });
         }
       })
       .catch(() => {});
+
+    return () => {
+      ignore = true;
+    };
   }, [addOrder]);
 
   const pendingQrisPayments = orders.filter(
-    (o) =>
-      (o.paymentMethod === "QRIS Statis" || !o.paymentMethod) &&
-      o.paymentStatus === "Menunggu Verifikasi"
+    (o) => isQrisMethod(o.paymentMethod) && isPendingQrisStatus(o.paymentStatus)
   );
 
   const pendingCashPayments = orders.filter(
-    (o) => o.paymentMethod === "Cash" && o.paymentStatus === "Menunggu Pembayaran"
+    (o) => o.paymentMethod === "Cash" && isPendingCashStatus(o.paymentStatus)
   );
 
-  const verifiedPayments = orders.filter((o) => o.paymentStatus === "Lunas");
+  const verifiedPayments = orders.filter((o) => isPaidStatus(o.paymentStatus));
 
   const handleConfirmQrisLunas = async (orderId: string) => {
     const res = await updateOrderStatus(orderId, "Diproses", "Lunas");
     setConfirmQrisOrder(null);
     if (!res.success) {
       alert(res.error || "Gagal memverifikasi pembayaran QRIS.");
+    } else {
+      fetchOrders();
     }
   };
 
@@ -70,6 +102,8 @@ export function PaymentsManager() {
     setConfirmCashOrder(null);
     if (!res.success) {
       alert(res.error || "Gagal mengonfirmasi pembayaran tunai.");
+    } else {
+      fetchOrders();
     }
   };
 
@@ -143,11 +177,23 @@ export function PaymentsManager() {
               Menunggu Verifikasi DANA (QRIS) ({pendingQrisPayments.length})
             </h3>
           </div>
-          {pendingQrisPayments.length > 0 && (
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-[#8A4B08]">
-              Perlu Verifikasi
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={fetchOrders}
+              disabled={isRefreshing}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700 disabled:opacity-50 transition-colors cursor-pointer"
+              title="Segarkan daftar verifikasi"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-[#8A4B08]" : ""}`} />
+              <span className="hidden sm:inline">{isRefreshing ? "Menyinkronkan..." : "Segarkan"}</span>
+            </button>
+            {pendingQrisPayments.length > 0 && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-[#8A4B08]">
+                Perlu Verifikasi
+              </span>
+            )}
+          </div>
         </div>
 
         {pendingQrisPayments.length === 0 ? (
@@ -428,7 +474,7 @@ export function PaymentsManager() {
                             : "bg-blue-50 text-blue-700 border border-blue-200"
                         }`}
                       >
-                        {p.paymentMethod || "QRIS Statis"}
+                        {p.paymentMethod === "Cash" ? "Cash" : "QRIS Statis"}
                       </span>
                     </div>
                     <span className="text-[10px] text-[#737373] block mt-0.5">
