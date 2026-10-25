@@ -34,18 +34,40 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2b. MVP: Only QRIS Statis is accepted.
-    // The database RPC (create_order_atomic) also strictly enforces QRIS-only.
-    // Cash is planned for a future release; do not silently convert or accept it.
+    // 2b. Authoritative Payment Method Validation against Store Settings
+    const qrisActive = storeSettings.paymentMethods?.qris !== false; // defaults to true
+    const cashActive = Boolean(storeSettings.paymentMethods?.cash);
+
     const selectedPaymentMethod = (paymentMethod as string) || "";
-    if (selectedPaymentMethod !== "QRIS Statis") {
+    let canonicalMethod: Order["paymentMethod"] = "QRIS Statis";
+
+    if (selectedPaymentMethod === "Cash") {
+      if (!cashActive) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Metode pembayaran Cash (Tunai) sedang dinonaktifkan oleh toko.",
+          },
+          { status: 400 }
+        );
+      }
+      canonicalMethod = "Cash";
+    } else if (selectedPaymentMethod === "QRIS Statis" || selectedPaymentMethod === "QRIS") {
+      if (!qrisActive) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Metode pembayaran QRIS Statis sedang dinonaktifkan oleh toko.",
+          },
+          { status: 400 }
+        );
+      }
+      canonicalMethod = "QRIS Statis";
+    } else {
       return NextResponse.json(
         {
           success: false,
-          error:
-            selectedPaymentMethod === "Cash"
-              ? "Metode pembayaran Cash (Tunai) belum tersedia pada tahap MVP ini. Silakan gunakan QRIS Statis."
-              : "Metode pembayaran wajib dipilih dan harus berupa QRIS Statis.",
+          error: "Metode pembayaran wajib dipilih (QRIS Statis atau Cash).",
         },
         { status: 400 }
       );
@@ -396,6 +418,8 @@ export async function POST(request: Request) {
 
     const orderId = await generateDailyOrderNumber();
 
+    const isCashOrder = canonicalMethod === "Cash";
+
     const order: Order = {
       id: orderId,
       token,
@@ -413,9 +437,9 @@ export async function POST(request: Request) {
       shippingFee: authoritativeShippingFee,
       total: authoritativeTotal,
       orderStatus: "Pesanan baru",
-      paymentStatus: "Menunggu Verifikasi",
-      paymentMethod: "QRIS Statis",
-      paymentDeadline: deadline.toISOString(),
+      paymentStatus: isCashOrder ? "Menunggu Pembayaran" : "Menunggu Verifikasi",
+      paymentMethod: canonicalMethod,
+      paymentDeadline: isCashOrder ? "" : deadline.toISOString(),
       merchantName: storeSettings.qrisMerchantName || "Nook by Jina",
     };
 

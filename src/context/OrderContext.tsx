@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Order, OrderStatus, PaymentStatus, CartItem, FulfillmentType, PaymentMethod } from "@/types";
 import { STORE_SETTINGS, generateOrderId, generateOrderToken } from "@/data/dummy-data";
+import { saveOrderToken, getOrderToken, getAllOrderTokens } from "@/lib/order-token-vault";
 
 interface CreateOrderParams {
   customerName: string;
@@ -52,18 +53,33 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) {
-            setOrders(parsed);
+            // Restore token from vault if missing in order
+            const withTokens: Order[] = parsed.map((o: Order) => {
+              const vaultToken = getOrderToken(o.id);
+              const token = o.token || vaultToken || "";
+              if (token && o.id) {
+                saveOrderToken(o.id, token);
+              }
+              return {
+                ...o,
+                token,
+              };
+            });
+            setOrders(withTokens);
 
             // Re-validate and sync latest status from backend for existing tokens
-            const tokens = parsed
-              .map((o: Order) => o.token)
-              .filter((t: string) => typeof t === "string" && t.length >= 8);
+            const allTokens = Array.from(
+              new Set([
+                ...withTokens.map((o) => o.token),
+                ...getAllOrderTokens(),
+              ])
+            ).filter((t: string) => typeof t === "string" && t.length >= 8);
 
-            if (tokens.length > 0) {
+            if (allTokens.length > 0) {
               fetch("/api/orders/history", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ tokens }),
+                body: JSON.stringify({ tokens: allTokens }),
               })
                 .then((res) => (res.ok ? res.json() : null))
                 .then((data) => {
@@ -79,6 +95,7 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
                           orderStatus: remote.orderStatus,
                           paymentStatus: remote.paymentStatus,
                           paymentDeadline: remote.paymentDeadline,
+                          token: local.token || getOrderToken(local.id) || "",
                         };
                       });
                       try {
@@ -116,9 +133,12 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
   }, [orders]);
 
   const syncWithServer = async () => {
-    const tokens = orders
-      .map((o) => o.token)
-      .filter((t) => typeof t === "string" && t.length >= 8);
+    const tokens = Array.from(
+      new Set([
+        ...orders.map((o) => o.token),
+        ...getAllOrderTokens(),
+      ])
+    ).filter((t) => typeof t === "string" && t.length >= 8);
 
     if (tokens.length === 0) return;
 
@@ -141,6 +161,7 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
               orderStatus: remote.orderStatus,
               paymentStatus: remote.paymentStatus,
               paymentDeadline: remote.paymentDeadline,
+              token: local.token || getOrderToken(local.id) || "",
             };
           })
         );
@@ -168,6 +189,7 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
               orderStatus: remoteOrder.orderStatus,
               paymentStatus: remoteOrder.paymentStatus,
               paymentDeadline: remoteOrder.paymentDeadline,
+              token: copy[index].token || getOrderToken(copy[index].id) || token,
             };
             return copy;
           }
@@ -207,16 +229,28 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
       orderStatus: "Pesanan baru",
       paymentStatus: isCash ? "Menunggu Pembayaran" : "Menunggu Verifikasi",
       paymentMethod: isCash ? "Cash" : "QRIS Statis",
-      paymentDeadline: deadline.toISOString(),
+      paymentDeadline: isCash ? "" : deadline.toISOString(),
       merchantName: STORE_SETTINGS.qrisMerchantName,
     };
 
+    saveOrderToken(orderId, token);
     setOrders((prev) => [newOrder, ...prev]);
     return newOrder;
   };
 
   const addOrder = (order: Order) => {
-    setOrders((prev) => [order, ...prev.filter((o) => o.id !== order.id)]);
+    setOrders((prev) => {
+      const existing = prev.find((o) => o.id === order.id);
+      const resolvedToken = order.token || existing?.token || getOrderToken(order.id) || "";
+      if (resolvedToken && order.id) {
+        saveOrderToken(order.id, resolvedToken);
+      }
+      const mergedOrder: Order = {
+        ...order,
+        token: resolvedToken,
+      };
+      return [mergedOrder, ...prev.filter((o) => o.id !== order.id)];
+    });
   };
 
   const getOrderById = (id: string) => {
@@ -275,12 +309,16 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: errorMsg };
       }
 
-      // If backend returned authoritative updated order, synchronize it
+      // If backend returned authoritative updated order, synchronize it while preserving token
       if (data.order) {
         setOrders((prev) =>
-          prev.map((order) =>
-            order.id === orderId || order.token === orderId ? data.order : order
-          )
+          prev.map((order) => {
+            if (order.id !== orderId && order.token !== orderId) return order;
+            return {
+              ...data.order,
+              token: order.token || getOrderToken(order.id) || "",
+            };
+          })
         );
       }
       return { success: true, order: data.order };
@@ -326,3 +364,4 @@ export function useOrder() {
   }
   return context;
 }
+

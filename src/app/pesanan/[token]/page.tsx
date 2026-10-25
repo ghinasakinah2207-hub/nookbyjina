@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   Clock,
   Copy,
@@ -15,95 +15,156 @@ import {
 import { Header } from "@/components/layout/Header";
 import { StatusBadge } from "@/components/ui/Badge";
 import { useOrder } from "@/context/OrderContext";
-import { formatRupiah } from "@/data/dummy-data";
+import { formatRupiah, STORE_SETTINGS } from "@/data/dummy-data";
+import { saveOrderToken, getOrderToken } from "@/lib/order-token-vault";
 import { Order } from "@/types";
 import { Suspense } from "react";
 
 function OrderDetailContent() {
   const params = useParams();
-  const token = (params?.token as string) || "";
+  const router = useRouter();
+  const rawParam = decodeURIComponent((params?.token as string) || "").trim();
 
-  const { orders, getOrderByToken } = useOrder();
+  const { orders, getOrderByToken, addOrder } = useOrder();
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isOrderIdParam, setIsOrderIdParam] = useState<boolean>(false);
   const [copyStatus, setCopyStatus] = useState<"idle" | "success" | "failed">("idle");
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   // Authoritative server fetch for order details
-  const fetchOrder = useCallback(async (showSpinner = false) => {
-    if (!token) {
-      setLoading(false);
-      setFetchError("Token akses tidak disertakan.");
-      return;
-    }
-    if (showSpinner) setIsRefreshing(true);
-    try {
-      const res = await fetch(`/api/orders/${encodeURIComponent(token)}`, {
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (res.ok && data.success && data.order) {
-        setOrder(data.order);
-        setFetchError(null);
-        setLastRefreshed(new Date());
-      } else {
-        // Fallback to local order reference only if server reports 404/error but local cache exists
-        const local = getOrderByToken(token) || orders.find((o) => o.token === token || o.id === token);
+  const fetchOrder = useCallback(
+    async (showSpinner = false) => {
+      if (!rawParam) {
+        setLoading(false);
+        setFetchError("Token akses tidak disertakan.");
+        return;
+      }
+
+      // Check if parameter is actually an order ID (e.g. TJ-261025-006) rather than a token
+      if (rawParam.startsWith("TJ-")) {
+        const vaultToken = getOrderToken(rawParam);
+        if (vaultToken) {
+          if (router) {
+            router.replace(`/pesanan/${vaultToken}`);
+            return;
+          }
+        }
+        setIsOrderIdParam(true);
+        setLoading(false);
+        return;
+      }
+
+      if (showSpinner) setIsRefreshing(true);
+      try {
+        const res = await fetch(`/api/orders/${encodeURIComponent(rawParam)}`, {
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (res.ok && data.success && data.order) {
+          const loadedOrder: Order = {
+            ...data.order,
+            token: rawParam,
+          };
+          saveOrderToken(loadedOrder.id, rawParam);
+          addOrder(loadedOrder);
+          setOrder(loadedOrder);
+          setFetchError(null);
+          setLastRefreshed(new Date());
+        } else {
+          // Fallback to local order reference only if server reports 404/error but local cache exists
+          const local =
+            getOrderByToken(rawParam) ||
+            orders.find((o) => o.token === rawParam);
+          if (local) {
+            setOrder(local);
+            setFetchError(null);
+          } else {
+            setFetchError(
+              data.error || "Pesanan tidak ditemukan atau tautan akses tidak valid."
+            );
+          }
+        }
+      } catch {
+        const local =
+          getOrderByToken(rawParam) ||
+          orders.find((o) => o.token === rawParam);
         if (local) {
           setOrder(local);
           setFetchError(null);
         } else {
-          setFetchError(data.error || "Pesanan tidak ditemukan atau tautan akses tidak valid.");
+          setFetchError("Gagal menghubungi server untuk memuat rincian pesanan.");
         }
+      } finally {
+        setLoading(false);
+        if (showSpinner) setIsRefreshing(false);
       }
-    } catch {
-      const local = getOrderByToken(token) || orders.find((o) => o.token === token || o.id === token);
-      if (local) {
-        setOrder(local);
-        setFetchError(null);
-      } else {
-        setFetchError("Gagal menghubungi server untuk memuat rincian pesanan.");
-      }
-    } finally {
-      setLoading(false);
-      if (showSpinner) setIsRefreshing(false);
-    }
-  }, [token, getOrderByToken, orders]);
+    },
+    [rawParam, router, getOrderByToken, orders, addOrder]
+  );
 
   // Initial load
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      if (!token) {
+      if (!rawParam) {
         setLoading(false);
         setFetchError("Token akses tidak disertakan.");
         return;
       }
+
+      if (rawParam.startsWith("TJ-")) {
+        const vaultToken = getOrderToken(rawParam);
+        if (vaultToken) {
+          if (router) {
+            router.replace(`/pesanan/${vaultToken}`);
+            return;
+          }
+        }
+        if (!cancelled) {
+          setIsOrderIdParam(true);
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
-        const res = await fetch(`/api/orders/${encodeURIComponent(token)}`, {
+        const res = await fetch(`/api/orders/${encodeURIComponent(rawParam)}`, {
           cache: "no-store",
         });
         const data = await res.json();
         if (cancelled) return;
         if (res.ok && data.success && data.order) {
-          setOrder(data.order);
+          const loadedOrder: Order = {
+            ...data.order,
+            token: rawParam,
+          };
+          saveOrderToken(loadedOrder.id, rawParam);
+          addOrder(loadedOrder);
+          setOrder(loadedOrder);
           setFetchError(null);
           setLastRefreshed(new Date());
         } else {
-          const local = getOrderByToken(token) || orders.find((o) => o.token === token || o.id === token);
+          const local =
+            getOrderByToken(rawParam) ||
+            orders.find((o) => o.token === rawParam);
           if (local) {
             setOrder(local);
             setFetchError(null);
           } else {
-            setFetchError(data.error || "Pesanan tidak ditemukan atau tautan akses tidak valid.");
+            setFetchError(
+              data.error || "Pesanan tidak ditemukan atau tautan akses tidak valid."
+            );
           }
         }
       } catch {
         if (cancelled) return;
-        const local = getOrderByToken(token) || orders.find((o) => o.token === token || o.id === token);
+        const local =
+          getOrderByToken(rawParam) ||
+          orders.find((o) => o.token === rawParam);
         if (local) {
           setOrder(local);
           setFetchError(null);
@@ -118,7 +179,7 @@ function OrderDetailContent() {
     return () => {
       cancelled = true;
     };
-  }, [token, getOrderByToken, orders]);
+  }, [rawParam, router, getOrderByToken, orders, addOrder]);
 
   // Real 15-second polling when tab is active and order is not terminal per PRD Section 14
   useEffect(() => {
@@ -162,10 +223,51 @@ function OrderDetailContent() {
     }
   };
 
+  const storePhone = STORE_SETTINGS.adminWhatsapp.replace(/[^0-9]/g, "");
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F6F6F7] flex items-center justify-center p-6 text-center">
         <p className="text-xs text-[#737373]">Memuat rincian pesanan dari server...</p>
+      </div>
+    );
+  }
+
+  // Safe explanation for orderId-only parameter without token
+  if (isOrderIdParam) {
+    return (
+      <div className="min-h-screen bg-[#F6F6F7] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-3">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <h1 className="text-base font-bold text-[#111111]">
+          Tautan Akses Memerlukan Token Otorisasi
+        </h1>
+        <p className="text-xs text-[#737373] mt-2 mb-2 max-w-sm leading-relaxed">
+          Tautan ini menggunakan nomor pesanan <span className="font-mono font-bold text-[#111111]">{rawParam}</span>, bukan token akses rahasia pelanggan.
+        </p>
+        <p className="text-xs text-[#737373] mb-6 max-w-sm leading-relaxed">
+          Demi keamanan dan privasi pelanggan, detail pesanan tidak dibuka secara publik hanya berdasarkan nomor order. Buka halaman Riwayat Pesanan pada perangkat yang Anda gunakan saat memesan, atau hubungi admin toko via WhatsApp.
+        </p>
+        <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full max-w-xs">
+          <a
+            href={`https://wa.me/${storePhone}?text=${encodeURIComponent(
+              `Halo admin Nook by Jina, saya ingin menanyakan status pesanan ${rawParam}.`
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full px-4 py-2.5 bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+          >
+            <MessageCircle className="w-4 h-4" />
+            <span>Tanya Admin via WhatsApp</span>
+          </a>
+          <Link
+            href="/pesanan"
+            className="w-full px-4 py-2.5 bg-[#111111] hover:bg-neutral-800 text-white text-xs font-semibold rounded-xl flex items-center justify-center transition-colors"
+          >
+            Buka Riwayat Pesanan
+          </Link>
+        </div>
       </div>
     );
   }
@@ -178,7 +280,7 @@ function OrderDetailContent() {
           Detail Pesanan Tidak Ditemukan
         </h1>
         <p className="text-xs text-[#737373] mt-1 mb-6 max-w-xs">
-          {fetchError || `Token akses "${token}" tidak valid atau telah kedaluwarsa.`}
+          {fetchError || `Token akses "${rawParam}" tidak valid atau telah kedaluwarsa.`}
         </p>
         <div className="flex items-center gap-2">
           <button
@@ -187,7 +289,7 @@ function OrderDetailContent() {
               setLoading(true);
               fetchOrder(false);
             }}
-            className="px-4 py-2.5 bg-[#F25B09] hover:bg-[#D94D06] text-white text-xs font-semibold rounded-xl transition-colors"
+            className="px-4 py-2.5 bg-[#F25B09] hover:bg-[#D94D06] text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
           >
             Coba Lagi
           </button>

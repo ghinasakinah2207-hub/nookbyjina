@@ -30,6 +30,7 @@ export function OrdersManager() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [confirmLunasOrder, setConfirmLunasOrder] = useState<Order | null>(null);
   const [confirmCashOrder, setConfirmCashOrder] = useState<Order | null>(null);
+  const [confirmCashCompleteOrder, setConfirmCashCompleteOrder] = useState<Order | null>(null);
   const [receiptWidth, setReceiptWidth] = useState<"58mm" | "80mm">("58mm");
   const [printError, setPrintError] = useState<string | null>(null);
 
@@ -163,6 +164,20 @@ export function OrdersManager() {
               paymentStatus: "Lunas",
             }
           : null
+      );
+    }
+  };
+
+  const handleConfirmCashComplete = async (orderId: string) => {
+    const res = await updateOrderStatus(orderId, "Selesai", "Lunas");
+    setConfirmCashCompleteOrder(null);
+    if (!res.success) {
+      alert(res.error || "Gagal menyelesaikan pesanan tunai.");
+      return;
+    }
+    if (selectedOrder?.id === orderId) {
+      setSelectedOrder((prev) =>
+        prev ? { ...prev, orderStatus: "Selesai", paymentStatus: "Lunas" } : null
       );
     }
   };
@@ -513,7 +528,15 @@ export function OrdersManager() {
                     {/* Action 4: Mark Completed */}
                     {order.orderStatus === "Siap" && (
                       <button
-                        onClick={() => handleUpdateStatus(order.id, "Selesai")}
+                        onClick={() => {
+                          if (order.paymentStatus === "Menunggu Pembayaran") {
+                            setConfirmCashCompleteOrder(order);
+                          } else if (order.paymentStatus === "Menunggu Verifikasi") {
+                            alert("Pesanan QRIS ini belum diverifikasi. Silakan lakukan Verifikasi QRIS terlebih dahulu.");
+                          } else {
+                            handleUpdateStatus(order.id, "Selesai");
+                          }
+                        }}
                         className="px-3 py-1.5 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold transition-colors cursor-pointer"
                       >
                         Selesai
@@ -664,6 +687,60 @@ export function OrdersManager() {
                 className="px-4 py-2 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer"
               >
                 Uang Tunai Diterima & Tandai Lunas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          CONFIRMATION MODAL: COMPLETE CASH ORDER & CONFIRM RECEIPT
+          ========================================================================= */}
+      {confirmCashCompleteOrder && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-landing-fade">
+          <div className="bg-white border border-[#E5E5E5] rounded-2xl max-w-md w-full p-5 sm:p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 text-[#8A4B08] flex items-center justify-center flex-shrink-0">
+                <Banknote className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[#111111]">
+                  Konfirmasi Selesai & Pembayaran Tunai
+                </h3>
+                <p className="text-xs text-[#737373]">Pesanan {confirmCashCompleteOrder.id}</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-[#8A4B08] space-y-2">
+              <p className="font-semibold text-amber-950">
+                Pesanan tunai ini belum ditandai Lunas. Setelah berstatus &apos;Selesai&apos;, status pesanan tidak dapat diubah lagi!
+              </p>
+              <ul className="list-disc list-inside text-[11px] space-y-1 text-amber-900">
+                <li>
+                  Total yang harus diterima:{" "}
+                  <strong className="text-[#111111]">
+                    {formatRupiah(confirmCashCompleteOrder.total)}
+                  </strong>
+                </li>
+                <li>Pelanggan: {confirmCashCompleteOrder.customerName}</li>
+                <li>Apakah uang tunai fisik telah diterima sehingga pesanan dapat diselesaikan sebagai Lunas?</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmCashCompleteOrder(null)}
+                className="px-3.5 py-2 rounded-xl border border-[#E5E5E5] text-xs font-semibold text-[#737373] hover:text-[#111111]"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => handleConfirmCashComplete(confirmCashCompleteOrder.id)}
+                className="px-4 py-2 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer"
+              >
+                Uang Tunai Diterima & Pesanan Selesai
               </button>
             </div>
           </div>

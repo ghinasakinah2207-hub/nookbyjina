@@ -2,17 +2,29 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ReceiptText, ChevronRight, Clock, QrCode, RefreshCw } from "lucide-react";
+import {
+  ReceiptText,
+  ChevronRight,
+  Clock,
+  QrCode,
+  RefreshCw,
+  MessageCircle,
+  X,
+  ShieldAlert,
+} from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { StatusBadge } from "@/components/ui/Badge";
 import { useOrder } from "@/context/OrderContext";
-import { formatRupiah } from "@/data/dummy-data";
+import { formatRupiah, STORE_SETTINGS } from "@/data/dummy-data";
+import { getOrderToken } from "@/lib/order-token-vault";
+import { Order } from "@/types";
 
 export default function OrderHistoryPage() {
   const { orders, isHydrated, syncWithServer } = useOrder();
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [restrictedOrder, setRestrictedOrder] = useState<Order | null>(null);
 
   const handleManualSync = async () => {
     setIsSyncing(true);
@@ -25,6 +37,8 @@ export default function OrderHistoryPage() {
       setIsSyncing(false);
     }
   };
+
+  const storePhone = STORE_SETTINGS.adminWhatsapp.replace(/[^0-9]/g, "");
 
   return (
     <div className="min-h-screen pb-24 bg-[#F6F6F7]">
@@ -101,6 +115,9 @@ export default function OrderHistoryPage() {
                 minute: "2-digit",
               }) + " WIB";
 
+              // Resolve raw authorization token from order object or client token vault
+              const resolvedToken = order.token || getOrderToken(order.id) || "";
+
               return (
                 <div
                   key={order.id}
@@ -155,7 +172,8 @@ export default function OrderHistoryPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {order.paymentStatus === "Menunggu Verifikasi" ? (
+                      {order.paymentStatus === "Menunggu Verifikasi" &&
+                      (order.paymentMethod === "QRIS Statis" || !order.paymentMethod) ? (
                         <Link
                           href={`/pembayaran/${order.id}`}
                           className="px-2.5 py-1.5 bg-orange-50 text-[#F25B09] border border-orange-200 rounded-lg text-xs font-medium flex items-center gap-1 hover:bg-orange-100"
@@ -165,18 +183,82 @@ export default function OrderHistoryPage() {
                         </Link>
                       ) : null}
 
-                      <Link
-                        href={`/pesanan/${order.token}`}
-                        className="px-3 py-1.5 bg-neutral-50 text-[#111111] border border-[#E5E5E5] rounded-lg text-xs font-semibold flex items-center gap-1 hover:bg-neutral-100"
-                      >
-                        <span>Detail</span>
-                        <ChevronRight className="w-3.5 h-3.5 text-[#737373]" />
-                      </Link>
+                      {resolvedToken ? (
+                        <Link
+                          href={`/pesanan/${resolvedToken}`}
+                          className="px-3 py-1.5 bg-neutral-50 text-[#111111] border border-[#E5E5E5] rounded-lg text-xs font-semibold flex items-center gap-1 hover:bg-neutral-100"
+                        >
+                          <span>Detail</span>
+                          <ChevronRight className="w-3.5 h-3.5 text-[#737373]" />
+                        </Link>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setRestrictedOrder(order)}
+                          className="px-3 py-1.5 bg-neutral-50 text-[#737373] border border-[#E5E5E5] rounded-lg text-xs font-semibold flex items-center gap-1 hover:bg-neutral-100 cursor-pointer"
+                        >
+                          <span>Detail</span>
+                          <ChevronRight className="w-3.5 h-3.5 text-[#A3A3A3]" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Modal: Explaining why an order without an access token cannot be opened directly */}
+        {restrictedOrder && (
+          <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-xl">
+              <div className="flex items-start justify-between gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRestrictedOrder(null)}
+                  className="p-1 rounded-lg hover:bg-neutral-100 text-[#737373]"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-sm font-bold text-[#111111]">
+                  Akses Pesanan Terbatas
+                </h3>
+                <p className="text-xs text-[#737373] leading-relaxed">
+                  Pesanan <span className="font-mono font-bold text-[#111111]">{restrictedOrder.id}</span> tercatat di riwayat, namun token otorisasi rahasia tidak ditemukan di browser ini.
+                </p>
+                <p className="text-xs text-[#737373] leading-relaxed">
+                  Demi perlindungan privasi dan keamanan data pembeli, rincian detail tidak dibuka secara publik tanpa token akses. Anda dapat langsung mengonfirmasi status ke admin toko via WhatsApp.
+                </p>
+              </div>
+
+              <div className="pt-2 flex flex-col gap-2">
+                <a
+                  href={`https://wa.me/${storePhone}?text=${encodeURIComponent(
+                    `Halo admin Nook by Jina, saya ingin menanyakan status pesanan ${restrictedOrder.id}.`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full min-h-[44px] px-4 py-2.5 bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Tanya Status via WhatsApp</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setRestrictedOrder(null)}
+                  className="w-full min-h-[40px] px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#111111] text-xs font-semibold rounded-xl transition-colors"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </main>
@@ -185,4 +267,5 @@ export default function OrderHistoryPage() {
     </div>
   );
 }
+
 

@@ -13,6 +13,7 @@ import {
 import { Header } from "@/components/layout/Header";
 import { StatusBadge } from "@/components/ui/Badge";
 import { useOrder } from "@/context/OrderContext";
+import { getOrderToken } from "@/lib/order-token-vault";
 import { Suspense } from "react";
 
 function OrderSuccessContent() {
@@ -44,9 +45,10 @@ function OrderSuccessContent() {
     );
   }
 
+  const resolvedToken = order.token || (order.id ? getOrderToken(order.id) : "") || "";
   const orderUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/pesanan/${order.token}`
-    : `/pesanan/${order.token}`;
+    ? `${window.location.origin}/pesanan/${resolvedToken}`
+    : `/pesanan/${resolvedToken}`;
 
   const handleCopyLink = async () => {
     try {
@@ -138,7 +140,7 @@ function OrderSuccessContent() {
           </Link>
 
           <Link
-            href={`/pesanan/${order.token}`}
+            href={resolvedToken ? `/pesanan/${resolvedToken}` : "/pesanan"}
             className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-white border border-[#E5E5E5] text-[#111111] hover:bg-neutral-50 font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors"
           >
             <Receipt className="w-4 h-4 text-[#737373]" />

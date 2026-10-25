@@ -64,6 +64,24 @@ export async function generateDailyOrderNumber(): Promise<string> {
  */
 function mapDatabaseRowToOrder(row: Record<string, unknown>, rawToken?: string): Order {
   const isCash = (row.payment_method as string) === "Cash";
+  const rawStatus = String(row.payment_status || "");
+  const normalizedPaymentStatus: PaymentStatus =
+    rawStatus === "Menunggu verifikasi admin" || rawStatus === "Menunggu Verifikasi"
+      ? "Menunggu Verifikasi"
+      : rawStatus === "Menunggu pembayaran" || rawStatus === "Menunggu Pembayaran"
+      ? "Menunggu Pembayaran"
+      : rawStatus === "Lunas"
+      ? "Lunas"
+      : rawStatus === "Dibatalkan" || rawStatus === "Gagal"
+      ? "Dibatalkan"
+      : isCash
+      ? "Menunggu Pembayaran"
+      : "Menunggu Verifikasi";
+
+  const rawMethod = String(row.payment_method || "");
+  const normalizedMethod: Order["paymentMethod"] =
+    rawMethod === "Cash" ? "Cash" : "QRIS Statis";
+
   return {
     id: (row.order_number as string) || (row.id as string),
     token: rawToken || "",
@@ -78,8 +96,8 @@ function mapDatabaseRowToOrder(row: Record<string, unknown>, rawToken?: string):
     shippingFee: Number(row.delivery_fee || 0),
     total: Number(row.total || 0),
     orderStatus: (row.order_status as OrderStatus) || "Pesanan baru",
-    paymentStatus: (row.payment_status as PaymentStatus) || (isCash ? "Menunggu Pembayaran" : "Menunggu Verifikasi"),
-    paymentMethod: ((row.payment_method as string) || "QRIS Statis") as Order["paymentMethod"],
+    paymentStatus: normalizedPaymentStatus,
+    paymentMethod: normalizedMethod,
     paymentDeadline: (row.payment_deadline as string) || "",
     merchantName: (row.merchant_name as string) || "Nook by Jina",
   };
@@ -107,6 +125,30 @@ const devOrdersById = globalOrdersStore.__devOrdersById;
 export async function saveOrder(order: Order): Promise<Order> {
   if (!order.token || !isValidTokenFormat(order.token)) {
     throw new Error("Token akses pesanan tidak valid atau belum disertakan.");
+  }
+
+  const isCash = order.paymentMethod === "Cash";
+  const rawStatus = (order.paymentStatus || "") as string;
+  if (isCash) {
+    if (
+      rawStatus &&
+      rawStatus !== "Menunggu Pembayaran" &&
+      rawStatus !== "Menunggu pembayaran"
+    ) {
+      throw new Error(
+        `Status pembayaran awal "${rawStatus}" tidak valid untuk metode Cash (harus "Menunggu pembayaran").`
+      );
+    }
+  } else {
+    if (
+      rawStatus &&
+      rawStatus !== "Menunggu Verifikasi" &&
+      rawStatus !== "Menunggu verifikasi admin"
+    ) {
+      throw new Error(
+        `Status pembayaran awal "${rawStatus}" tidak valid untuk metode QRIS (harus "Menunggu verifikasi admin").`
+      );
+    }
   }
 
   const tokenHash = hashOrderToken(order.token);
@@ -270,7 +312,7 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
     for (const h of hashes) {
       const devOrder = devOrdersByHash.get(h);
       if (devOrder) {
-        results.push({ ...devOrder, token: "" });
+        results.push({ ...devOrder, token: tokenHashMap.get(h) || "" });
       }
     }
     return results;
@@ -283,10 +325,14 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
   );
 
   if (!rpcErr && Array.isArray(rpcResult)) {
-    return (rpcResult as Order[]).map((o) => ({
-      ...o,
-      token: "", // Omit raw token in list queries for safety
-    }));
+    return (rpcResult as Order[]).map((o) => {
+      // Restore client's own token for matching
+      const token = validTokens.find((t) => hashOrderToken(t) === o.id) || "";
+      return {
+        ...o,
+        token,
+      };
+    });
   }
 
   // 2. Direct query fallback
@@ -298,6 +344,14 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
 
   if (tokenErr || !tokenRecords || tokenRecords.length === 0) {
     return [];
+  }
+
+  const orderIdToToken = new Map<string, string>();
+  for (const record of tokenRecords) {
+    const rawT = tokenHashMap.get(record.token_hash);
+    if (rawT && record.order_id) {
+      orderIdToToken.set(String(record.order_id), rawT);
+    }
   }
 
   const orderIds = tokenRecords.map((r) => r.order_id);
@@ -312,7 +366,7 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
   }
 
   return (orderRows as Record<string, unknown>[]).map((row) =>
-    mapDatabaseRowToOrder(row)
+    mapDatabaseRowToOrder(row, orderIdToToken.get(String(row.id)))
   );
 }
 
@@ -390,6 +444,24 @@ export async function updateOrderStatusServer(
       }
       if (targetPaymentStatus === "Dibatalkan" && !targetOrderStatus && ["Pesanan baru", "Diproses", "Siap"].includes(existingOrderStatus)) {
         targetOrderStatus = "Dibatalkan";
+      }
+
+      // Transition Rule 7: Reject Invalid Payment Method and Status Combinations
+      const currentMethod = (devOrder.paymentMethod || "") as string;
+      const rawTargetStatus = (targetPaymentStatus || "") as string;
+      if (rawTargetStatus) {
+        if (
+          currentMethod === "Cash" &&
+          (rawTargetStatus === "Menunggu Verifikasi" || rawTargetStatus === "Menunggu verifikasi admin")
+        ) {
+          throw new Error('Metode pembayaran Cash tidak valid dengan status "Menunggu verifikasi admin".');
+        }
+        if (
+          (currentMethod === "QRIS" || currentMethod === "QRIS Statis") &&
+          (rawTargetStatus === "Menunggu Pembayaran" || rawTargetStatus === "Menunggu pembayaran")
+        ) {
+          throw new Error('Metode pembayaran QRIS tidak valid dengan status "Menunggu pembayaran".');
+        }
       }
 
       if (targetOrderStatus) devOrder.orderStatus = targetOrderStatus;

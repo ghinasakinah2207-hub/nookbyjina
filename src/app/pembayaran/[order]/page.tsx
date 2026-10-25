@@ -19,6 +19,7 @@ import { StatusBadge } from "@/components/ui/Badge";
 import { useOrder } from "@/context/OrderContext";
 import { formatRupiah, STORE_SETTINGS } from "@/data/dummy-data";
 import { StoreSettings } from "@/types";
+import { getOrderToken } from "@/lib/order-token-vault";
 
 function PaymentContent() {
   const params = useParams();
@@ -34,17 +35,20 @@ function PaymentContent() {
   // Authoritative server-time offset (serverTime - localTime) in ms
   const serverOffsetRef = React.useRef<number>(0);
 
-  // Fallback recovery: fetch remote order if not found in local context but orderId looks like a token
+  // Fallback recovery: fetch remote order if not found in local context
   useEffect(() => {
-    if (!isHydrated || !orderId || orderId.length < 16) return;
+    if (!isHydrated || !orderId) return;
     const existsLocally = getOrderById(orderId) || orders.find((o) => o.token === orderId);
     if (existsLocally) return;
 
-    fetch(`/api/orders/${encodeURIComponent(orderId)}`, { cache: "no-store" })
+    const lookupToken = orderId.length >= 16 ? orderId : getOrderToken(orderId);
+    if (!lookupToken) return;
+
+    fetch(`/api/orders/${encodeURIComponent(lookupToken)}`, { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.success && data?.order) {
-          addOrder({ ...data.order, token: orderId });
+          addOrder({ ...data.order, token: lookupToken });
         }
       })
       .catch(() => {});
@@ -106,12 +110,15 @@ function PaymentContent() {
     return getOrderById(orderId) || orders.find((o) => o.token === orderId);
   }, [orderId, orders, getOrderById, isHydrated]);
 
+  // Resolve token for links and navigation
+  const resolvedToken = order?.token || (order?.id ? getOrderToken(order.id) : "") || "";
+
   // If order uses Cash method, redirect to order detail page immediately
   useEffect(() => {
     if (order && order.paymentMethod === "Cash") {
-      router.replace(`/pesanan/${order.token}`);
+      router.replace(resolvedToken ? `/pesanan/${resolvedToken}` : "/pesanan");
     }
-  }, [order, router]);
+  }, [order, resolvedToken, router]);
 
   // 30-minute QRIS countdown anchored to persisted order paymentDeadline
   const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(() => {
@@ -309,7 +316,7 @@ Mohon dicek di riwayat transaksi merchant. Terima kasih!`;
       <Header
         title="Pembayaran QRIS"
         showBack={true}
-        backHref={`/pesanan/${order.token}`}
+        backHref={resolvedToken ? `/pesanan/${resolvedToken}` : "/pesanan"}
         showCart={false}
       />
 
@@ -405,7 +412,7 @@ Mohon dicek di riwayat transaksi merchant. Terima kasih!`;
             </p>
             <div className="pt-1">
               <Link
-                href={`/pesanan/${order.token}`}
+                href={resolvedToken ? `/pesanan/${resolvedToken}` : "/pesanan"}
                 className="inline-flex items-center gap-1.5 font-bold text-white bg-[#18794E] hover:bg-emerald-700 px-4 py-2.5 rounded-xl text-xs transition-colors shadow-xs"
               >
                 <span>Lihat Detail Pesanan & Token Akses</span>
@@ -563,7 +570,7 @@ Mohon dicek di riwayat transaksi merchant. Terima kasih!`;
         {/* Link to order detail & token */}
         <div>
           <Link
-            href={`/pesanan/${order.token}`}
+            href={resolvedToken ? `/pesanan/${resolvedToken}` : "/pesanan"}
             className="w-full min-h-[44px] px-4 py-2.5 bg-white border border-[#E5E5E5] rounded-xl text-xs font-semibold text-[#111111] flex items-center justify-center gap-2 hover:bg-neutral-50 transition-colors shadow-xs"
           >
             <span>Buka Detail Pesanan & Token Akses</span>
