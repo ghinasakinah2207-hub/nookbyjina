@@ -1,6 +1,6 @@
 import React, { Suspense } from "react";
 import type { Metadata } from "next";
-import { getProductBySlugOrId, getVisibleProducts } from "@/lib/supabase/catalog";
+import { getProductBySlugOrId, getRecommendedProducts } from "@/lib/supabase/catalog";
 import { getStoreSettings } from "@/lib/supabase/store-settings";
 import ProductDetailClient from "@/components/product/ProductDetailClient";
 
@@ -52,23 +52,20 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   const { id } = await params;
   const decodedId = decodeURIComponent(id);
 
-  const [product, allVisible, storeSettings] = await Promise.all([
+  const [product, storeSettings] = await Promise.all([
     getProductBySlugOrId(decodedId).catch(() => null),
-    getVisibleProducts().catch(() => []),
     getStoreSettings().catch(() => ({
       isOpen: true,
     })),
   ]);
 
   const recommended = product
-    ? allVisible
-        .filter(
-          (p) =>
-            p.id !== product.id &&
-            p.slug !== product.slug &&
-            (p.categoryId === product.categoryId || p.isHighlight)
-        )
-        .slice(0, 4)
+    ? await getRecommendedProducts(
+        product.categoryId,
+        product.dbId || product.id,
+        product.slug,
+        4
+      ).catch(() => [])
     : [];
 
   return (

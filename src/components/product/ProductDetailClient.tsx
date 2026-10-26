@@ -19,7 +19,7 @@ import { formatRupiah } from "@/data/dummy-data";
 import { useCart } from "@/context/CartContext";
 import { SelectedOption, SelectedAddon, Product } from "@/types";
 import { ProductCard } from "@/components/product/ProductCard";
-import { getProductBySlugOrId, getVisibleProducts } from "@/lib/supabase/catalog";
+import { getProductBySlugOrId, getRecommendedProducts } from "@/lib/supabase/catalog";
 import { parseOptionLabel } from "@/lib/option-utils";
 
 interface ProductDetailClientProps {
@@ -74,21 +74,30 @@ export default function ProductDetailClient({
 
   // Validation error state
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [storeOpen, setStoreOpen] = useState<boolean>(initialStoreOpen);
+  const [storeOpen, setStoreOpen] = useState<boolean>(Boolean(initialStoreOpen));
+  const [prevInitialStoreOpen, setPrevInitialStoreOpen] = useState(initialStoreOpen);
+  if (prevInitialStoreOpen !== initialStoreOpen) {
+    setPrevInitialStoreOpen(initialStoreOpen);
+    if (typeof initialStoreOpen === "boolean") {
+      setStoreOpen(initialStoreOpen);
+    }
+  }
 
-  // Fetch product, store settings, and visible products on mount / ID change if not pre-populated
+  // Fetch product, store settings, and recommendations on mount / ID change if not pre-populated
   useEffect(() => {
     let isMounted = true;
 
-    // Check store settings asynchronously
-    fetch("/api/store-settings")
-      .then((res) => res.json())
-      .then((data) => {
-        if (isMounted && data.success && data.settings) {
-          setStoreOpen(Boolean(data.settings.isOpen));
-        }
-      })
-      .catch((err) => console.error("Error fetching store settings in product page:", err));
+    // Check store settings asynchronously only if not pre-populated by server
+    if (typeof initialStoreOpen !== "boolean") {
+      fetch("/api/store-settings")
+        .then((res) => res.json())
+        .then((data) => {
+          if (isMounted && data.success && data.settings) {
+            setStoreOpen(Boolean(data.settings.isOpen));
+          }
+        })
+        .catch((err) => console.error("Error fetching store settings in product page:", err));
+    }
 
     // If initialProduct matches current productId, skip refetching
     if (initialProduct && (initialProduct.id === productId || initialProduct.slug === productId)) {
@@ -98,10 +107,7 @@ export default function ProductDetailClient({
     async function loadProductData() {
       if (!productId) return;
       try {
-        const [fetchedProduct, allVisible] = await Promise.all([
-          getProductBySlugOrId(productId),
-          getVisibleProducts(),
-        ]);
+        const fetchedProduct = await getProductBySlugOrId(productId);
 
         if (isMounted) {
           setProduct(fetchedProduct);
@@ -114,15 +120,15 @@ export default function ProductDetailClient({
             });
             setSelectedOptions(initialOpts);
 
-            const recommended = allVisible
-              .filter(
-                (p) =>
-                  p.id !== fetchedProduct.id &&
-                  p.slug !== fetchedProduct.slug &&
-                  (p.categoryId === fetchedProduct.categoryId || p.isHighlight)
-              )
-              .slice(0, 4);
-            setRecommendedProducts(recommended);
+            const recommended = await getRecommendedProducts(
+              fetchedProduct.categoryId,
+              fetchedProduct.dbId || fetchedProduct.id,
+              fetchedProduct.slug,
+              4
+            );
+            if (isMounted) {
+              setRecommendedProducts(recommended);
+            }
           }
           setError(null);
           setLoading(false);
@@ -142,17 +148,14 @@ export default function ProductDetailClient({
     return () => {
       isMounted = false;
     };
-  }, [productId, initialProduct]);
+  }, [productId, initialProduct, initialStoreOpen]);
 
   const handleRetry = async () => {
     if (!productId) return;
     setLoading(true);
     setError(null);
     try {
-      const [fetchedProduct, allVisible] = await Promise.all([
-        getProductBySlugOrId(productId),
-        getVisibleProducts(),
-      ]);
+      const fetchedProduct = await getProductBySlugOrId(productId);
       setProduct(fetchedProduct);
       if (fetchedProduct) {
         const initialOpts: Record<string, string> = {};
@@ -163,14 +166,12 @@ export default function ProductDetailClient({
         });
         setSelectedOptions(initialOpts);
 
-        const recommended = allVisible
-          .filter(
-            (p) =>
-              p.id !== fetchedProduct.id &&
-              p.slug !== fetchedProduct.slug &&
-              (p.categoryId === fetchedProduct.categoryId || p.isHighlight)
-          )
-          .slice(0, 4);
+        const recommended = await getRecommendedProducts(
+          fetchedProduct.categoryId,
+          fetchedProduct.dbId || fetchedProduct.id,
+          fetchedProduct.slug,
+          4
+        );
         setRecommendedProducts(recommended);
       }
     } catch (err: unknown) {

@@ -151,6 +151,7 @@ const CACHE_TTL_MS = 60_000; // 60 seconds TTL
 let categoriesCache: CacheEntry<Category[]> | null = null;
 let visibleProductsCache: CacheEntry<Product[]> | null = null;
 const singleProductCache = new Map<string, CacheEntry<Product | null>>();
+const recommendedProductsCache = new Map<string, CacheEntry<Product[]>>();
 
 /**
  * Invalidate in-memory catalog cache when admin performs mutations
@@ -159,6 +160,7 @@ export function clearCatalogCache(): void {
   categoriesCache = null;
   visibleProductsCache = null;
   singleProductCache.clear();
+  recommendedProductsCache.clear();
 }
 
 /**
@@ -256,6 +258,96 @@ export async function getVisibleProducts(bypassCache = false): Promise<Product[]
 
   const result = (data || []).map((row) => mapDbProductToUiProduct(row as unknown as DbProductRow));
   visibleProductsCache = { data: result, timestamp: now };
+  return result;
+}
+
+/**
+ * Fetch limited recommended products for a given category/product.
+ * Matches category or is_highlight=true, non-archived, excludes current product.
+ */
+export async function getRecommendedProducts(
+  categoryId: string | null | undefined,
+  currentProductId: string,
+  currentProductSlug?: string,
+  limit = 4,
+  bypassCache = false
+): Promise<Product[]> {
+  const now = performance.now();
+  if (!bypassCache && visibleProductsCache && now - visibleProductsCache.timestamp < CACHE_TTL_MS) {
+    return visibleProductsCache.data
+      .filter(
+        (p) =>
+          p.id !== currentProductId &&
+          (!currentProductSlug || p.slug !== currentProductSlug) &&
+          (p.categoryId === categoryId || p.isHighlight)
+      )
+      .slice(0, limit);
+  }
+
+  const cacheKey = `${categoryId || "none"}:${currentProductId}:${currentProductSlug || ""}:${limit}`;
+  if (!bypassCache) {
+    const cached = recommendedProductsCache.get(cacheKey);
+    if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+      return cached.data;
+    }
+  }
+
+  let query = supabase
+    .from("products")
+    .select(`
+      id,
+      name,
+      slug,
+      description,
+      price,
+      is_available,
+      is_archived,
+      is_highlight,
+      sort_order,
+      category_id,
+      tags,
+      categories (
+        id,
+        name,
+        slug
+      ),
+      product_images (
+        id,
+        image_url,
+        sort_order
+      )
+    `)
+    .eq("is_archived", false)
+    .neq("id", currentProductId);
+
+  if (categoryId) {
+    query = query.or(`category_id.eq.${categoryId},is_highlight.eq.true`);
+  } else {
+    query = query.eq("is_highlight", true);
+  }
+
+  const { data, error } = await query
+    .order("sort_order", { ascending: true })
+    .limit(limit + 1);
+
+  if (error) {
+    if (recommendedProductsCache.has(cacheKey)) {
+      return recommendedProductsCache.get(cacheKey)!.data;
+    }
+    console.error("Error fetching recommended products:", error);
+    return [];
+  }
+
+  const result = (data || [])
+    .filter(
+      (row) =>
+        row.id !== currentProductId &&
+        (!currentProductSlug || row.slug !== currentProductSlug)
+    )
+    .slice(0, limit)
+    .map((row) => mapDbProductToUiProduct(row as unknown as DbProductRow));
+
+  recommendedProductsCache.set(cacheKey, { data: result, timestamp: now });
   return result;
 }
 
