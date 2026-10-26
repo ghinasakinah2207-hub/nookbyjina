@@ -17,7 +17,7 @@ export default function WelcomeLandingPage() {
       {/* Cinematic Full-screen Background with Subtle Blur and Contrast Overlay */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
         <Image
-          src="/images/landing-food-bg.webp"
+          src="/images/bghomepage.webp"
           alt="Sajian Makanan Homemade Nook by Jina"
           fill
           priority
