@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { AppProvider } from "@/context/AppProvider";
 import "./globals.css";
 
@@ -64,6 +65,7 @@ export default function RootLayout({
     <html lang="id" className={`${plusJakartaSans.variable} h-full`}>
       <body className="min-h-full flex flex-col bg-[#F6F6F7] text-[#111111] font-sans antialiased">
         <AppProvider>{children}</AppProvider>
+        <Analytics />
       </body>
     </html>
   );
