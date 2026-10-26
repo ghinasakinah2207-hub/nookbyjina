@@ -1,8 +1,12 @@
 import React, { Suspense } from "react";
 import type { Metadata } from "next";
-import { getProductBySlugOrId, getRecommendedProducts } from "@/lib/supabase/catalog";
+import { getProductBySlugOrId } from "@/lib/supabase/catalog";
 import { getStoreSettings } from "@/lib/supabase/store-settings";
 import ProductDetailClient from "@/components/product/ProductDetailClient";
+import {
+  ProductRecommendations,
+  ProductRecommendationsSkeleton,
+} from "@/components/product/ProductRecommendations";
 
 export const instant = false;
 
@@ -59,29 +63,23 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
     })),
   ]);
 
-  const recommended = product
-    ? await getRecommendedProducts(
-        product.categoryId,
-        product.dbId || product.id,
-        product.slug,
-        4
-      ).catch(() => [])
-    : [];
-
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-[#F6F6F7] flex items-center justify-center text-xs text-[#737373]">
-          Memuat menu...
-        </div>
+    <ProductDetailClient
+      key={decodedId}
+      productId={decodedId}
+      initialProduct={product}
+      initialStoreOpen={Boolean(storeSettings.isOpen)}
+      recommendedSlot={
+        product ? (
+          <Suspense fallback={<ProductRecommendationsSkeleton />}>
+            <ProductRecommendations
+              categoryId={product.categoryId}
+              productId={product.dbId || product.id}
+              productSlug={product.slug}
+            />
+          </Suspense>
+        ) : null
       }
-    >
-      <ProductDetailClient
-        productId={decodedId}
-        initialProduct={product}
-        initialRecommended={recommended}
-        initialStoreOpen={Boolean(storeSettings.isOpen)}
-      />
-    </Suspense>
+    />
   );
 }

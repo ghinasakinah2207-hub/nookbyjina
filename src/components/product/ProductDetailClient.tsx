@@ -27,6 +27,7 @@ interface ProductDetailClientProps {
   initialProduct?: Product | null;
   initialRecommended?: Product[];
   initialStoreOpen?: boolean;
+  recommendedSlot?: React.ReactNode;
 }
 
 export default function ProductDetailClient({
@@ -34,6 +35,7 @@ export default function ProductDetailClient({
   initialProduct,
   initialRecommended,
   initialStoreOpen = true,
+  recommendedSlot,
 }: ProductDetailClientProps) {
   const router = useRouter();
 
@@ -670,7 +672,9 @@ export default function ProductDetailClient({
         </section>
 
         {/* 5. Recommended Companion Products */}
-        {recommendedProducts.length > 0 && (
+        {recommendedSlot !== undefined ? (
+          recommendedSlot
+        ) : recommendedProducts.length > 0 ? (
           <section className="space-y-2 pt-2">
             <h2 className="text-xs font-bold text-[#111111] px-0.5">
               Menu Rekomendasi Lainnya
@@ -681,7 +685,7 @@ export default function ProductDetailClient({
               ))}
             </div>
           </section>
-        )}
+        ) : null}
       </main>
 
       {/* 6. Sticky Floating Bottom Action Bar */}
