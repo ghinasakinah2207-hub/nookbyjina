@@ -31,6 +31,19 @@ export default function MenuClient({
   const [loading, setLoading] = useState<boolean>(!hasInitialProducts);
   const [error, setError] = useState<string | null>(null);
 
+  // Sync state if server props change without triggering cascading render effect
+  const [prevInitialProducts, setPrevInitialProducts] = useState(initialProducts);
+  if (initialProducts !== prevInitialProducts) {
+    setPrevInitialProducts(initialProducts);
+    setProducts(initialProducts ?? []);
+  }
+
+  const [prevInitialCategories, setPrevInitialCategories] = useState(initialCategories);
+  if (initialCategories !== prevInitialCategories) {
+    setPrevInitialCategories(initialCategories);
+    setCategories(initialCategories ?? []);
+  }
+
   useEffect(() => {
     // If categories and products were already pre-populated on the server, skip initial client fetch
     if (hasInitialProducts) {

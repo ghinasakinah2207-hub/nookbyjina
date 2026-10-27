@@ -150,7 +150,7 @@ export function ProductCard({
                 <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
             ) : (
-              <span className="text-[8.55px] text-[#737373] font-medium flex-shrink-0 mt-1">
+              <span className="inline-flex items-center text-[9px] font-bold text-[#B42318] bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-md flex-shrink-0 mt-0.5 select-none">
                 Habis
               </span>
             )}

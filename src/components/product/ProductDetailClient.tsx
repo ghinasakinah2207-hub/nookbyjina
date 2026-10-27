@@ -187,6 +187,7 @@ export default function ProductDetailClient({
 
   // Toggle option selection
   const handleSelectOption = (groupId: string, valueId: string) => {
+    if (!product?.isAvailable || !storeOpen) return;
     setSelectedOptions((prev) => ({
       ...prev,
       [groupId]: valueId,
@@ -196,6 +197,7 @@ export default function ProductDetailClient({
 
   // Toggle addon selection
   const handleToggleAddon = (addonId: string) => {
+    if (!product?.isAvailable || !storeOpen) return;
     setSelectedAddonIds((prev) => {
       const next = new Set(prev);
       if (next.has(addonId)) {
@@ -479,9 +481,16 @@ export default function ProductDetailClient({
           {/* Product Information Directly Flowing Below Image */}
           <div className="px-0.5 pt-0.5 space-y-1.5">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] font-semibold text-[#F25B09] uppercase tracking-wider">
-                {product.categoryName || "Menu Pilihan"}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-[#F25B09] uppercase tracking-wider">
+                  {product.categoryName || "Menu Pilihan"}
+                </span>
+                {!product.isAvailable && (
+                  <span className="inline-flex items-center text-[10px] font-bold text-[#B42318] bg-red-50 border border-red-200 px-2 py-0.5 rounded-full select-none">
+                    Habis
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-1 text-[11px] font-semibold text-[#111111]">
                 <Star className="w-3.5 h-3.5 text-[#FFC83D] fill-[#FFC83D]" />
                 <span>4.9</span>
@@ -560,8 +569,11 @@ export default function ProductDetailClient({
                     <button
                       key={val.id}
                       type="button"
+                      disabled={!product.isAvailable || !storeOpen}
                       onClick={() => handleSelectOption(group.id, val.id)}
                       className={`min-h-[46px] p-2 rounded-lg text-left transition-colors flex items-center justify-between border ${
+                        !product.isAvailable || !storeOpen ? "opacity-60 cursor-not-allowed " : "cursor-pointer "
+                      }${
                         isSelected
                           ? "bg-neutral-50 border-[#111111] text-[#111111]"
                           : "bg-white border-[#E5E5E5] text-[#111111] hover:border-neutral-300"
@@ -620,8 +632,11 @@ export default function ProductDetailClient({
                   <button
                     key={addon.id}
                     type="button"
+                    disabled={!product.isAvailable || !storeOpen}
                     onClick={() => handleToggleAddon(addon.id)}
                     className={`w-full min-h-[42px] px-3 py-2 rounded-lg text-left transition-colors flex items-center justify-between border ${
+                      !product.isAvailable || !storeOpen ? "opacity-60 cursor-not-allowed " : "cursor-pointer "
+                    }${
                       isSelected
                         ? "bg-neutral-50 border-[#111111] text-[#111111]"
                         : "bg-white border-[#E5E5E5] text-[#111111] hover:border-neutral-300"
@@ -661,10 +676,13 @@ export default function ProductDetailClient({
           <input
             id="item-note"
             type="text"
+            disabled={!product.isAvailable || !storeOpen}
             value={itemNote}
             onChange={(e) => setItemNote(e.target.value.slice(0, 100))}
             placeholder="Contoh: Sambal dipisah, jangan terlalu pedas..."
-            className="w-full text-xs px-3 py-2 rounded-lg border border-[#E5E5E5] bg-[#F6F6F7] text-[#111111] focus:outline-none focus:border-[#111111] transition-colors"
+            className={`w-full text-xs px-3 py-2 rounded-lg border border-[#E5E5E5] text-[#111111] focus:outline-none focus:border-[#111111] transition-colors ${
+              !product.isAvailable || !storeOpen ? "bg-neutral-100 opacity-60 cursor-not-allowed" : "bg-[#F6F6F7]"
+            }`}
           />
           <div className="text-right text-[9.5px] text-[#737373]">
             {itemNote.length}/100

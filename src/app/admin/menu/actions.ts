@@ -854,29 +854,40 @@ export async function toggleProductAvailabilityAction(
       return { success: false, error: authCheck.error };
     }
 
+    const trimmedId = (productId || "").trim();
+    if (!trimmedId) {
+      return { success: false, error: "ID atau slug produk tidak valid." };
+    }
+
     const isUuid =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        productId
+        trimmedId
       );
 
-    const client =
-      (process.env.NODE_ENV === "development" && getServiceRoleSupabaseClient()) ||
-      supabase;
+    const serviceClient = getServiceRoleSupabaseClient();
+    const client = serviceClient || supabase;
 
     let query = client
       .from("products")
       .update({ is_available: isAvailable });
 
     if (isUuid) {
-      query = query.eq("id", productId);
+      query = query.eq("id", trimmedId);
     } else {
-      query = query.eq("slug", productId);
+      query = query.eq("slug", trimmedId);
     }
 
-    const { error } = await query;
+    const { data: updatedRows, error } = await query.select("id, is_available");
 
     if (error) {
       return { success: false, error: error.message };
+    }
+
+    if (!updatedRows || updatedRows.length === 0) {
+      return {
+        success: false,
+        error: `Produk dengan identifier "${trimmedId}" tidak ditemukan.`,
+      };
     }
 
     clearCatalogCache();

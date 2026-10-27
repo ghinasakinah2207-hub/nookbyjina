@@ -109,6 +109,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const openQuickAdd = React.useCallback((product: Product) => {
+    if (!product || !product.isAvailable) return;
     setQuickAddProduct(product);
   }, []);
 

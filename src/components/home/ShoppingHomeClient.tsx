@@ -126,14 +126,18 @@ export default function ShoppingHomeClient({
           setClientBanners(data.banners);
         }
 
-        const productMap = new Map<string, Product>();
-        (data.sections || []).forEach((sec: HomepageSectionWithProducts) => {
-          (sec.products || []).forEach((prod: Product) => {
-            productMap.set(prod.id, prod);
+        if (data.products && Array.isArray(data.products) && data.products.length > 0) {
+          setAllProducts(data.products);
+        } else {
+          const productMap = new Map<string, Product>();
+          (data.sections || []).forEach((sec: HomepageSectionWithProducts) => {
+            (sec.products || []).forEach((prod: Product) => {
+              productMap.set(prod.id, prod);
+            });
           });
-        });
-        if (productMap.size > 0) {
-          setAllProducts(Array.from(productMap.values()));
+          if (productMap.size > 0) {
+            setAllProducts(Array.from(productMap.values()));
+          }
         }
       } else {
         throw new Error(data.error || "Gagal memuat seksi.");
@@ -170,14 +174,18 @@ export default function ShoppingHomeClient({
             setClientBanners(data.banners);
           }
 
-          const productMap = new Map<string, Product>();
-          (data.sections || []).forEach((sec: HomepageSectionWithProducts) => {
-            (sec.products || []).forEach((prod: Product) => {
-              productMap.set(prod.id, prod);
+          if (data.products && Array.isArray(data.products) && data.products.length > 0) {
+            setAllProducts(data.products);
+          } else {
+            const productMap = new Map<string, Product>();
+            (data.sections || []).forEach((sec: HomepageSectionWithProducts) => {
+              (sec.products || []).forEach((prod: Product) => {
+                productMap.set(prod.id, prod);
+              });
             });
-          });
-          if (productMap.size > 0) {
-            setAllProducts(Array.from(productMap.values()));
+            if (productMap.size > 0) {
+              setAllProducts(Array.from(productMap.values()));
+            }
           }
         }
       } catch (err: unknown) {

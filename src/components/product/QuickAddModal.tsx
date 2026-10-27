@@ -36,6 +36,7 @@ function QuickAddForm({ product, onClose }: QuickAddFormProps) {
 
   // Option selection handler
   const handleSelectOption = (groupId: string, valueId: string) => {
+    if (!product.isAvailable) return;
     setSelectedOptions((prev) => ({
       ...prev,
       [groupId]: valueId,
@@ -45,6 +46,7 @@ function QuickAddForm({ product, onClose }: QuickAddFormProps) {
 
   // Addon toggle handler
   const handleToggleAddon = (addonId: string) => {
+    if (!product.isAvailable) return;
     setSelectedAddonIds((prev) => {
       const next = new Set(prev);
       if (next.has(addonId)) {
@@ -103,6 +105,8 @@ function QuickAddForm({ product, onClose }: QuickAddFormProps) {
 
   // Confirm and add to cart
   const handleConfirmAddToCart = () => {
+    if (!product.isAvailable) return;
+
     // 1. Validate all required option groups
     for (const group of optionGroups) {
       if (group.required && !selectedOptions[group.id]) {
@@ -379,10 +383,15 @@ function QuickAddForm({ product, onClose }: QuickAddFormProps) {
         {/* Add to Cart Button */}
         <button
           type="button"
+          disabled={!product.isAvailable}
           onClick={handleConfirmAddToCart}
-          className="flex-1 min-h-[42px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white flex items-center justify-between transition-colors shadow-sm cursor-pointer"
+          className={`flex-1 min-h-[42px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-between transition-colors shadow-sm ${
+            product.isAvailable
+              ? "bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white cursor-pointer"
+              : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+          }`}
         >
-          <span>Tambah ke Keranjang</span>
+          <span>{product.isAvailable ? "Tambah ke Keranjang" : "Menu Habis"}</span>
           <span>{formatRupiah(totalPrice)}</span>
         </button>
       </div>

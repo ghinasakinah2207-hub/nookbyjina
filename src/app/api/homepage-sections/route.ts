@@ -29,6 +29,7 @@ export async function GET() {
       sections: sectionsWithProducts,
       categories,
       banners: banners || [],
+      products: catalogProducts,
     });
   } catch (err: unknown) {
     const message =
