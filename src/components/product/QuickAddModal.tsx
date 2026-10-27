@@ -2,18 +2,19 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Image from "next/image";
-import { X, Plus, Minus, Check, AlertCircle } from "lucide-react";
+import { X, Plus, Minus, Check, AlertCircle, Loader2 } from "lucide-react";
 import { Product, SelectedOption, SelectedAddon } from "@/types";
-import { PRODUCTS, formatRupiah } from "@/data/dummy-data";
+import { formatRupiah } from "@/data/dummy-data";
 import { parseOptionLabel } from "@/lib/option-utils";
 import { useCart } from "@/context/CartContext";
 
 interface QuickAddFormProps {
   product: Product;
+  isLoadingOptions?: boolean;
   onClose: () => void;
 }
 
-function QuickAddForm({ product, onClose }: QuickAddFormProps) {
+function QuickAddForm({ product, isLoadingOptions = false, onClose }: QuickAddFormProps) {
   const { addToCart } = useCart();
   const optionGroups = useMemo(() => product.optionGroups || [], [product.optionGroups]);
   const addons = useMemo(() => product.addons || [], [product.addons]);
@@ -28,6 +29,23 @@ function QuickAddForm({ product, onClose }: QuickAddFormProps) {
     });
     return initialOpts;
   });
+
+  // Ensure all required option groups have their first value selected if optionGroups arrives asynchronously
+  const [prevOptionGroups, setPrevOptionGroups] = useState(optionGroups);
+  if (prevOptionGroups !== optionGroups) {
+    setPrevOptionGroups(optionGroups);
+    const updated = { ...selectedOptions };
+    let changed = false;
+    optionGroups.forEach((group) => {
+      if (group.required && group.values.length > 0 && !updated[group.id]) {
+        updated[group.id] = group.values[0].id;
+        changed = true;
+      }
+    });
+    if (changed) {
+      setSelectedOptions(updated);
+    }
+  }
 
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<string>>(() => new Set());
   const [quantity, setQuantity] = useState(1);
@@ -105,7 +123,7 @@ function QuickAddForm({ product, onClose }: QuickAddFormProps) {
 
   // Confirm and add to cart
   const handleConfirmAddToCart = () => {
-    if (!product.isAvailable) return;
+    if (!product.isAvailable || isLoadingOptions) return;
 
     // 1. Validate all required option groups
     for (const group of optionGroups) {
@@ -176,151 +194,175 @@ function QuickAddForm({ product, onClose }: QuickAddFormProps) {
 
       {/* Scrollable Modal Content */}
       <div className="overflow-y-auto px-4 py-3 space-y-3.5 flex-1 divide-y divide-neutral-100">
-        {/* 1. Variant Option Groups */}
-        {optionGroups.map((group) => {
-          const selectedValId = selectedOptions[group.id];
-          const isThreeCol = group.values.length === 3;
-
-          return (
-            <div key={group.id} className="pt-2 first:pt-0 space-y-2">
+        {isLoadingOptions ? (
+          <div className="space-y-4 py-2 animate-pulse" data-testid="quick-add-loading-skeleton">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xs font-semibold text-[#111111]">
-                    {group.name}
-                  </h3>
-                  <p className="text-[10px] text-[#737373]">
-                    {group.required ? "Pilih salah satu" : "Pilihan opsional"}
-                  </p>
-                </div>
-                {group.required ? (
-                  <span className="text-[9.5px] font-semibold text-[#F25B09] bg-orange-50 px-2 py-0.5 rounded-md">
-                    Wajib
-                  </span>
-                ) : null}
+                <div className="h-3.5 bg-neutral-200 rounded w-28" />
+                <div className="h-3.5 bg-neutral-200 rounded w-12" />
               </div>
-
-              <div
-                className={`grid gap-1.5 ${
-                  isThreeCol
-                    ? "grid-cols-3"
-                    : group.values.length === 2
-                    ? "grid-cols-2"
-                    : "grid-cols-2 sm:grid-cols-3"
-                }`}
-              >
-                {group.values.map((val) => {
-                  const isSelected = selectedValId === val.id;
-                  const { label, desc } = parseOptionLabel(val.name);
-
-                  return (
-                    <button
-                      key={val.id}
-                      type="button"
-                      onClick={() => handleSelectOption(group.id, val.id)}
-                      className={`min-w-0 p-2 rounded-xl border flex flex-col justify-between transition-colors min-h-[46px] text-left cursor-pointer ${
-                        isSelected
-                          ? "border-[#111111] bg-neutral-900 text-white"
-                          : "border-[#E5E5E5] bg-white text-[#111111] hover:border-neutral-300"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between w-full gap-1 min-w-0">
-                        <span className="text-[10.5px] font-semibold truncate leading-tight">
-                          {label}
-                        </span>
-                        <div
-                          className={`w-3 h-3 rounded-full border flex items-center justify-center flex-shrink-0 ${
-                            isSelected
-                              ? "border-white bg-white"
-                              : "border-[#737373]"
-                          }`}
-                        >
-                          {isSelected ? (
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#111111]" />
-                          ) : null}
-                        </div>
-                      </div>
-
-                      {desc ? (
-                        <span
-                          className={`text-[9px] truncate leading-tight mt-0.5 ${
-                            isSelected
-                              ? "text-neutral-300"
-                              : "text-[#737373]"
-                          }`}
-                        >
-                          {desc}
-                        </span>
-                      ) : null}
-
-                      {val.priceDelta > 0 ? (
-                        <span
-                          className={`text-[9px] mt-0.5 font-medium ${
-                            isSelected
-                              ? "text-neutral-300"
-                              : "text-[#737373]"
-                          }`}
-                        >
-                          +{formatRupiah(val.priceDelta)}
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                <div className="h-11 bg-neutral-100 border border-neutral-200 rounded-xl" />
+                <div className="h-11 bg-neutral-100 border border-neutral-200 rounded-xl" />
               </div>
             </div>
-          );
-        })}
-
-        {/* 2. Add-on Selections */}
-        {addons.length > 0 ? (
-          <div className="pt-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold text-[#111111]">
-                Tambahan / Ekstra (Add-on)
-              </h3>
-              <span className="text-[10px] text-[#737373]">Opsional</span>
-            </div>
-
-            <div className="space-y-1.5">
-              {addons.map((addon) => {
-                const isSelected = selectedAddonIds.has(addon.id);
-                return (
-                  <button
-                    key={addon.id}
-                    type="button"
-                    onClick={() => handleToggleAddon(addon.id)}
-                    className={`w-full min-h-[38px] px-2.5 py-1.5 rounded-xl border flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                      isSelected
-                        ? "border-[#F25B09] bg-orange-50/40 text-[#111111]"
-                        : "border-[#E5E5E5] bg-white text-[#111111] hover:border-neutral-300"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <div
-                        className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
-                          isSelected
-                            ? "border-[#F25B09] bg-[#F25B09] text-white"
-                            : "border-[#737373]"
-                        }`}
-                      >
-                        {isSelected ? (
-                          <Check className="w-3 h-3 stroke-[3]" />
-                        ) : null}
-                      </div>
-                      <span className="text-xs font-medium text-left truncate">
-                        {addon.name}
-                      </span>
-                    </div>
-
-                    <span className="text-xs font-semibold text-[#F25B09] flex-shrink-0">
-                      +{formatRupiah(addon.price)}
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="space-y-2 pt-2 border-t border-neutral-100">
+              <div className="flex items-center justify-between">
+                <div className="h-3.5 bg-neutral-200 rounded w-32" />
+                <div className="h-3 bg-neutral-200 rounded w-14" />
+              </div>
+              <div className="h-10 bg-neutral-100 border border-neutral-200 rounded-xl" />
             </div>
           </div>
-        ) : null}
+        ) : (
+          <>
+            {/* 1. Variant Option Groups */}
+            {optionGroups.map((group) => {
+              const selectedValId = selectedOptions[group.id];
+              const isThreeCol = group.values.length === 3;
+
+              return (
+                <div key={group.id} className="pt-2 first:pt-0 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xs font-semibold text-[#111111]">
+                        {group.name}
+                      </h3>
+                      <p className="text-[10px] text-[#737373]">
+                        {group.required ? "Pilih salah satu" : "Pilihan opsional"}
+                      </p>
+                    </div>
+                    {group.required ? (
+                      <span className="text-[9.5px] font-semibold text-[#F25B09] bg-orange-50 px-2 py-0.5 rounded-md">
+                        Wajib
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div
+                    className={`grid gap-1.5 ${
+                      isThreeCol
+                        ? "grid-cols-3"
+                        : group.values.length === 2
+                        ? "grid-cols-2"
+                        : "grid-cols-2 sm:grid-cols-3"
+                    }`}
+                  >
+                    {group.values.map((val) => {
+                      const isSelected = selectedValId === val.id;
+                      const { label, desc } = parseOptionLabel(val.name);
+
+                      return (
+                        <button
+                          key={val.id}
+                          type="button"
+                          onClick={() => handleSelectOption(group.id, val.id)}
+                          className={`min-w-0 p-2 rounded-xl border flex flex-col justify-between transition-colors min-h-[46px] text-left cursor-pointer ${
+                            isSelected
+                              ? "border-[#111111] bg-neutral-900 text-white"
+                              : "border-[#E5E5E5] bg-white text-[#111111] hover:border-neutral-300"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full gap-1 min-w-0">
+                            <span className="text-[10.5px] font-semibold truncate leading-tight">
+                              {label}
+                            </span>
+                            <div
+                              className={`w-3 h-3 rounded-full border flex items-center justify-center flex-shrink-0 ${
+                                isSelected
+                                  ? "border-white bg-white"
+                                  : "border-[#737373]"
+                              }`}
+                            >
+                              {isSelected ? (
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#111111]" />
+                              ) : null}
+                            </div>
+                          </div>
+
+                          {desc ? (
+                            <span
+                              className={`text-[9px] truncate leading-tight mt-0.5 ${
+                                isSelected
+                                  ? "text-neutral-300"
+                                  : "text-[#737373]"
+                              }`}
+                            >
+                              {desc}
+                            </span>
+                          ) : null}
+
+                          {val.priceDelta > 0 ? (
+                            <span
+                              className={`text-[9px] mt-0.5 font-medium ${
+                                isSelected
+                                  ? "text-neutral-300"
+                                  : "text-[#737373]"
+                              }`}
+                            >
+                              +{formatRupiah(val.priceDelta)}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* 2. Add-on Selections */}
+            {addons.length > 0 ? (
+              <div className="pt-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-[#111111]">
+                    Tambahan / Ekstra (Add-on)
+                  </h3>
+                  <span className="text-[10px] text-[#737373]">Opsional</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  {addons.map((addon) => {
+                    const isSelected = selectedAddonIds.has(addon.id);
+                    return (
+                      <button
+                        key={addon.id}
+                        type="button"
+                        onClick={() => handleToggleAddon(addon.id)}
+                        className={`w-full min-h-[38px] px-2.5 py-1.5 rounded-xl border flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                          isSelected
+                            ? "border-[#F25B09] bg-orange-50/40 text-[#111111]"
+                            : "border-[#E5E5E5] bg-white text-[#111111] hover:border-neutral-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div
+                            className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                              isSelected
+                                ? "border-[#F25B09] bg-[#F25B09] text-white"
+                                : "border-[#737373]"
+                            }`}
+                          >
+                            {isSelected ? (
+                              <Check className="w-3 h-3 stroke-[3]" />
+                            ) : null}
+                          </div>
+                          <span className="text-xs font-medium text-left truncate">
+                            {addon.name}
+                          </span>
+                        </div>
+
+                        <span className="text-xs font-semibold text-[#F25B09] flex-shrink-0">
+                          +{formatRupiah(addon.price)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
 
         {/* 3. Seller Note Field */}
         <div className="pt-3 space-y-1.5">
@@ -360,7 +402,7 @@ function QuickAddForm({ product, onClose }: QuickAddFormProps) {
         <div className="flex items-center border border-[#E5E5E5] rounded-xl p-0.5 bg-neutral-50 flex-shrink-0">
           <button
             type="button"
-            disabled={quantity <= 1}
+            disabled={quantity <= 1 || isLoadingOptions}
             onClick={() => setQuantity((q) => Math.max(1, q - 1))}
             aria-label="Kurangi kuantitas"
             className="w-8 h-8 flex items-center justify-center rounded-lg text-[#111111] disabled:opacity-30 min-h-[32px] min-w-[32px] hover:bg-neutral-100 transition-colors cursor-pointer disabled:cursor-not-allowed"
@@ -372,9 +414,10 @@ function QuickAddForm({ product, onClose }: QuickAddFormProps) {
           </span>
           <button
             type="button"
+            disabled={isLoadingOptions}
             onClick={() => setQuantity((q) => q + 1)}
             aria-label="Tambah kuantitas"
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-[#111111] min-h-[32px] min-w-[32px] hover:bg-neutral-100 transition-colors cursor-pointer"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-[#111111] disabled:opacity-30 min-h-[32px] min-w-[32px] hover:bg-neutral-100 transition-colors cursor-pointer disabled:cursor-not-allowed"
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
@@ -383,16 +426,28 @@ function QuickAddForm({ product, onClose }: QuickAddFormProps) {
         {/* Add to Cart Button */}
         <button
           type="button"
-          disabled={!product.isAvailable}
+          disabled={isLoadingOptions || !product.isAvailable}
           onClick={handleConfirmAddToCart}
+          aria-busy={isLoadingOptions}
           className={`flex-1 min-h-[42px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-between transition-colors shadow-sm ${
-            product.isAvailable
+            isLoadingOptions
+              ? "bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-not-allowed justify-center"
+              : product.isAvailable
               ? "bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white cursor-pointer"
               : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
           }`}
         >
-          <span>{product.isAvailable ? "Tambah ke Keranjang" : "Menu Habis"}</span>
-          <span>{formatRupiah(totalPrice)}</span>
+          {isLoadingOptions ? (
+            <div className="flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-[#F25B09]" />
+              <span className="text-neutral-500 font-medium">Memuat Pilihan...</span>
+            </div>
+          ) : (
+            <>
+              <span>{product.isAvailable ? "Tambah ke Keranjang" : "Menu Habis"}</span>
+              <span>{formatRupiah(totalPrice)}</span>
+            </>
+          )}
         </button>
       </div>
     </>
@@ -439,6 +494,7 @@ export function QuickAddModal({ product, isOpen, onClose }: QuickAddModalProps) 
     setStatus("closed");
     setRenderedProduct(null);
     setPrevProduct(null);
+    setAsyncProduct(null);
     onClose();
   }, [onClose]);
 
@@ -486,6 +542,7 @@ export function QuickAddModal({ product, isOpen, onClose }: QuickAddModalProps) 
   if (isOpen && product && product !== prevProduct) {
     setPrevProduct(product);
     setRenderedProduct(product);
+    setAsyncProduct(null);
     setStatus("opening");
   }
 
@@ -606,49 +663,39 @@ export function QuickAddModal({ product, isOpen, onClose }: QuickAddModalProps) 
   // Use the active product or preserved renderedProduct during closing
   const currentProduct = product || renderedProduct;
 
-  // Synchronous resolution of options from product or dummy data
-  const baseResolvedProduct = useMemo(() => {
-    if (!currentProduct) return null;
-    if (
-      (currentProduct.optionGroups && currentProduct.optionGroups.length > 0) ||
-      (currentProduct.addons && currentProduct.addons.length > 0)
-    ) {
-      return currentProduct;
-    }
+  const isMatchingAsync = Boolean(
+    asyncProduct &&
+      (asyncProduct.id === currentProduct?.id ||
+        (asyncProduct.dbId && currentProduct?.dbId && asyncProduct.dbId === currentProduct.dbId) ||
+        (asyncProduct.slug && currentProduct?.slug && asyncProduct.slug === currentProduct.slug))
+  );
 
-    const fallback = PRODUCTS.find(
-      (p) => p.id === currentProduct.id || p.slug === currentProduct.slug
-    );
-    if (
-      fallback &&
-      ((fallback.optionGroups && fallback.optionGroups.length > 0) ||
-        (fallback.addons && fallback.addons.length > 0))
-    ) {
-      return {
-        ...currentProduct,
-        optionGroups: fallback.optionGroups,
-        addons: fallback.addons,
-      };
-    }
+  const activeProduct = isMatchingAsync && asyncProduct ? asyncProduct : currentProduct;
 
-    return currentProduct;
-  }, [currentProduct]);
+  // Options are loaded if:
+  // 1. The active product explicitly has isOptionsLoaded === true (e.g. from getVisibleProducts)
+  // 2. The active product has optionGroups or addons populated
+  // 3. Or matching asyncProduct is resolved
+  const isOptionsLoaded = Boolean(
+    activeProduct &&
+      (activeProduct.isOptionsLoaded ||
+        (activeProduct.optionGroups && activeProduct.optionGroups.length > 0) ||
+        (activeProduct.addons && activeProduct.addons.length > 0) ||
+        isMatchingAsync)
+  );
 
-  // Asynchronous fallback from Supabase catalog if needed
+  // Asynchronous fallback from Supabase catalog if options are not yet loaded
   useEffect(() => {
     if (!currentProduct || status === "closed") return;
 
+    // Skip fetch if options are already loaded on the product
     if (
+      currentProduct.isOptionsLoaded ||
       (currentProduct.optionGroups && currentProduct.optionGroups.length > 0) ||
       (currentProduct.addons && currentProduct.addons.length > 0)
     ) {
       return;
     }
-
-    const fallback = PRODUCTS.find(
-      (p) => p.id === currentProduct.id || p.slug === currentProduct.slug
-    );
-    if (fallback?.optionGroups?.length) return;
 
     let active = true;
     import("@/lib/supabase/catalog")
@@ -659,22 +706,20 @@ export function QuickAddModal({ product, isOpen, onClose }: QuickAddModalProps) 
         if (active && full) {
           setAsyncProduct({
             ...currentProduct,
-            optionGroups: full.optionGroups,
-            addons: full.addons,
+            optionGroups: full.optionGroups || [],
+            addons: full.addons || [],
+            isOptionsLoaded: true,
           });
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("Gagal memuat detail opsi produk:", err);
+      });
 
     return () => {
       active = false;
     };
   }, [currentProduct, status]);
-
-  const activeProduct =
-    asyncProduct && asyncProduct.id === currentProduct?.id
-      ? asyncProduct
-      : baseResolvedProduct;
 
   if (status === "closed" || !activeProduct) return null;
 
@@ -717,8 +762,9 @@ export function QuickAddModal({ product, isOpen, onClose }: QuickAddModalProps) 
         } motion-reduce:transition-none motion-reduce:transform-none`}
       >
         <QuickAddForm
-          key={activeProduct.id}
+          key={activeProduct.dbId || activeProduct.id}
           product={activeProduct}
+          isLoadingOptions={!isOptionsLoaded}
           onClose={() => requestClose(false)}
         />
       </div>

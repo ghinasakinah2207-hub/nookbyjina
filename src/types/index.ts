@@ -52,6 +52,7 @@ export interface Product {
   addons: Addon[];
   isHighlight?: boolean;
   hpp?: number | null;
+  isOptionsLoaded?: boolean;
 }
 
 export interface SelectedOption {

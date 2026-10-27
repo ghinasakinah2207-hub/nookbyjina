@@ -40,6 +40,8 @@ export interface DbProductRow {
     slug: string;
   }[] | null;
   product_images: DbProductImage[] | null;
+  product_option_groups?: DbOptionGroup[] | null;
+  product_addons?: DbProductAddon[] | null;
 }
 
 export interface DbOptionValue {
@@ -78,7 +80,57 @@ export interface DbProductAddon {
 }
 
 /**
- * Maps a database product row (with joined categories and images)
+ * Maps database option groups and values to the UI OptionGroup model.
+ */
+export function mapDbOptionGroupsToUiOptionGroups(groups: DbOptionGroup[] | null | undefined): OptionGroup[] {
+  if (!groups || !Array.isArray(groups)) return [];
+  return groups
+    .slice()
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map((g) => {
+      const rawValues = (g.product_option_values || []) as DbOptionValue[];
+      const values: OptionValue[] = rawValues
+        .filter((v) => v.is_active !== false)
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+        .map((v) => ({
+          id: v.id,
+          name: v.name,
+          priceDelta: Number(v.price_delta || 0),
+        }));
+
+      return {
+        id: g.id,
+        name: g.name,
+        required: Boolean(g.is_required),
+        minSelect: Number(g.min_select ?? (g.is_required ? 1 : 0)),
+        maxSelect: Number(g.max_select ?? 1),
+        values,
+      };
+    });
+}
+
+/**
+ * Maps database product-addons join records to the UI Addon model.
+ */
+export function mapDbProductAddonsToUiAddons(productAddons: DbProductAddon[] | null | undefined): Addon[] {
+  if (!productAddons || !Array.isArray(productAddons)) return [];
+  return productAddons
+    .slice()
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map((pa) => {
+      const rawAddon = Array.isArray(pa.addons) ? pa.addons[0] : pa.addons;
+      if (!rawAddon || rawAddon.is_active === false) return null;
+      return {
+        id: rawAddon.id,
+        name: rawAddon.name,
+        price: Number(rawAddon.price || 0),
+      };
+    })
+    .filter((a): a is Addon => a !== null);
+}
+
+/**
+ * Maps a database product row (with joined categories, images, option groups, and addons)
  * to the UI Product model expected by components.
  */
 export function mapDbProductToUiProduct(row: DbProductRow): Product & { categorySlug?: string } {
@@ -121,6 +173,11 @@ export function mapDbProductToUiProduct(row: DbProductRow): Product & { category
       return url;
     });
 
+  const optionGroups = mapDbOptionGroupsToUiOptionGroups(row.product_option_groups);
+  const addons = mapDbProductAddonsToUiAddons(row.product_addons);
+  const isOptionsLoaded =
+    row.product_option_groups !== undefined && row.product_addons !== undefined;
+
   return {
     id: row.slug || row.id,
     dbId: row.id,
@@ -137,10 +194,11 @@ export function mapDbProductToUiProduct(row: DbProductRow): Product & { category
     isAvailable: Boolean(row.is_available),
     isArchived: Boolean(row.is_archived),
     images: sortedImages.length > 0 ? sortedImages : ["/images/hero-food.webp"],
-    optionGroups: [],
-    addons: [],
+    optionGroups,
+    addons,
     isHighlight: Boolean(row.is_highlight),
     hpp: row.hpp !== undefined && row.hpp !== null ? Number(row.hpp) : undefined,
+    isOptionsLoaded,
   };
 }
 
@@ -249,6 +307,35 @@ export async function getVisibleProducts(bypassCache = false): Promise<Product[]
         id,
         image_url,
         sort_order
+      ),
+      product_option_groups (
+        id,
+        product_id,
+        name,
+        is_required,
+        min_select,
+        max_select,
+        sort_order,
+        product_option_values (
+          id,
+          group_id,
+          name,
+          price_delta,
+          is_active,
+          sort_order
+        )
+      ),
+      product_addons (
+        product_id,
+        addon_id,
+        sort_order,
+        addons (
+          id,
+          name,
+          description,
+          price,
+          is_active
+        )
       )
     `)
     .eq("is_archived", false)
@@ -412,6 +499,19 @@ export async function getProductBySlugOrId(
     if (cached && now - cached.timestamp < CACHE_TTL_MS) {
       return cached.data;
     }
+    // Check if product is already cached in visibleProductsCache with full options
+    if (visibleProductsCache && now - visibleProductsCache.timestamp < CACHE_TTL_MS) {
+      const fromCatalog = visibleProductsCache.data.find(
+        (p) =>
+          p.id === identifier ||
+          p.slug === identifier ||
+          (p.dbId && p.dbId === identifier)
+      );
+      if (fromCatalog && fromCatalog.isOptionsLoaded) {
+        singleProductCache.set(identifier, { data: fromCatalog, timestamp: now });
+        return fromCatalog;
+      }
+    }
   }
 
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
@@ -508,46 +608,13 @@ export async function getProductBySlugOrId(
     throw new Error(`Gagal memuat ekstra add-on: ${addonsRes.error.message}`);
   }
 
-  // Map option groups ordered by sort_order
-  const optionGroups: OptionGroup[] = (optionGroupsRes.data || [])
-    .slice()
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-    .map((g) => {
-      const rawValues = (g.product_option_values || []) as DbOptionValue[];
-      const values: OptionValue[] = rawValues
-        .filter((v) => v.is_active !== false)
-        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-        .map((v) => ({
-          id: v.id,
-          name: v.name,
-          priceDelta: Number(v.price_delta || 0),
-        }));
-
-      return {
-        id: g.id,
-        name: g.name,
-        required: Boolean(g.is_required),
-        minSelect: Number(g.min_select ?? (g.is_required ? 1 : 0)),
-        maxSelect: Number(g.max_select ?? 1),
-        values,
-      };
-    });
-
-  // Map addons linked via product_addons ordered by sort_order
-  const rawProductAddons = (addonsRes.data || []) as unknown as DbProductAddon[];
-  const addons: Addon[] = rawProductAddons
-    .slice()
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-    .map((pa) => {
-      const rawAddon = Array.isArray(pa.addons) ? pa.addons[0] : pa.addons;
-      if (!rawAddon || rawAddon.is_active === false) return null;
-      return {
-        id: rawAddon.id,
-        name: rawAddon.name,
-        price: Number(rawAddon.price || 0),
-      };
-    })
-    .filter((a): a is Addon => a !== null);
+  // Map option groups and addons using unified helpers
+  const optionGroups = mapDbOptionGroupsToUiOptionGroups(
+    (optionGroupsRes.data || []) as DbOptionGroup[]
+  );
+  const addons = mapDbProductAddonsToUiAddons(
+    (addonsRes.data || []) as unknown as DbProductAddon[]
+  );
 
   const baseProduct = mapDbProductToUiProduct(productRow as unknown as DbProductRow);
 
@@ -555,6 +622,7 @@ export async function getProductBySlugOrId(
     ...baseProduct,
     optionGroups,
     addons,
+    isOptionsLoaded: true,
   };
 
   if (!clientOverride) {
