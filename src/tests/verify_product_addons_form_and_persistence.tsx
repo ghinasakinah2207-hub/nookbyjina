@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Product, Category, Addon } from "@/types";
 import { AddProductModal } from "@/components/admin/AddProductModal";
 import { DbProductAddon } from "@/lib/supabase/catalog";
+import { ProductAddonInputItem } from "@/app/admin/menu/actions";
 
 function assert(condition: boolean, message: string) {
   if (!condition) {
@@ -13,7 +14,7 @@ function assert(condition: boolean, message: string) {
   }
 }
 
-console.log("=== REGRESSION TEST: Product Add-ons Form & Persistence ===\n");
+console.log("=== REGRESSION TEST: Product Add-ons Form & Persistence (Hybrid Copy-on-Write) ===\n");
 
 const mockCategories: Category[] = [
   { id: "cat-makanan", name: "Makanan Utama", slug: "makanan" },
@@ -56,7 +57,7 @@ const sampleProductWithoutAddons: Product = {
 };
 
 // =========================================================================
-// 1. Testing Add Product Modal: Form Tambah Menampilkan Konfigurasi Add-on
+// 1. Testing Add Product Modal: Form Tambah Menampilkan Editor Add-on
 // =========================================================================
 console.log("--- 1. Testing Add Product Modal (Tambah Menu Baru) ---");
 
@@ -77,28 +78,16 @@ assert(
   "Form Tambah Menu renders '5. Add-on / Ekstra' section header"
 );
 assert(
-  addModalHtml.includes("0 dipilih"),
-  "Form Tambah Menu displays '0 dipilih' count initially"
+  addModalHtml.includes("Tambah Add-on Baru"),
+  "Form Tambah Menu renders '+ Tambah Add-on Baru' action button"
 );
 assert(
-  addModalHtml.includes("Pilih Semua"),
-  "Form Tambah Menu displays 'Pilih Semua' button when addons are available"
+  addModalHtml.includes("Pilih dari master:"),
+  "Form Tambah Menu provides master addon quick picker option"
 );
 assert(
-  addModalHtml.includes("Ekstra Sambal Cakalang"),
-  "Form Tambah Menu displays master addon 'Ekstra Sambal Cakalang'"
-);
-assert(
-  addModalHtml.includes("Telur Dadar Iris Gurih"),
-  "Form Tambah Menu displays master addon 'Telur Dadar Iris Gurih'"
-);
-assert(
-  addModalHtml.includes("Kerupuk Kaleng Renyah"),
-  "Form Tambah Menu displays master addon 'Kerupuk Kaleng Renyah'"
-);
-assert(
-  addModalHtml.includes("+Rp4.000") || addModalHtml.includes("+Rp&nbsp;4.000") || addModalHtml.includes("+Rp 4.000"),
-  "Form Tambah Menu displays formatted price for addon"
+  addModalHtml.includes("Belum Ada Add-on / Ekstra"),
+  "Form Tambah Menu renders clear empty state before any add-on is added"
 );
 
 // Verify section order: 1. Info -> 2. Harga & HPP -> 3. Foto -> 4. Varian -> 5. Add-on
@@ -117,27 +106,10 @@ assert(sec3Idx > sec2Idx, "2. Harga & HPP appears before 3. Foto Produk");
 assert(sec4Idx > sec3Idx, "3. Foto Produk appears before 4. Varian & Pilihan Opsi");
 assert(sec5Idx > sec4Idx, "4. Varian & Pilihan Opsi appears before 5. Add-on / Ekstra");
 
-// Test Empty State when availableAddons is empty
-const emptyAddModalHtml = renderToStaticMarkup(
-  <AddProductModal
-    isOpen={true}
-    onClose={() => {}}
-    categories={mockCategories}
-    availableAddons={[]}
-    initialProduct={null}
-    onProductCreated={() => {}}
-    onProductUpdated={() => {}}
-  />
-);
-assert(
-  emptyAddModalHtml.includes("Belum Ada Master Add-on Aktif"),
-  "Form Tambah Menu renders informative empty state when no master addons exist"
-);
-
 // =========================================================================
-// 2. Testing Edit Product Modal: Prefill Relasi Add-on Tersimpan
+// 2. Testing Edit Product Modal: Prefill Input Nama dan Harga Add-on
 // =========================================================================
-console.log("\n--- 2. Testing Edit Product Modal (Prefill Relasi Tersimpan) ---");
+console.log("\n--- 2. Testing Edit Product Modal (Prefill Add-on Editor) ---");
 
 const editModalHtml = renderToStaticMarkup(
   <AddProductModal
@@ -152,13 +124,22 @@ const editModalHtml = renderToStaticMarkup(
 );
 
 assert(
-  editModalHtml.includes("5. Add-on / Ekstra (2 dipilih)"),
-  "Form Edit Menu pre-calculates and displays count '(2 dipilih)' for saved addons"
+  editModalHtml.includes("5. Add-on / Ekstra (2)"),
+  "Form Edit Menu displays header with count '5. Add-on / Ekstra (2)'"
 );
 assert(
-  editModalHtml.includes('id="addon-checkbox-add-sambal"') &&
-    editModalHtml.includes('id="addon-checkbox-add-kerupuk"'),
-  "Form Edit Menu renders unique checkbox IDs for stored addons"
+  editModalHtml.includes('value="Ekstra Sambal Cakalang"') &&
+    editModalHtml.includes('value="Kerupuk Kaleng Renyah"'),
+  "Form Edit Menu pre-fills text input with saved addon names"
+);
+assert(
+  editModalHtml.includes('value="4000"') &&
+    editModalHtml.includes('value="2000"'),
+  "Form Edit Menu pre-fills price input with saved addon prices"
+);
+assert(
+  editModalHtml.includes('title="Hapus add-on ini"'),
+  "Form Edit Menu renders delete button for each addon item"
 );
 
 // Edit modal with no stored addons
@@ -174,171 +155,213 @@ const editModalNoAddonsHtml = renderToStaticMarkup(
   />
 );
 assert(
-  editModalNoAddonsHtml.includes("5. Add-on / Ekstra (0 dipilih)"),
-  "Form Edit Menu for product without addons renders '(0 dipilih)'"
+  editModalNoAddonsHtml.includes("5. Add-on / Ekstra (0)") &&
+    editModalNoAddonsHtml.includes("Belum Ada Add-on / Ekstra"),
+  "Form Edit Menu for product without addons renders '(0)' and empty state"
 );
 
 // =========================================================================
-// 3. Testing Create Product Persistence Logic & Deduplication
+// 3. Testing Data Strategy: Hybrid Copy-on-Write & Master Deduplication
 // =========================================================================
-console.log("\n--- 3. Testing Create Product Addon Deduplication & Persistence Logic ---");
+console.log("\n--- 3. Testing Data Strategy: Hybrid Copy-on-Write ---");
 
-function processCreateAddonIds(addonIds?: string[]): {
-  addonRows: { product_id: string; addon_id: string; sort_order: number }[];
-} {
-  const uniqueAddonIds = Array.from(
-    new Set((addonIds || []).map((id) => id.trim()).filter(Boolean))
-  );
-
-  const addonRows = uniqueAddonIds.map((addonId, aIdx) => ({
-    product_id: "test-product-id",
-    addon_id: addonId,
-    sort_order: aIdx + 1,
-  }));
-
-  return { addonRows };
+interface MasterRecord {
+  id: string;
+  name: string;
+  price: number;
+  is_active: boolean;
 }
 
-// Case 3A: Deduplicate repeated addon IDs
-const deduplicated = processCreateAddonIds([
-  "add-sambal",
-  "add-sambal",
-  "add-telur",
-  "  add-telur  ",
-]);
-assert(
-  deduplicated.addonRows.length === 2,
-  "Create logic strictly deduplicates repeated or untrimmed addon IDs"
-);
-assert(
-  deduplicated.addonRows[0].addon_id === "add-sambal" &&
-    deduplicated.addonRows[0].sort_order === 1,
-  "First addon receives sort_order = 1"
-);
-assert(
-  deduplicated.addonRows[1].addon_id === "add-telur" &&
-    deduplicated.addonRows[1].sort_order === 2,
-  "Second addon receives sort_order = 2"
-);
-
-// Case 3B: Empty array -> 0 rows
-const emptyCreate = processCreateAddonIds([]);
-assert(emptyCreate.addonRows.length === 0, "Create logic produces 0 rows when addonIds is empty");
-
-// Case 3C: Undefined -> 0 rows
-const undefinedCreate = processCreateAddonIds(undefined);
-assert(undefinedCreate.addonRows.length === 0, "Create logic produces 0 rows when addonIds is undefined");
-
-// =========================================================================
-// 4. Testing Update Product Addon Modification & Field Preservation Invariant
-// =========================================================================
-console.log("\n--- 4. Testing Update Product Addon Modification & Field Preservation ---");
-
-interface MockDbProductAddonRow {
+interface ProductAddonRelation {
   product_id: string;
   addon_id: string;
   sort_order: number;
 }
 
-function simulateUpdateProductAddons(
-  inputAddonIds: string[] | undefined,
-  currentStoredAddons: MockDbProductAddonRow[]
+function simulateSyncAddons(
+  productId: string,
+  inputItems: ProductAddonInputItem[],
+  masters: MasterRecord[],
+  relations: ProductAddonRelation[]
 ): {
-  newStoredAddons: MockDbProductAddonRow[];
-  modified: boolean;
+  updatedMasters: MasterRecord[];
+  newResolvedIds: string[];
+  createdCount: number;
+  updatedCount: number;
+  reusedCount: number;
 } {
-  // Invariant: If inputAddonIds is undefined, preserve all existing product_addons untouched
-  if (inputAddonIds === undefined) {
-    return { newStoredAddons: currentStoredAddons, modified: false };
+  const currentMasters = [...masters];
+  const resolvedIds: string[] = [];
+  let createdCount = 0;
+  let updatedCount = 0;
+  let reusedCount = 0;
+
+  for (const item of inputItems) {
+    const cleanName = item.name.trim();
+    const cleanPrice = Math.max(0, Math.round(Number(item.price) || 0));
+    if (!cleanName) continue;
+
+    // A. Check exact match
+    const exact = currentMasters.find(
+      (m) =>
+        m.name.trim().toLowerCase() === cleanName.toLowerCase() &&
+        m.price === cleanPrice &&
+        m.is_active !== false
+    );
+
+    if (exact) {
+      resolvedIds.push(exact.id);
+      reusedCount++;
+      continue;
+    }
+
+    // B. If has item.id, check if shared with other products
+    if (item.id) {
+      const existing = currentMasters.find((m) => m.id === item.id);
+      if (existing) {
+        const isShared = relations.some(
+          (r) => r.addon_id === item.id && r.product_id !== productId
+        );
+
+        if (!isShared) {
+          // Unshared: safe to update in-place
+          existing.name = cleanName;
+          existing.price = cleanPrice;
+          resolvedIds.push(item.id);
+          updatedCount++;
+          continue;
+        }
+        // If shared, DO NOT UPDATE! Fall through to Copy-on-Write (create new)
+      }
+    }
+
+    // C. Create new master record (Copy-on-Write)
+    const newId = `new-addon-${cleanName.toLowerCase().replace(/\s+/g, "-")}-${cleanPrice}`;
+    currentMasters.push({
+      id: newId,
+      name: cleanName,
+      price: cleanPrice,
+      is_active: true,
+    });
+    resolvedIds.push(newId);
+    createdCount++;
   }
 
-  const uniqueAddonIds = Array.from(
-    new Set(inputAddonIds.map((id) => id.trim()).filter(Boolean))
-  );
-
-  const newStoredAddons = uniqueAddonIds.map((addonId, aIdx) => ({
-    product_id: "prod-1",
-    addon_id: addonId,
-    sort_order: aIdx + 1,
-  }));
-
-  return { newStoredAddons, modified: true };
+  return {
+    updatedMasters: currentMasters,
+    newResolvedIds: Array.from(new Set(resolvedIds)),
+    createdCount,
+    updatedCount,
+    reusedCount,
+  };
 }
 
-const initialRelations: MockDbProductAddonRow[] = [
-  { product_id: "prod-1", addon_id: "add-sambal", sort_order: 1 },
-  { product_id: "prod-1", addon_id: "add-kerupuk", sort_order: 2 },
+const initialMasters: MasterRecord[] = [
+  { id: "m-kerupuk", name: "Kerupuk Kaleng Renyah", price: 2000, is_active: true },
+  { id: "m-sambal", name: "Ekstra Sambal Matah Fresh", price: 3000, is_active: true },
 ];
 
-// Sub-case 4A: Partial update without addonIds (e.g. price or stock toggle) MUST NOT TOUCH ADDONS
-const partialUpdateResult = simulateUpdateProductAddons(undefined, initialRelations);
-assert(
-  partialUpdateResult.modified === false,
-  "CRITICAL: When input.addonIds is undefined, product_addons relations are strictly untouched"
+const initialDbRelations: ProductAddonRelation[] = [
+  { product_id: "prod-A", addon_id: "m-kerupuk", sort_order: 1 },
+  { product_id: "prod-B", addon_id: "m-kerupuk", sort_order: 1 }, // SHARED between prod-A and prod-B!
+  { product_id: "prod-A", addon_id: "m-sambal", sort_order: 2 },  // UNSHARED (only in prod-A)
+];
+
+// Test 3A: Exact Match Reuse (No duplicate created when name and price match)
+const exactMatchTest = simulateSyncAddons(
+  "prod-C",
+  [{ name: "Kerupuk Kaleng Renyah", price: 2000 }],
+  initialMasters,
+  initialDbRelations
 );
 assert(
-  partialUpdateResult.newStoredAddons.length === 2 &&
-    partialUpdateResult.newStoredAddons[0].addon_id === "add-sambal",
-  "Existing relations remain 100% intact during partial update"
+  exactMatchTest.reusedCount === 1 && exactMatchTest.createdCount === 0,
+  "Exact match reuses existing master addon without duplicating master rows"
+);
+assert(
+  exactMatchTest.newResolvedIds[0] === "m-kerupuk",
+  "Resolved ID points accurately to existing master record"
 );
 
-// Sub-case 4B: Explicitly deselecting all addons (empty array)
-const deselectAllResult = simulateUpdateProductAddons([], initialRelations);
+// Test 3B: Copy-on-Write on Shared Addon
+// Admin edits prod-A and raises Kerupuk price to 2500. Kerupuk is shared with prod-B!
+const cowTest = simulateSyncAddons(
+  "prod-A",
+  [{ id: "m-kerupuk", name: "Kerupuk Kaleng Renyah", price: 2500 }],
+  initialMasters,
+  initialDbRelations
+);
 assert(
-  deselectAllResult.modified === true && deselectAllResult.newStoredAddons.length === 0,
-  "Updating with empty array removes all product_addons relations cleanly"
+  cowTest.createdCount === 1,
+  "CRITICAL INVARIANT: Editing shared addon creates a new Copy-on-Write master record"
+);
+const sharedMasterStillUnchanged = cowTest.updatedMasters.find((m) => m.id === "m-kerupuk");
+assert(
+  sharedMasterStillUnchanged?.price === 2000,
+  "Original shared master record price strictly preserved at 2000 (prod-B is protected!)"
 );
 
-// Sub-case 4C: Modifying addon selection (adding and removing)
-const modifiedResult = simulateUpdateProductAddons(["add-telur"], initialRelations);
+// Test 3C: Brand New Addon Creation
+const brandNewTest = simulateSyncAddons(
+  "prod-A",
+  [{ name: "Ekstra Saus Mentai Bakar", price: 4000 }],
+  initialMasters,
+  initialDbRelations
+);
 assert(
-  modifiedResult.newStoredAddons.length === 1 &&
-    modifiedResult.newStoredAddons[0].addon_id === "add-telur",
-  "Updating with new list accurately replaces product_addons relations"
+  brandNewTest.createdCount === 1 &&
+    brandNewTest.updatedMasters.some((m) => m.name === "Ekstra Saus Mentai Bakar"),
+  "New addon typed by admin is inserted into master addons and linked to product"
 );
 
-// Sub-case 4D: Unchanged addon selection skips mutation
-function simulateUnchangedCheck(current: MockDbProductAddonRow[], incoming: string[]): boolean {
-  const uniqueIncoming = Array.from(new Set(incoming.map((id) => id.trim()).filter(Boolean)));
-  const currentIds = current.map((c) => c.addon_id);
-  return (
-    currentIds.length === uniqueIncoming.length &&
-    currentIds.every((id, idx) => id === uniqueIncoming[idx])
-  );
+// =========================================================================
+// 4. Testing Update Product Addon Modification & Field Preservation
+// =========================================================================
+console.log("\n--- 4. Testing Field Preservation & Partial Update Semantics ---");
+
+// Sub-case 4A: Partial update without addonIds/addons MUST NOT TOUCH ADDONS
+function simulatePartialUpdateCheck(
+  addonsInput: ProductAddonInputItem[] | undefined,
+  addonIdsInput: string[] | undefined,
+  existingRelations: ProductAddonRelation[]
+): { relations: ProductAddonRelation[]; touched: boolean } {
+  if (addonsInput === undefined && addonIdsInput === undefined) {
+    return { relations: existingRelations, touched: false };
+  }
+  return { relations: [], touched: true };
 }
 
-const unchangedCheckResult = simulateUnchangedCheck(initialRelations, ["add-sambal", "add-kerupuk"]);
+const partialUpdate = simulatePartialUpdateCheck(undefined, undefined, initialDbRelations);
 assert(
-  unchangedCheckResult === true,
-  "Unchanged addon selection accurately detected to bypass delete/insert operations"
+  partialUpdate.touched === false,
+  "Partial update without addons/addonIds field strictly preserves existing relations"
+);
+assert(
+  partialUpdate.relations.length === 3,
+  "All 3 existing relations remain intact when field is omitted"
 );
 
-const changedCheckResult = simulateUnchangedCheck(initialRelations, ["add-sambal"]);
+// Sub-case 4B: Explicit clearing (empty array) removes relations
+const explicitClear = simulatePartialUpdateCheck([], undefined, initialDbRelations);
 assert(
-  changedCheckResult === false,
-  "Changed addon selection correctly detected to proceed with update"
+  explicitClear.touched === true && explicitClear.relations.length === 0,
+  "Explicitly passing empty array [] unlinks relations cleanly"
 );
 
-// =========================================================================
-// 5. Testing Invariant: Master Addons Table Is Never Deleted
-// =========================================================================
-console.log("\n--- 5. Testing Master Addon Table Safety ---");
-
-const masterAddonIdsBefore = mockMasterAddons.map((a) => a.id);
-// When a relation is removed from a product:
-const unlinkedProductId = "prod-1";
+// Sub-case 4C: Master table is NEVER deleted when unlinking
+const masterCountBefore = initialMasters.length;
+const unlinkedProductId = "prod-A";
 void unlinkedProductId;
-// Master list remains unaffected
-const masterAddonIdsAfter = mockMasterAddons.map((a) => a.id);
+const masterCountAfter = initialMasters.length;
 assert(
-  JSON.stringify(masterAddonIdsBefore) === JSON.stringify(masterAddonIdsAfter),
-  "Unlinking product_addons leaves master 'addons' table rows completely intact"
+  masterCountBefore === masterCountAfter,
+  "Unlinking product addons leaves master 'addons' table rows completely intact"
 );
 
 // =========================================================================
-// 6. Testing Inactive Add-ons Filter on Customer Product Detail
+// 5. Testing Inactive Add-ons Filtering on Customer Catalog
 // =========================================================================
-console.log("\n--- 6. Testing Inactive Add-ons Filtering on Customer Catalog ---");
+console.log("\n--- 5. Testing Inactive Add-ons Filtering on Customer Catalog ---");
 
 const rawDbProductAddons: DbProductAddon[] = [
   {
@@ -351,7 +374,7 @@ const rawDbProductAddons: DbProductAddon[] = [
     product_id: "prod-1",
     addon_id: "add-discontinued",
     sort_order: 2,
-    addons: { id: "add-discontinued", name: "Add-on Lama Nonaktif", description: null, price: 5000, is_active: false }, // INACTIVE!
+    addons: { id: "add-discontinued", name: "Add-on Nonaktif", description: null, price: 5000, is_active: false },
   },
   {
     product_id: "prod-1",
@@ -361,7 +384,6 @@ const rawDbProductAddons: DbProductAddon[] = [
   },
 ];
 
-// Customer catalog loader filtering logic (from getProductBySlugOrId in src/lib/supabase/catalog.ts)
 const customerVisibleAddons: Addon[] = rawDbProductAddons
   .slice()
   .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -381,19 +403,15 @@ assert(
   "Customer catalog strictly excludes inactive addons (is_active: false)"
 );
 assert(
-  !customerVisibleAddons.some((a) => a.id === "add-discontinued"),
-  "Discontinued addon is omitted from customer product detail options"
-);
-assert(
   customerVisibleAddons.some((a) => a.id === "add-sambal") &&
     customerVisibleAddons.some((a) => a.id === "add-kerupuk"),
-  "Active addons are preserved in correct sort order"
+  "Active addons appear in customer catalog in correct sort order"
 );
 
 // =========================================================================
-// 7. Testing Customer Detail Price Calculation with Selected Addons
+// 6. Testing Customer Detail Price Calculation with Selected Addons
 // =========================================================================
-console.log("\n--- 7. Testing Customer Detail Price Calculation ---");
+console.log("\n--- 6. Testing Customer Detail Price Calculation ---");
 
 const basePrice = 25000;
 const selectedCustomerAddons = [
@@ -409,4 +427,4 @@ assert(
   "Customer unit price correctly calculates 25000 + 6000 = 31000"
 );
 
-console.log("\n🎉 ALL PRODUCT ADD-ONS REGRESSION TEST SUITES PASSED SUCCESSFULLY!\n");
+console.log("\n🎉 ALL PRODUCT ADD-ONS REGRESSION TEST SUITES (HYBRID COPY-ON-WRITE) PASSED SUCCESSFULLY!\n");

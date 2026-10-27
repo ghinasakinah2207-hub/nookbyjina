@@ -3,12 +3,26 @@
 import fs from "fs";
 import path from "path";
 import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getProductBySlugOrId, clearCatalogCache } from "@/lib/supabase/catalog";
 import { PRODUCTS } from "@/data/dummy-data";
 import { Product } from "@/types";
 import { generateSlug, resolveUniqueSlug } from "@/lib/slug";
 import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
+
+export interface ProductAddonInputItem {
+  id?: string;
+  name: string;
+  price: number;
+}
+
+interface MasterAddonRow {
+  id: string;
+  name: string;
+  price: number;
+  is_active: boolean;
+}
 
 export interface CreateProductInput {
   name: string;
@@ -31,6 +45,7 @@ export interface CreateProductInput {
     }[];
   }[];
   addonIds?: string[];
+  addons?: ProductAddonInputItem[];
 }
 
 export interface CreateProductResult {
@@ -62,6 +77,7 @@ export interface UpdateProductInput {
     }[];
   }[];
   addonIds?: string[];
+  addons?: ProductAddonInputItem[];
 }
 
 export interface UpdateProductResult {
@@ -69,6 +85,130 @@ export interface UpdateProductResult {
   productId?: string;
   slug?: string;
   error?: string;
+}
+
+/**
+ * Resolves product addons against the master `addons` table using a Hybrid Copy-on-Write strategy:
+ * 1. Exact match (name & price identical): Reuses existing master addon record without duplication.
+ * 2. Unshared modification: If addon is modified and ONLY used by this product, updates the master record.
+ * 3. Shared modification: If addon is modified and used by other products, creates a new record (Copy-on-Write)
+ *    to strictly protect other products from unintended price/name alterations.
+ * 4. New addon: Inserts a new record in `addons` and links to this product.
+ */
+async function resolveAndSyncProductAddons(
+  client: SupabaseClient,
+  productId: string,
+  items: ProductAddonInputItem[]
+): Promise<{ success: boolean; resolvedAddonIds?: string[]; error?: string }> {
+  try {
+    const { data: masterAddons, error: masterErr } = await client
+      .from("addons")
+      .select("id, name, price, is_active");
+
+    if (masterErr) {
+      return {
+        success: false,
+        error: `Gagal membaca daftar master add-on: ${masterErr.message}`,
+      };
+    }
+
+    const masters: MasterAddonRow[] = (masterAddons || []) as unknown as MasterAddonRow[];
+    const resolvedIds: string[] = [];
+
+    const validItems = items
+      .map((it) => ({
+        id: it.id?.trim() || undefined,
+        name: (it.name || "").trim(),
+        price: Math.max(0, Math.round(Number(it.price) || 0)),
+      }))
+      .filter((it) => it.name.length > 0);
+
+    for (const item of validItems) {
+      // Step A: Check if an exact match already exists in master (name & price match)
+      const exactMatch = masters.find(
+        (m) =>
+          m.name.trim().toLowerCase() === item.name.toLowerCase() &&
+          Number(m.price) === item.price &&
+          m.is_active !== false
+      );
+
+      if (exactMatch) {
+        resolvedIds.push(exactMatch.id);
+        continue;
+      }
+
+      // Step B: Check if item carries an existing addon ID that belongs to this product
+      if (item.id) {
+        const existingMaster = masters.find((m) => m.id === item.id);
+        if (existingMaster) {
+          // Check if this addon is shared with OTHER products
+          const { count, error: countErr } = await client
+            .from("product_addons")
+            .select("*", { count: "exact", head: true })
+            .eq("addon_id", item.id)
+            .neq("product_id", productId);
+
+          if (!countErr && (count ?? 0) === 0) {
+            // Unshared: safe to update this master record directly
+            const { error: updErr } = await client
+              .from("addons")
+              .update({
+                name: item.name,
+                price: item.price,
+                is_active: true,
+              })
+              .eq("id", item.id);
+
+            if (updErr) {
+              return {
+                success: false,
+                error: `Gagal memperbarui add-on "${item.name}": ${updErr.message}`,
+              };
+            }
+
+            resolvedIds.push(item.id);
+            existingMaster.name = item.name;
+            existingMaster.price = item.price;
+            continue;
+          }
+          // Shared with other products: do not mutate existingMaster! Proceed to create copy-on-write record below.
+        }
+      }
+
+      // Step C: Create a new master record in `addons`
+      const newAddonId = crypto.randomUUID();
+      const { error: insErr } = await client.from("addons").insert({
+        id: newAddonId,
+        name: item.name,
+        price: item.price,
+        is_active: true,
+      });
+
+      if (insErr) {
+        return {
+          success: false,
+          error: `Gagal menyimpan add-on baru "${item.name}": ${insErr.message}`,
+        };
+      }
+
+      resolvedIds.push(newAddonId);
+      masters.push({
+        id: newAddonId,
+        name: item.name,
+        price: item.price,
+        is_active: true,
+      });
+    }
+
+    const uniqueResolvedIds = Array.from(new Set(resolvedIds));
+    return { success: true, resolvedAddonIds: uniqueResolvedIds };
+  } catch (err) {
+    const msg =
+      err instanceof Error
+        ? err.message
+        : "Kesalahan tidak terduga saat sinkronisasi add-on.";
+    return { success: false, error: msg };
+  }
 }
 
 /**
@@ -312,10 +452,29 @@ export async function createProductAction(
     }
 
     // 8. Insert linked Add-ons if provided
-    if (input.addonIds && input.addonIds.length > 0) {
-      const uniqueAddonIds = Array.from(
-        new Set(input.addonIds.map((id) => id.trim()).filter(Boolean))
-      );
+    const hasAddonsInput = input.addons !== undefined;
+    const hasAddonIdsInput = input.addonIds !== undefined;
+
+    if (hasAddonsInput || hasAddonIdsInput) {
+      let uniqueAddonIds: string[] = [];
+
+      if (hasAddonsInput) {
+        const syncResult = await resolveAndSyncProductAddons(
+          client,
+          productId,
+          input.addons || []
+        );
+        if (!syncResult.success) {
+          await client.from("products").delete().eq("id", productId);
+          return { success: false, error: syncResult.error };
+        }
+        uniqueAddonIds = syncResult.resolvedAddonIds || [];
+      } else if (hasAddonIdsInput && input.addonIds) {
+        uniqueAddonIds = Array.from(
+          new Set(input.addonIds.map((id) => id.trim()).filter(Boolean))
+        );
+      }
+
       if (uniqueAddonIds.length > 0) {
         const addonRows = uniqueAddonIds.map((addonId, aIdx) => ({
           product_id: productId,
@@ -656,8 +815,11 @@ export async function updateProductAction(
     }
 
     // 6. Update linked Addons ONLY if explicitly provided in input
-    // If input.addonIds is undefined, preserve all existing product_addons untouched
-    if (input.addonIds !== undefined) {
+    // If both input.addons and input.addonIds are undefined, preserve all existing product_addons untouched
+    const hasAddonsInput = input.addons !== undefined;
+    const hasAddonIdsInput = input.addonIds !== undefined;
+
+    if (hasAddonsInput || hasAddonIdsInput) {
       // 6a. Snapshot existing addons before updating so we can restore if new insert fails
       const { data: existingAddons, error: fetchAddonErr } = await client
         .from("product_addons")
@@ -672,9 +834,23 @@ export async function updateProductAction(
         };
       }
 
-      const uniqueAddonIds = Array.from(
-        new Set((input.addonIds || []).map((id) => id.trim()).filter(Boolean))
-      );
+      let uniqueAddonIds: string[] = [];
+
+      if (hasAddonsInput) {
+        const syncResult = await resolveAndSyncProductAddons(
+          client,
+          resolvedProductId,
+          input.addons || []
+        );
+        if (!syncResult.success) {
+          return { success: false, error: syncResult.error };
+        }
+        uniqueAddonIds = syncResult.resolvedAddonIds || [];
+      } else if (hasAddonIdsInput && input.addonIds) {
+        uniqueAddonIds = Array.from(
+          new Set(input.addonIds.map((id) => id.trim()).filter(Boolean))
+        );
+      }
 
       const currentAddonIds = (existingAddons || []).map((ea) => ea.addon_id);
       const isUnchanged =

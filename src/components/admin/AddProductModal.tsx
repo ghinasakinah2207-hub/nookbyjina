@@ -91,9 +91,18 @@ function ProductFormModalContent({
     initialProduct?.categoryId || categories[0]?.id || ""
   );
   const [description, setDescription] = useState(initialProduct?.description || "");
-  const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>(
-    () => (initialProduct?.addons || []).map((a) => a.id)
-  );
+  const [productAddons, setProductAddons] = useState<
+    { id?: string; name: string; price: string }[]
+  >(() => {
+    if (initialProduct?.addons && initialProduct.addons.length > 0) {
+      return initialProduct.addons.map((a) => ({
+        id: a.id,
+        name: a.name,
+        price: String(a.price ?? 0),
+      }));
+    }
+    return [];
+  });
   const [price, setPrice] = useState<string>(
     initialProduct ? String(initialProduct.basePrice ?? 0) : "25000"
   );
@@ -174,7 +183,13 @@ function ProductFormModalContent({
           );
         }
         if (full.addons && Array.isArray(full.addons)) {
-          setSelectedAddonIds(full.addons.map((a) => a.id));
+          setProductAddons(
+            full.addons.map((a) => ({
+              id: a.id,
+              name: a.name,
+              price: String(a.price ?? 0),
+            }))
+          );
         }
       })
       .catch((e) => {
@@ -308,19 +323,38 @@ function ProductFormModalContent({
     );
   };
 
-  // Addon selection handlers
-  const handleToggleAddon = (addonId: string) => {
-    setSelectedAddonIds((prev) =>
-      prev.includes(addonId) ? prev.filter((id) => id !== addonId) : [...prev, addonId]
+  // Add-on editor handlers
+  const handleAddAddon = () => {
+    setProductAddons((prev) => [...prev, { name: "", price: "0" }]);
+  };
+
+  const handleUpdateAddon = (idx: number, field: "name" | "price", val: string) => {
+    setProductAddons((prev) =>
+      prev.map((addon, i) => (i === idx ? { ...addon, [field]: val } : addon))
     );
   };
 
-  const handleSelectAllAddons = () => {
-    if (selectedAddonIds.length === availableAddons.length) {
-      setSelectedAddonIds([]);
-    } else {
-      setSelectedAddonIds(availableAddons.map((a) => a.id));
-    }
+  const handleRemoveAddon = (idx: number) => {
+    setProductAddons((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleAddFromMaster = (master: Addon) => {
+    setProductAddons((prev) => {
+      const exists = prev.some(
+        (p) =>
+          (p.id && p.id === master.id) ||
+          p.name.trim().toLowerCase() === master.name.trim().toLowerCase()
+      );
+      if (exists) return prev;
+      return [
+        ...prev,
+        {
+          id: master.id,
+          name: master.name,
+          price: String(master.price ?? 0),
+        },
+      ];
+    });
   };
 
   // Submit handler
@@ -395,6 +429,24 @@ function ProductFormModalContent({
       }
     }
 
+    // Validate Add-ons
+    const validAddonsPayload: { id?: string; name: string; price: number }[] = [];
+    for (let aIdx = 0; aIdx < productAddons.length; aIdx++) {
+      const a = productAddons[aIdx];
+      const aName = a.name.trim();
+      if (!aName) continue;
+      const aPriceNum = Number(a.price);
+      if (isNaN(aPriceNum) || aPriceNum < 0) {
+        setError(`Harga tambahan untuk add-on "${aName}" harus berupa angka valid >= 0.`);
+        return;
+      }
+      validAddonsPayload.push({
+        id: a.id,
+        name: aName,
+        price: Math.round(aPriceNum),
+      });
+    }
+
     setLoading(true);
 
     try {
@@ -418,7 +470,8 @@ function ProductFormModalContent({
               priceDelta: Math.round(Number(v.priceDelta) || 0),
             })),
           })),
-          addonIds: selectedAddonIds,
+          addonIds: validAddonsPayload.map((a) => a.id).filter(Boolean) as string[],
+          addons: validAddonsPayload,
         };
 
         const result = await updateProductAction(payload);
@@ -431,9 +484,11 @@ function ProductFormModalContent({
 
         const catObj = categories.find((c) => c.id === categoryId);
         const resolvedSlug = result.slug || initialProduct.slug;
-        const resolvedAddons: Addon[] = availableAddons.filter((a) =>
-          selectedAddonIds.includes(a.id)
-        );
+        const resolvedAddons: Addon[] = validAddonsPayload.map((a, idx) => ({
+          id: a.id || `temp-addon-${idx}`,
+          name: a.name,
+          price: a.price,
+        }));
         const updatedUiProduct: Product = {
           id: result.productId || initialProduct.id,
           dbId: result.productId || initialProduct.dbId,
@@ -486,7 +541,8 @@ function ProductFormModalContent({
               priceDelta: Math.round(Number(v.priceDelta) || 0),
             })),
           })),
-          addonIds: selectedAddonIds,
+          addonIds: validAddonsPayload.map((a) => a.id).filter(Boolean) as string[],
+          addons: validAddonsPayload,
         };
 
         const result = await createProductAction(payload);
@@ -499,9 +555,11 @@ function ProductFormModalContent({
 
         const catObj = categories.find((c) => c.id === categoryId);
         const resolvedSlug = result.slug || "produk";
-        const resolvedAddons: Addon[] = availableAddons.filter((a) =>
-          selectedAddonIds.includes(a.id)
-        );
+        const resolvedAddons: Addon[] = validAddonsPayload.map((a, idx) => ({
+          id: a.id || `temp-addon-${idx}`,
+          name: a.name,
+          price: a.price,
+        }));
         const newUiProduct: Product = {
           id: result.productId || resolvedSlug,
           dbId: result.productId,
@@ -1023,60 +1081,99 @@ function ProductFormModalContent({
             <div className="flex items-center justify-between pb-1 border-b border-neutral-100 font-bold text-[#111111]">
               <div className="flex items-center gap-1.5">
                 <UtensilsCrossed className="w-3.5 h-3.5 text-[#F25B09]" />
-                <span>5. Add-on / Ekstra ({selectedAddonIds.length} dipilih)</span>
+                <span>5. Add-on / Ekstra ({productAddons.length})</span>
               </div>
-              {availableAddons.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleSelectAllAddons}
-                  className="text-[11px] text-[#F25B09] hover:underline font-semibold cursor-pointer"
-                >
-                  {selectedAddonIds.length === availableAddons.length
-                    ? "Batal Pilih Semua"
-                    : "Pilih Semua"}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleAddAddon}
+                className="inline-flex items-center gap-1 text-[11px] text-[#F25B09] hover:underline font-semibold cursor-pointer"
+              >
+                <Plus className="w-3 h-3" />
+                <span>Tambah Add-on Baru</span>
+              </button>
             </div>
 
-            {availableAddons.length === 0 ? (
+            {/* Master Add-on Quick Selector */}
+            {availableAddons.length > 0 && (
+              <div className="flex items-center gap-2 text-[11px] text-[#737373]">
+                <span className="flex-shrink-0">Pilih dari master:</span>
+                <select
+                  onChange={(e) => {
+                    const found = availableAddons.find((a) => a.id === e.target.value);
+                    if (found) handleAddFromMaster(found);
+                    e.target.value = "";
+                  }}
+                  defaultValue=""
+                  className="px-2.5 py-1 bg-white border border-[#E5E5E5] rounded-lg text-xs font-medium text-[#111111] focus:outline-none focus:border-[#F25B09] cursor-pointer"
+                >
+                  <option value="" disabled>-- Tambahkan Master Add-on Tersedia --</option>
+                  {availableAddons
+                    .filter(
+                      (ma) =>
+                        !productAddons.some(
+                          (pa) =>
+                            (pa.id && pa.id === ma.id) ||
+                            pa.name.trim().toLowerCase() === ma.name.trim().toLowerCase()
+                        )
+                    )
+                    .map((ma) => (
+                      <option key={ma.id} value={ma.id}>
+                        {ma.name} (+{formatRupiah(ma.price)})
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+
+            {productAddons.length === 0 ? (
               <div className="p-3.5 rounded-xl border border-dashed border-neutral-200 bg-[#FAF9F8] text-center space-y-1">
-                <p className="text-xs font-semibold text-[#111111]">Belum Ada Master Add-on Aktif</p>
+                <p className="text-xs font-semibold text-[#111111]">Belum Ada Add-on / Ekstra</p>
                 <p className="text-[11px] text-[#737373]">
-                  Tidak ada add-on aktif yang ditemukan di database. Tambahkan atau aktifkan add-on terlebih dahulu untuk menghubungkannya ke menu ini.
+                  Klik &ldquo;+ Tambah Add-on Baru&rdquo; untuk membuat opsi ekstra seperti sambal, telur, atau kerupuk khusus untuk menu ini, atau pilih dari daftar master.
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {availableAddons.map((addon) => {
-                  const isChecked = selectedAddonIds.includes(addon.id);
-                  return (
-                    <label
-                      key={addon.id}
-                      htmlFor={`addon-checkbox-${addon.id}`}
-                      className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
-                        isChecked
-                          ? "border-[#111111] bg-neutral-50 shadow-xs"
-                          : "border-[#E5E5E5] bg-white hover:border-neutral-300"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
+              <div className="space-y-2">
+                {productAddons.map((addon, aIdx) => (
+                  <div
+                    key={aIdx}
+                    className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2.5 rounded-xl border border-neutral-200 bg-[#FAF9F8]"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <input
+                        type="text"
+                        value={addon.name}
+                        onChange={(e) => handleUpdateAddon(aIdx, "name", e.target.value)}
+                        placeholder="Nama add-on (cth: Ekstra Sambal Matah)"
+                        className="w-full px-2.5 py-1.5 bg-white border border-[#E5E5E5] rounded-lg text-xs font-semibold text-[#111111] focus:outline-none focus:border-[#F25B09]"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 w-32 sm:w-36 bg-white border border-[#E5E5E5] rounded-lg px-2 py-1.5">
+                        <span className="text-[11px] font-medium text-[#737373] select-none">+Rp</span>
                         <input
-                          id={`addon-checkbox-${addon.id}`}
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => handleToggleAddon(addon.id)}
-                          className="rounded border-[#D1D5DB] text-[#111111] focus:ring-[#111111] w-4 h-4 cursor-pointer"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={addon.price}
+                          onChange={(e) =>
+                            handleUpdateAddon(aIdx, "price", e.target.value.replace(/[^0-9]/g, ""))
+                          }
+                          placeholder="0"
+                          className="w-full bg-transparent text-xs font-bold text-[#18794E] focus:outline-none"
                         />
-                        <span className="font-semibold text-[#111111] truncate">
-                          {addon.name}
-                        </span>
                       </div>
-                      <span className="text-[11px] font-bold text-[#18794E] flex-shrink-0 ml-2">
-                        +{formatRupiah(addon.price)}
-                      </span>
-                    </label>
-                  );
-                })}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAddon(aIdx)}
+                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer flex-shrink-0"
+                        title="Hapus add-on ini"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
