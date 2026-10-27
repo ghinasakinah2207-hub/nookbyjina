@@ -313,22 +313,27 @@ export async function createProductAction(
 
     // 8. Insert linked Add-ons if provided
     if (input.addonIds && input.addonIds.length > 0) {
-      const addonRows = input.addonIds.map((addonId, aIdx) => ({
-        product_id: productId,
-        addon_id: addonId,
-        sort_order: aIdx + 1,
-      }));
+      const uniqueAddonIds = Array.from(
+        new Set(input.addonIds.map((id) => id.trim()).filter(Boolean))
+      );
+      if (uniqueAddonIds.length > 0) {
+        const addonRows = uniqueAddonIds.map((addonId, aIdx) => ({
+          product_id: productId,
+          addon_id: addonId,
+          sort_order: aIdx + 1,
+        }));
 
-      const { error: addonErr } = await supabase
-        .from("product_addons")
-        .insert(addonRows);
+        const { error: addonErr } = await client
+          .from("product_addons")
+          .insert(addonRows);
 
-      if (addonErr) {
-        await supabase.from("products").delete().eq("id", productId);
-        return {
-          success: false,
-          error: `Gagal menghubungkan add-on produk: ${addonErr.message}`,
-        };
+        if (addonErr) {
+          await client.from("products").delete().eq("id", productId);
+          return {
+            success: false,
+            error: `Gagal menghubungkan add-on produk: ${addonErr.message}`,
+          };
+        }
       }
     }
 
@@ -653,40 +658,70 @@ export async function updateProductAction(
     // 6. Update linked Addons ONLY if explicitly provided in input
     // If input.addonIds is undefined, preserve all existing product_addons untouched
     if (input.addonIds !== undefined) {
-      // Snapshot existing addons before updating so we can restore if new insert fails
-      const { data: existingAddons } = await supabase
+      // 6a. Snapshot existing addons before updating so we can restore if new insert fails
+      const { data: existingAddons, error: fetchAddonErr } = await client
         .from("product_addons")
         .select("addon_id, sort_order")
-        .eq("product_id", resolvedProductId);
+        .eq("product_id", resolvedProductId)
+        .order("sort_order", { ascending: true });
 
-      await supabase.from("product_addons").delete().eq("product_id", resolvedProductId);
+      if (fetchAddonErr) {
+        return {
+          success: false,
+          error: `Gagal membaca relasi add-on produk: ${fetchAddonErr.message}`,
+        };
+      }
 
-      if (input.addonIds && input.addonIds.length > 0) {
-        const addonRows = input.addonIds.map((addonId, aIdx) => ({
-          product_id: resolvedProductId,
-          addon_id: addonId,
-          sort_order: aIdx + 1,
-        }));
+      const uniqueAddonIds = Array.from(
+        new Set((input.addonIds || []).map((id) => id.trim()).filter(Boolean))
+      );
 
-        const { error: addonErr } = await supabase
+      const currentAddonIds = (existingAddons || []).map((ea) => ea.addon_id);
+      const isUnchanged =
+        currentAddonIds.length === uniqueAddonIds.length &&
+        currentAddonIds.every((id, idx) => id === uniqueAddonIds[idx]);
+
+      // Only perform database mutation if the addons selection actually changed
+      if (!isUnchanged) {
+        const { error: delErr } = await client
           .from("product_addons")
-          .insert(addonRows);
+          .delete()
+          .eq("product_id", resolvedProductId);
 
-        if (addonErr) {
-          // Restore previous addons if new insert fails
-          if (existingAddons && existingAddons.length > 0) {
-            await supabase.from("product_addons").insert(
-              existingAddons.map((ea) => ({
-                product_id: resolvedProductId,
-                addon_id: ea.addon_id,
-                sort_order: ea.sort_order,
-              }))
-            );
-          }
+        if (delErr) {
           return {
             success: false,
-            error: `Gagal memperbarui add-on produk: ${addonErr.message}`,
+            error: `Gagal membersihkan relasi add-on lama: ${delErr.message}`,
           };
+        }
+
+        if (uniqueAddonIds.length > 0) {
+          const addonRows = uniqueAddonIds.map((addonId, aIdx) => ({
+            product_id: resolvedProductId,
+            addon_id: addonId,
+            sort_order: aIdx + 1,
+          }));
+
+          const { error: addonErr } = await client
+            .from("product_addons")
+            .insert(addonRows);
+
+          if (addonErr) {
+            // Restore previous addons snapshot if new insert fails to avoid partial state
+            if (existingAddons && existingAddons.length > 0) {
+              await client.from("product_addons").insert(
+                existingAddons.map((ea) => ({
+                  product_id: resolvedProductId,
+                  addon_id: ea.addon_id,
+                  sort_order: ea.sort_order,
+                }))
+              );
+            }
+            return {
+              success: false,
+              error: `Gagal memperbarui add-on produk: ${addonErr.message}`,
+            };
+          }
         }
       }
     }
