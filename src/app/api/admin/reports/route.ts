@@ -4,6 +4,7 @@ import {
   calculateReportStats,
   calculateDashboardMetrics,
   getAdminProductsWithHppServer,
+  getReportDateFilterBounds,
   ReportTimeRange,
 } from "@/lib/admin-reports";
 import { getAdminOrdersServer } from "@/lib/orders-store";
@@ -21,13 +22,40 @@ export async function GET(request: NextRequest) {
       ? (rangeParam as ReportTimeRange)
       : "7days";
 
-    // 3. Fetch server data
+    // 3. Fast-path: If caller only requested dashboard operational metrics
+    const metricsOnly = searchParams.get("metricsOnly") === "true";
+    if (metricsOnly) {
+      const orders = await getAdminOrdersServer();
+      const metrics = calculateDashboardMetrics(orders);
+      return NextResponse.json(
+        {
+          success: true,
+          metrics,
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store, max-age=0",
+          },
+        }
+      );
+    }
+
+    // 4. Fetch server data for reports with database date filtering
+    const bounds = getReportDateFilterBounds(range);
+    const orderOptions = bounds.startUtcIso
+      ? {
+          startDate: bounds.startUtcIso,
+          endDate: bounds.endUtcIso || undefined,
+          endDateExclusive: true,
+        }
+      : undefined;
+
     const [orders, products] = await Promise.all([
-      getAdminOrdersServer(),
+      getAdminOrdersServer(orderOptions),
       getAdminProductsWithHppServer(),
     ]);
 
-    // 4. Calculate metrics and reports
+    // 5. Calculate metrics and reports
     const metrics = calculateDashboardMetrics(orders);
     const reports = calculateReportStats(orders, products, range);
 

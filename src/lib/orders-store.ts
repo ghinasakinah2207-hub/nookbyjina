@@ -651,7 +651,14 @@ export async function updateOrderStatusServer(
 /**
  * Retrieves all store orders for the authenticated admin dashboard.
  */
-export async function getAdminOrdersServer(options?: { limit?: number }): Promise<Order[]> {
+export interface GetAdminOrdersOptions {
+  limit?: number;
+  startDate?: string;
+  endDate?: string;
+  endDateExclusive?: boolean;
+}
+
+export async function getAdminOrdersServer(options?: GetAdminOrdersOptions): Promise<Order[]> {
   let client = getServiceRoleSupabaseClient();
   if (!client) {
     try {
@@ -666,13 +673,26 @@ export async function getAdminOrdersServer(options?: { limit?: number }): Promis
     if (process.env.NODE_ENV === "production") {
       throw new Error("SUPABASE_SERVICE_ROLE_KEY belum dikonfigurasi.");
     }
-    for (const devOrder of devOrdersById.values()) {
+    let devOrders = Array.from(devOrdersById.values());
+    if (options?.startDate) {
+      const startMs = new Date(options.startDate).getTime();
+      devOrders = devOrders.filter((o) => new Date(o.createdAt).getTime() >= startMs);
+    }
+    if (options?.endDate) {
+      const endMs = new Date(options.endDate).getTime();
+      if (options.endDateExclusive) {
+        devOrders = devOrders.filter((o) => new Date(o.createdAt).getTime() < endMs);
+      } else {
+        devOrders = devOrders.filter((o) => new Date(o.createdAt).getTime() <= endMs);
+      }
+    }
+    for (const devOrder of devOrders) {
       if (isOrderExpired(devOrder)) {
         devOrder.orderStatus = "Dibatalkan";
         devOrder.paymentStatus = "Dibatalkan";
       }
     }
-    return Array.from(devOrdersById.values())
+    return devOrders
       .map(normalizeOrder)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
@@ -684,6 +704,18 @@ export async function getAdminOrdersServer(options?: { limit?: number }): Promis
     .from("orders")
     .select("*")
     .order("created_at", { ascending: false });
+
+  if (options?.startDate) {
+    query = query.gte("created_at", options.startDate);
+  }
+
+  if (options?.endDate) {
+    if (options.endDateExclusive) {
+      query = query.lt("created_at", options.endDate);
+    } else {
+      query = query.lte("created_at", options.endDate);
+    }
+  }
 
   if (options?.limit && options.limit > 0) {
     query = query.limit(options.limit);
@@ -748,6 +780,18 @@ export async function getAdminOrdersServer(options?: { limit?: number }): Promis
     const dbOrderIds = new Set(adminOrders.map((o) => o.id));
     for (const devOrder of devOrdersById.values()) {
       if (!dbOrderIds.has(devOrder.id)) {
+        if (options?.startDate) {
+          const startMs = new Date(options.startDate).getTime();
+          if (new Date(devOrder.createdAt).getTime() < startMs) continue;
+        }
+        if (options?.endDate) {
+          const endMs = new Date(options.endDate).getTime();
+          if (options.endDateExclusive) {
+            if (new Date(devOrder.createdAt).getTime() >= endMs) continue;
+          } else {
+            if (new Date(devOrder.createdAt).getTime() > endMs) continue;
+          }
+        }
         adminOrders.push(normalizeOrder(devOrder));
       }
     }

@@ -66,12 +66,26 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
                 token,
               };
             });
-            setOrders(withTokens);
 
-            // Re-validate and sync latest status from backend for existing tokens
+            // Defense-in-depth: keep only authentic customer orders (has secret token or in vault)
+            const customerOnlyOrders = withTokens.filter(
+              (o) => (typeof o.token === "string" && o.token.length >= 8) || Boolean(getOrderToken(o.id))
+            );
+            setOrders(customerOnlyOrders);
+
+            // Clean up legacy contaminated storage if untokenized orders were present
+            if (customerOnlyOrders.length !== parsed.length) {
+              try {
+                localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(customerOnlyOrders));
+              } catch {
+                // Ignore storage write error
+              }
+            }
+
+            // Re-validate and sync latest status from backend for existing customer tokens
             const allTokens = Array.from(
               new Set([
-                ...withTokens.map((o) => o.token),
+                ...customerOnlyOrders.map((o) => o.token),
                 ...getAllOrderTokens(),
               ])
             ).filter((t: string) => typeof t === "string" && t.length >= 8);
@@ -254,11 +268,21 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  /**
+   * @deprecated Admin state is isolated in useAdminOrders.
+   * Customer OrderContext only accepts orders that possess authentic customer access tokens.
+   */
   const mergeOrders = (incomingOrders: Order[]) => {
     if (!Array.isArray(incomingOrders) || incomingOrders.length === 0) return;
+    // Strict isolation guard: Only allow orders with customer access tokens
+    const validOrders = incomingOrders.filter(
+      (o) => (typeof o.token === "string" && o.token.length >= 8) || Boolean(getOrderToken(o.id))
+    );
+    if (validOrders.length === 0) return;
+
     setOrders((prev) => {
       const existingMap = new Map(prev.map((o) => [o.id, o]));
-      for (const order of incomingOrders) {
+      for (const order of validOrders) {
         const existing = existingMap.get(order.id);
         const resolvedToken = order.token || existing?.token || getOrderToken(order.id) || "";
         if (resolvedToken && order.id) {

@@ -136,6 +136,15 @@ export function AdminShell({
 }: AdminShellProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState(userEmail);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user?.email) {
+        setCurrentUserEmail(data.user.email);
+      }
+    });
+  }, []);
 
   // Standalone login route renders without the admin shell
   if (pathname === "/admin/login") {
@@ -146,16 +155,6 @@ export function AdminShell({
   const activeTitle = pageTitle || routeMeta?.title;
   const activeBadge = badgeText || routeMeta?.badge;
   const activeDesc = pageDescription || routeMeta?.description;
-
-  const [currentUserEmail, setCurrentUserEmail] = useState(userEmail);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user?.email) {
-        setCurrentUserEmail(data.user.email);
-      }
-    });
-  }, []);
 
   const isActive = (href: string) => {
     if (href === "/admin") {

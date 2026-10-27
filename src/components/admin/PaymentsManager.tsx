@@ -10,7 +10,7 @@ import {
   RefreshCw,
   Loader2,
 } from "lucide-react";
-import { useOrder } from "@/context/OrderContext";
+import { useAdminOrders } from "@/hooks/useAdminOrders";
 import { Order, StoreSettings } from "@/types";
 import { formatRupiah, STORE_SETTINGS } from "@/data/dummy-data";
 import {
@@ -21,31 +21,17 @@ import {
   isOrderExpired,
 } from "@/lib/order-normalizer";
 
-export function PaymentsManager() {
-  const { orders, updateOrderStatus, mergeOrders } = useOrder();
+interface PaymentsManagerProps {
+  initialOrders?: Order[];
+}
+
+export function PaymentsManager({ initialOrders }: PaymentsManagerProps = {}) {
+  const { orders, updateOrderStatus, fetchOrders, isRefreshing } = useAdminOrders({ initialOrders });
   const [confirmQrisOrder, setConfirmQrisOrder] = useState<Order | null>(null);
   const [confirmCashOrder, setConfirmCashOrder] = useState<Order | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const confirmingRef = React.useRef(false);
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const fetchOrders = React.useCallback(async () => {
-    setIsRefreshing(true);
-    try {
-      const res = await fetch("/api/admin/orders");
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.success && Array.isArray(data.orders)) {
-          mergeOrders(data.orders);
-        }
-      }
-    } catch {
-      // Ignore background fetch errors
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [mergeOrders]);
 
   React.useEffect(() => {
     fetch("/api/store-settings")
@@ -57,34 +43,6 @@ export function PaymentsManager() {
       })
       .catch(() => {});
   }, []);
-
-  React.useEffect(() => {
-    let ignore = false;
-    const fetchOrders = () => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-      fetch("/api/admin/orders")
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (!ignore && data && data.success && Array.isArray(data.orders)) {
-            mergeOrders(data.orders);
-          }
-        })
-        .catch(() => {});
-    };
-
-    fetchOrders();
-    const interval = setInterval(fetchOrders, 15000);
-    const handleVis = () => {
-      if (document.visibilityState === "visible") fetchOrders();
-    };
-    document.addEventListener("visibilitychange", handleVis);
-
-    return () => {
-      ignore = true;
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", handleVis);
-    };
-  }, [mergeOrders]);
 
   const pendingQrisPayments = orders.filter(
     (o) => isQrisMethod(o.paymentMethod) && isPendingQrisStatus(o.paymentStatus) && !isOrderExpired(o)
@@ -213,7 +171,7 @@ export function PaymentsManager() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={fetchOrders}
+              onClick={() => fetchOrders(true)}
               disabled={isRefreshing}
               className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700 disabled:opacity-50 transition-colors cursor-pointer"
               title="Segarkan daftar verifikasi"

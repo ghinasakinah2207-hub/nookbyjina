@@ -575,22 +575,111 @@ export async function getAdminProductsWithHppServer(): Promise<ProductHppMapItem
 }
 
 /**
+ * Dedicated server fetch for the Admin Dashboard overview page (/admin).
+ * Fetches authoritative orders to calculate operational metrics and returns
+ * strictly the 5 most recent orders needed for the dashboard UI contract.
+ *
+ * Avoids overfetching products/HPP and computing sales reports when not on the reports page.
+ */
+export async function fetchAdminDashboardOverviewDataServer(referenceDate: Date = new Date()): Promise<{
+  metrics: DashboardMetrics;
+  recentOrders: Order[];
+}> {
+  const orders = await getAdminOrdersServer();
+  const metrics = calculateDashboardMetrics(orders, referenceDate);
+  const recentOrders = metrics.recentOrders; // strictly max 5 recent orders
+
+  return {
+    metrics,
+    recentOrders,
+  };
+}
+
+/**
+ * Calculates accurate UTC ISO boundary strings for database filtering based on Asia/Jakarta (WIB) calendar days.
+ *
+ * For ranges "today", "7days", and "30days", returns:
+ * - startUtcIso: inclusive lower bound (>=) matching 00:00:00.000 WIB of the start date in UTC.
+ * - endUtcIso: exclusive upper bound (<) matching 00:00:00.000 WIB of the day following the end date in UTC.
+ *
+ * For "all", returns null for both bounds (fetch full history).
+ */
+export function getReportDateFilterBounds(
+  range: ReportTimeRange,
+  referenceDate: Date = new Date()
+): {
+  startUtcIso: string | null;
+  endUtcIso: string | null;
+  startDateKey: string;
+  endDateKey: string;
+} {
+  const todayKey = getWIBDateKey(referenceDate);
+  const endDateKey = todayKey;
+
+  if (range === "all") {
+    return {
+      startUtcIso: null,
+      endUtcIso: null,
+      startDateKey: "",
+      endDateKey,
+    };
+  }
+
+  let startDateKey = todayKey;
+  if (range === "7days") {
+    startDateKey = shiftWIBDateKey(todayKey, -6);
+  } else if (range === "30days") {
+    startDateKey = shiftWIBDateKey(todayKey, -29);
+  }
+
+  // Start bound: 00:00:00.000 WIB of startDateKey converted to UTC ISO string
+  const startWib = getWIBDayStart(startDateKey);
+  const startUtcIso = startWib.toISOString();
+
+  // End bound (exclusive <): 00:00:00.000 WIB of day after endDateKey converted to UTC ISO string
+  const nextDayKey = shiftWIBDateKey(endDateKey, 1);
+  const endExclusiveWib = getWIBDayStart(nextDayKey);
+  const endUtcIso = endExclusiveWib.toISOString();
+
+  return {
+    startUtcIso,
+    endUtcIso,
+    startDateKey,
+    endDateKey,
+  };
+}
+
+/**
  * Comprehensive server fetch for the Admin Dashboard and Sales Reports.
  * Enforces server-only boundary and returns verified calculated metrics.
+ *
+ * Uses database-level date filtering for reports when range is today, 7days, or 30days.
  */
-export async function fetchAdminDashboardDataServer(range: ReportTimeRange = "7days"): Promise<{
+export async function fetchAdminDashboardDataServer(
+  range: ReportTimeRange = "7days",
+  referenceDate: Date = new Date()
+): Promise<{
   metrics: DashboardMetrics;
   reports: ReportStats;
   orders: Order[];
 }> {
-  // Fetch authoritative orders and products in parallel
+  const bounds = getReportDateFilterBounds(range, referenceDate);
+  const orderOptions = bounds.startUtcIso
+    ? {
+        startDate: bounds.startUtcIso,
+        endDate: bounds.endUtcIso || undefined,
+        endDateExclusive: true,
+      }
+    : undefined;
+
+  // Fetch authoritative date-filtered orders and products in parallel
   const [orders, products] = await Promise.all([
-    getAdminOrdersServer(),
+    getAdminOrdersServer(orderOptions),
     getAdminProductsWithHppServer(),
   ]);
 
-  const metrics = calculateDashboardMetrics(orders);
-  const reports = calculateReportStats(orders, products, range);
+  const metrics = calculateDashboardMetrics(orders, referenceDate);
+  const reports = calculateReportStats(orders, products, range, referenceDate);
 
   return {
     metrics,

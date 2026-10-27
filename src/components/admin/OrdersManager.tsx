@@ -15,7 +15,7 @@ import {
   Banknote,
   Loader2,
 } from "lucide-react";
-import { useOrder } from "@/context/OrderContext";
+import { useAdminOrders } from "@/hooks/useAdminOrders";
 import { Order, OrderStatus } from "@/types";
 import { StatusBadge } from "@/components/ui/Badge";
 import { formatRupiah } from "@/data/dummy-data";
@@ -30,8 +30,12 @@ import {
 
 type FilterTab = "semua" | "verifikasi" | "kas" | "berjalan" | "selesai" | "dibatalkan";
 
-export function OrdersManager() {
-  const { orders, updateOrderStatus, mergeOrders } = useOrder();
+interface OrdersManagerProps {
+  initialOrders?: Order[];
+}
+
+export function OrdersManager({ initialOrders }: OrdersManagerProps = {}) {
+  const { orders, updateOrderStatus, fetchOrders } = useAdminOrders({ initialOrders });
   const [activeTab, setActiveTab] = useState<FilterTab>("semua");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -42,34 +46,6 @@ export function OrdersManager() {
   const processingRef = React.useRef(false);
   const [receiptWidth, setReceiptWidth] = useState<"58mm" | "80mm">("58mm");
   const [printError, setPrintError] = useState<string | null>(null);
-
-  React.useEffect(() => {
-    let ignore = false;
-    const fetchOrders = () => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-      fetch("/api/admin/orders")
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (!ignore && data && data.success && Array.isArray(data.orders)) {
-            mergeOrders(data.orders);
-          }
-        })
-        .catch(() => {});
-    };
-
-    fetchOrders();
-    const interval = setInterval(fetchOrders, 15000);
-    const handleVis = () => {
-      if (document.visibilityState === "visible") fetchOrders();
-    };
-    document.addEventListener("visibilitychange", handleVis);
-
-    return () => {
-      ignore = true;
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", handleVis);
-    };
-  }, [mergeOrders]);
 
   const handlePrintReceipt = (order: Order) => {
     setPrintError(null);
@@ -156,10 +132,7 @@ export function OrdersManager() {
     if (targetOrder && isOrderExpired(targetOrder)) {
       alert("Batas waktu pembayaran pesanan telah kedaluwarsa (30 menit). Pembayaran tidak dapat diverifikasi.");
       setConfirmLunasOrder(null);
-      fetch("/api/admin/orders")
-        .then((r) => r.json())
-        .then((d) => d.success && mergeOrders(d.orders))
-        .catch(() => {});
+      fetchOrders();
       return;
     }
 

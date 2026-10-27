@@ -53,7 +53,7 @@ export function DashboardOverview({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/reports?range=today", {
+      const res = await fetch("/api/admin/reports?range=today&metricsOnly=true", {
         headers: { "Cache-Control": "no-cache" },
       });
       if (!res.ok) {

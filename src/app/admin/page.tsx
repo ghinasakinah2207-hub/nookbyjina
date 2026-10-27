@@ -2,7 +2,7 @@ import React from "react";
 import { connection } from "next/server";
 import { requireAdminAuth } from "@/lib/supabase/admin-auth";
 import { DashboardOverview } from "@/components/admin/DashboardOverview";
-import { fetchAdminDashboardDataServer, DashboardMetrics } from "@/lib/admin-reports";
+import { fetchAdminDashboardOverviewDataServer, DashboardMetrics } from "@/lib/admin-reports";
 import { Order } from "@/types";
 
 export const instant = false;
@@ -15,9 +15,9 @@ export default async function AdminDashboardPage() {
   let initialMetrics: DashboardMetrics | null = null;
   let initialOrders: Order[] = [];
   try {
-    const data = await fetchAdminDashboardDataServer("today");
+    const data = await fetchAdminDashboardOverviewDataServer();
     initialMetrics = data.metrics;
-    initialOrders = data.orders;
+    initialOrders = data.recentOrders;
   } catch (err) {
     console.error("Gagal memuat metrik dasbor:", err);
   }
