@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -18,6 +18,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { logoutAction } from "@/app/admin/actions";
+import { supabase } from "@/lib/supabase/client";
 
 interface AdminShellProps {
   children: React.ReactNode;
@@ -80,6 +81,51 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
+interface RouteHeaderConfig {
+  title: string;
+  badge?: string;
+  description?: string;
+}
+
+const ROUTE_CONFIG: Record<string, RouteHeaderConfig> = {
+  "/admin": {
+    title: "Dasbor Operasional",
+    badge: "Owner Aktif",
+  },
+  "/admin/pesanan": {
+    title: "Manajemen Pesanan",
+    badge: "Operasional",
+  },
+  "/admin/menu": {
+    title: "Katalog Menu & Produk",
+    badge: "Katalog",
+  },
+  "/admin/beranda": {
+    title: "Manajemen Seksi Beranda",
+    badge: "Etalase Toko",
+    description:
+      "Konfigurasi banner hero beranda, susunan seksi, visibilitas, dan penugasan produk etalase beranda pelanggan",
+  },
+  "/admin/pembayaran": {
+    title: "Verifikasi Pembayaran & QRIS",
+    badge: "QRIS Merchant",
+    description:
+      "Pemeriksaan mutasi DANA Bisnis merchant dan konfirmasi pesanan lunas",
+  },
+  "/admin/laporan": {
+    title: "Laporan Penjualan & Keuangan",
+    badge: "Keuangan",
+    description:
+      "Ringkasan omzet, estimasi laba kotor, dan analitik produk terlaris",
+  },
+  "/admin/pengaturan": {
+    title: "Pengaturan Toko",
+    badge: "Pengaturan",
+    description:
+      "Konfigurasi status toko, jam operasional, kontak WhatsApp, QRIS, dan tarif ongkir",
+  },
+};
+
 export function AdminShell({
   children,
   userEmail = "owner@temubyjina.com",
@@ -90,6 +136,26 @@ export function AdminShell({
 }: AdminShellProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Standalone login route renders without the admin shell
+  if (pathname === "/admin/login") {
+    return <>{children}</>;
+  }
+
+  const routeMeta = ROUTE_CONFIG[pathname];
+  const activeTitle = pageTitle || routeMeta?.title;
+  const activeBadge = badgeText || routeMeta?.badge;
+  const activeDesc = pageDescription || routeMeta?.description;
+
+  const [currentUserEmail, setCurrentUserEmail] = useState(userEmail);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user?.email) {
+        setCurrentUserEmail(data.user.email);
+      }
+    });
+  }, []);
 
   const isActive = (href: string) => {
     if (href === "/admin") {
@@ -203,7 +269,7 @@ export function AdminShell({
             </div>
             <div className="min-w-0 flex-1">
               <span className="text-[11px] font-semibold text-[#111111] block truncate">
-                {userEmail}
+                {currentUserEmail}
               </span>
               <span className="text-[9px] text-emerald-700 block font-medium">
                 Owner Terverifikasi
@@ -293,7 +359,7 @@ export function AdminShell({
 
             <div className="pt-2 border-t border-[#E5E5E5] flex items-center justify-between text-xs">
               <span className="text-[11px] text-[#737373] truncate max-w-[200px]">
-                {userEmail}
+                {currentUserEmail}
               </span>
               <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
                 Owner Aktif
@@ -308,26 +374,26 @@ export function AdminShell({
           ========================================================================= */}
       <div className="flex-1 md:pl-64 flex flex-col min-h-screen print:pl-0">
         {/* Page Title & Context Header */}
-        {(pageTitle || action) && (
+        {(activeTitle || action) && (
           <div
             className={`bg-white border-b border-[#E5E5E5] px-4 sm:px-6 print-hide ${
-              pageDescription ? "py-4 sm:py-5" : "py-3 sm:py-3.5"
+              activeDesc ? "py-4 sm:py-5" : "py-3 sm:py-3.5"
             }`}
           >
             <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-base sm:text-lg font-bold text-[#111111] tracking-tight">
-                    {pageTitle}
+                    {activeTitle}
                   </h1>
-                  {badgeText && (
+                  {activeBadge && (
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-[#F25B09]">
-                      {badgeText}
+                      {activeBadge}
                     </span>
                   )}
                 </div>
-                {pageDescription && (
-                  <p className="text-xs text-[#737373] mt-0.5">{pageDescription}</p>
+                {activeDesc && (
+                  <p className="text-xs text-[#737373] mt-0.5">{activeDesc}</p>
                 )}
               </div>
 

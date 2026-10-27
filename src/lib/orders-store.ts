@@ -651,7 +651,7 @@ export async function updateOrderStatusServer(
 /**
  * Retrieves all store orders for the authenticated admin dashboard.
  */
-export async function getAdminOrdersServer(): Promise<Order[]> {
+export async function getAdminOrdersServer(options?: { limit?: number }): Promise<Order[]> {
   let client = getServiceRoleSupabaseClient();
   if (!client) {
     try {
@@ -679,68 +679,79 @@ export async function getAdminOrdersServer(): Promise<Order[]> {
 
   let adminOrders: Order[] = [];
 
-  // 1. Try get_admin_orders RPC
-  const { data: rpcResult, error: rpcErr } = await client.rpc("get_admin_orders");
-  if (!rpcErr && Array.isArray(rpcResult)) {
-    adminOrders = (rpcResult as Order[]).map(normalizeOrder);
-  } else {
-    // 2. Direct query fallback
-    const { data: rows, error: rowsErr } = await client
-      .from("orders")
-      .select("*")
-      .order("created_at", { ascending: false });
+  // Direct table query: fetch authoritative orders ordered by created_at DESC
+  let query = client
+    .from("orders")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-    if (rowsErr || !rows) {
-      return [];
-    }
+  if (options?.limit && options.limit > 0) {
+    query = query.limit(options.limit);
+  }
 
-    // Resilient item resolution: if items_snapshot is not yet populated, join order_items
-    const hasSnapshot = rows.some((r) => Array.isArray((r as Record<string, unknown>).items_snapshot));
-    const itemsByOrderId = new Map<string, Order["items"]>();
+  const { data: rows, error: rowsErr } = await query;
 
-    if (!hasSnapshot && rows.length > 0) {
-      try {
-        const orderIds = rows.map((r) => (r as Record<string, unknown>).id).filter(Boolean);
-        const { data: itemRows } = await client
-          .from("order_items")
-          .select("id, order_id, product_id, product_name, quantity, unit_price, item_note")
-          .in("order_id", orderIds);
+  if (rowsErr || !rows) {
+    return [];
+  }
 
-        if (itemRows && Array.isArray(itemRows)) {
-          for (const item of itemRows) {
-            const oId = String(item.order_id);
-            const list = itemsByOrderId.get(oId) || [];
-            const qty = Number(item.quantity) || 1;
-            const uPrice = Number(item.unit_price) || 0;
-            list.push({
-              id: String(item.id),
-              productId: String(item.product_id),
-              productName: String(item.product_name),
-              productImage: "",
-              basePrice: uPrice,
-              selectedOptions: [],
-              selectedAddons: [],
-              itemNote: String(item.item_note || ""),
-              quantity: qty,
-              unitPrice: uPrice,
-              itemTotal: uPrice * qty,
-              isAvailable: true,
-            });
-            itemsByOrderId.set(oId, list);
-          }
+  // Resilient item resolution: if items_snapshot is not yet populated, join order_items
+  const hasSnapshot = rows.some((r) => Array.isArray((r as Record<string, unknown>).items_snapshot));
+  const itemsByOrderId = new Map<string, Order["items"]>();
+
+  if (!hasSnapshot && rows.length > 0) {
+    try {
+      const orderIds = rows.map((r) => (r as Record<string, unknown>).id).filter(Boolean);
+      const { data: itemRows } = await client
+        .from("order_items")
+        .select("id, order_id, product_id, product_name, quantity, unit_price, item_note")
+        .in("order_id", orderIds);
+
+      if (itemRows && Array.isArray(itemRows)) {
+        for (const item of itemRows) {
+          const oId = String(item.order_id);
+          const list = itemsByOrderId.get(oId) || [];
+          const qty = Number(item.quantity) || 1;
+          const uPrice = Number(item.unit_price) || 0;
+          list.push({
+            id: String(item.id),
+            productId: String(item.product_id),
+            productName: String(item.product_name),
+            productImage: "",
+            basePrice: uPrice,
+            selectedOptions: [],
+            selectedAddons: [],
+            itemNote: String(item.item_note || ""),
+            quantity: qty,
+            unitPrice: uPrice,
+            itemTotal: uPrice * qty,
+            isAvailable: true,
+          });
+          itemsByOrderId.set(oId, list);
         }
-      } catch {
-        // Graceful fallback if order_items is not queryable
+      }
+    } catch {
+      // Graceful fallback if order_items is not queryable
+    }
+  }
+
+  adminOrders = (rows as Record<string, unknown>[]).map((row) => {
+    const mapped = mapDatabaseRowToOrder(row);
+    if ((!mapped.items || mapped.items.length === 0) && itemsByOrderId.has(String(row.id))) {
+      mapped.items = itemsByOrderId.get(String(row.id)) || [];
+    }
+    return normalizeOrder(mapped);
+  });
+
+  // Include any in-memory dev/test orders that were saved in the active process
+  if (devOrdersById.size > 0) {
+    const dbOrderIds = new Set(adminOrders.map((o) => o.id));
+    for (const devOrder of devOrdersById.values()) {
+      if (!dbOrderIds.has(devOrder.id)) {
+        adminOrders.push(normalizeOrder(devOrder));
       }
     }
-
-    adminOrders = (rows as Record<string, unknown>[]).map((row) => {
-      const mapped = mapDatabaseRowToOrder(row);
-      if ((!mapped.items || mapped.items.length === 0) && itemsByOrderId.has(String(row.id))) {
-        mapped.items = itemsByOrderId.get(String(row.id)) || [];
-      }
-      return normalizeOrder(mapped);
-    });
+    adminOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   await syncExpiredOrders(adminOrders);

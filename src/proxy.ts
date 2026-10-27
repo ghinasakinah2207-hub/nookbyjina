@@ -49,35 +49,26 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // Authenticated user: cross-check membership in public.admin_users
-  const { data: adminRecord } = await supabase
-    .from("admin_users")
-    .select("user_id")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  // Authenticated user on login page: verify admin role before redirecting to dashboard
+  if (isLoginPage) {
+    const { data: adminRecord } = await supabase
+      .from("admin_users")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-  const isAdmin = Boolean(adminRecord);
-
-  // Authenticated non-admin attempting to access /admin or any admin subroute
-  if (!isAdmin) {
-    if (!isLoginPage) {
+    if (adminRecord) {
       const url = request.nextUrl.clone();
-      url.pathname = "/admin/login";
-      url.searchParams.set("error", "unauthorized");
+      url.pathname = "/admin";
+      url.search = "";
       return NextResponse.redirect(url);
     }
     // Allow non-admin on /admin/login to view error and sign in with admin account
     return supabaseResponse;
   }
 
-  // Authenticated admin visiting /admin/login -> redirect to /admin dashboard
-  if (isLoginPage) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/admin";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
-
+  // On protected admin routes, user session is verified and cookies refreshed.
+  // Authoritative role verification is enforced by requireAdminAuth() in the RSC DAL.
   return supabaseResponse;
 }
 

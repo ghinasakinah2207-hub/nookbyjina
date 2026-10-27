@@ -2,7 +2,6 @@ import React from "react";
 import { requireAdminAuth } from "@/lib/supabase/admin-auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
-import { AdminShell } from "@/components/admin/AdminShell";
 import { MenuManager } from "@/components/admin/MenuManager";
 import {
   getActiveCategories,
@@ -28,7 +27,7 @@ const DEFAULT_ADDONS: Addon[] = [
 ];
 
 export default async function AdminMenuPage() {
-  const { user } = await requireAdminAuth();
+  await requireAdminAuth();
 
   let categories: Category[] = [];
   let products: Product[] = [];
@@ -44,25 +43,16 @@ export default async function AdminMenuPage() {
     products = fetchedProds.length > 0 ? fetchedProds : PRODUCTS;
     addons = fetchedAddons.length > 0 ? fetchedAddons : DEFAULT_ADDONS;
 
-    // Securely retrieve HPP via public.get_admin_products() RPC with direct table fallback for verified admin
+    // Securely retrieve HPP directly from products table for verified admin
     try {
       const serviceClient = getServiceRoleSupabaseClient();
       const supabase = serviceClient || (await createServerSupabaseClient());
-      let adminProds: { id: string; slug: string; hpp?: number | null }[] | null = null;
 
-      const { data: rpcProds, error: rpcErr } = await supabase.rpc("get_admin_products");
-      if (!rpcErr && Array.isArray(rpcProds)) {
-        adminProds = rpcProds;
-      } else {
-        const { data: directProds, error: directErr } = await supabase
-          .from("products")
-          .select("id, slug, hpp");
-        if (!directErr && Array.isArray(directProds)) {
-          adminProds = directProds;
-        }
-      }
+      const { data: adminProds, error: directErr } = await supabase
+        .from("products")
+        .select("id, slug, hpp");
 
-      if (adminProds && Array.isArray(adminProds)) {
+      if (!directErr && Array.isArray(adminProds)) {
         interface AdminRow {
           id: string;
           slug: string;
@@ -88,16 +78,10 @@ export default async function AdminMenuPage() {
   }
 
   return (
-    <AdminShell
-      userEmail={user.email}
-      pageTitle="Katalog Menu & Produk"
-      badgeText="Katalog"
-    >
-      <MenuManager
-        initialProducts={products}
-        initialCategories={categories}
-        availableAddons={addons}
-      />
-    </AdminShell>
+    <MenuManager
+      initialProducts={products}
+      initialCategories={categories}
+      availableAddons={addons}
+    />
   );
 }

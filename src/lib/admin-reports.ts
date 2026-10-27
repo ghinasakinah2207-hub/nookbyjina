@@ -553,20 +553,13 @@ export function generateSalesChartData(
 
 /**
  * Fetches all store products with their authoritative HPP.
- * Queries Supabase service-role client, or authenticated admin client.
+ * Directly queries Supabase products table using service-role client or authenticated admin client.
  */
 export async function getAdminProductsWithHppServer(): Promise<ProductHppMapItem[]> {
   const serviceClient = getServiceRoleSupabaseClient();
   const client = serviceClient || (await createServerSupabaseClient());
 
   try {
-    // 1. Try public.get_admin_products RPC
-    const { data: rpcProds, error: rpcErr } = await client.rpc("get_admin_products");
-    if (!rpcErr && Array.isArray(rpcProds)) {
-      return rpcProds as ProductHppMapItem[];
-    }
-
-    // 2. Direct table fallback
     const { data: prods, error: prodsErr } = await client
       .from("products")
       .select("id, slug, name, price, hpp");

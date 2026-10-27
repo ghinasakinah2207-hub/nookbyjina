@@ -1,6 +1,5 @@
 import React from "react";
 import { requireAdminAuth } from "@/lib/supabase/admin-auth";
-import { AdminShell } from "@/components/admin/AdminShell";
 import { HomepageSectionManager } from "@/components/admin/HomepageSectionManager";
 import { getAdminHomepageSections } from "@/lib/supabase/homepage-sections";
 import { getAdminHomeBanners } from "@/lib/supabase/banners";
@@ -14,7 +13,7 @@ import { Category, Product, HomepageSection, Banner } from "@/types";
 export const instant = false;
 
 export default async function AdminHomepageSectionsPage() {
-  const { user } = await requireAdminAuth();
+  await requireAdminAuth();
 
   let sections: HomepageSection[] = [];
   let products: Product[] = [];
@@ -41,18 +40,11 @@ export default async function AdminHomepageSectionsPage() {
   }
 
   return (
-    <AdminShell
-      userEmail={user.email}
-      pageTitle="Manajemen Seksi Beranda"
-      pageDescription="Konfigurasi banner hero beranda, susunan seksi, visibilitas, dan penugasan produk etalase beranda pelanggan"
-      badgeText="Etalase Toko"
-    >
-      <HomepageSectionManager
-        initialSections={sections}
-        catalogProducts={products}
-        categories={categories}
-        initialBanners={banners}
-      />
-    </AdminShell>
+    <HomepageSectionManager
+      initialSections={sections}
+      catalogProducts={products}
+      categories={categories}
+      initialBanners={banners}
+    />
   );
 }

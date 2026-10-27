@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from "./server";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { User } from "@supabase/supabase-js";
+import { cache } from "react";
 
 export interface AdminAuthContext {
   user: User;
@@ -10,6 +11,41 @@ export interface AdminAuthContext {
     created_at?: string;
   };
 }
+
+/**
+ * Scoped zero-trust verification helper memoized per RSC request pass.
+ * Returns the authenticated admin context or null without throwing a redirect.
+ */
+export const getAuthenticatedAdmin = cache(
+  async (): Promise<AdminAuthContext | null> => {
+    try {
+      const supabase = await createServerSupabaseClient();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (!user || userError) {
+        return null;
+      }
+
+      // Cross-check membership in public.admin_users
+      const { data: adminRecord, error: adminError } = await supabase
+        .from("admin_users")
+        .select("user_id, created_at")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (adminError || !adminRecord) {
+        return null;
+      }
+
+      return { user, adminRecord };
+    } catch {
+      return null;
+    }
+  }
+);
 
 /**
  * Server-side authorization guard for Admin pages and Server Actions.
@@ -21,39 +57,34 @@ export interface AdminAuthContext {
  * If authenticated but NOT in admin_users: immediately terminates the unauthorized session
  * and redirects to /admin/login with an explicit error query param.
  */
-export async function requireAdminAuth(): Promise<AdminAuthContext> {
+export const requireAdminAuth = cache(async (): Promise<AdminAuthContext> => {
   // Indicate rendering must wait for an incoming user request before continuing
   await connection();
 
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+  const auth = await getAuthenticatedAdmin();
 
-  if (!user || userError) {
-    redirect("/admin/login");
+  if (!auth) {
+    // Check if the caller has any session at all to determine appropriate error
+    const supabase = await createServerSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      redirect("/admin/login");
+    } else {
+      // Unauthorized: user is authenticated but not registered in public.admin_users
+      redirect("/admin/login?error=unauthorized");
+    }
   }
 
-  // Cross-check membership in public.admin_users
-  const { data: adminRecord, error: adminError } = await supabase
-    .from("admin_users")
-    .select("user_id, created_at")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (adminError || !adminRecord) {
-    // Unauthorized: user is authenticated but not registered in public.admin_users
-    redirect("/admin/login?error=unauthorized");
-  }
-
-  return { user, adminRecord };
-}
+  return auth;
+});
 
 /**
  * Check if a given user ID is registered in public.admin_users.
  */
-export async function checkIsAdmin(userId: string): Promise<boolean> {
+export const checkIsAdmin = cache(async (userId: string): Promise<boolean> => {
   await connection();
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase
@@ -63,4 +94,4 @@ export async function checkIsAdmin(userId: string): Promise<boolean> {
     .maybeSingle();
 
   return Boolean(data);
-}
+});

@@ -1,9 +1,7 @@
 import React from "react";
 import { connection } from "next/server";
 import { requireAdminAuth } from "@/lib/supabase/admin-auth";
-import { AdminShell } from "@/components/admin/AdminShell";
 import { DashboardOverview } from "@/components/admin/DashboardOverview";
-
 import { fetchAdminDashboardDataServer, DashboardMetrics } from "@/lib/admin-reports";
 import { Order } from "@/types";
 
@@ -25,16 +23,10 @@ export default async function AdminDashboardPage() {
   }
 
   return (
-    <AdminShell
-      userEmail={user.email}
-      pageTitle="Dasbor Operasional"
-      badgeText="Owner Aktif"
-    >
-      <DashboardOverview
-        user={user}
-        initialMetrics={initialMetrics}
-        initialOrders={initialOrders}
-      />
-    </AdminShell>
+    <DashboardOverview
+      user={user}
+      initialMetrics={initialMetrics}
+      initialOrders={initialOrders}
+    />
   );
 }

@@ -802,42 +802,23 @@ export async function getAdminProductForEditAction(
       }
     }
 
-    // 3. Fetch HPP via public.get_admin_products() RPC with direct table fallback (authorized admins only)
+    // 3. Fetch authoritative HPP directly from products table (authorized admins only)
     let fetchedHpp: number | null = null;
     try {
       const serviceClient = getServiceRoleSupabaseClient();
       const client = serviceClient || supabase;
 
-      const { data: adminProds, error: rpcErr } = await client.rpc("get_admin_products");
-      if (!rpcErr && Array.isArray(adminProds)) {
-        interface AdminProdRow {
-          id: string;
-          slug: string;
-          hpp?: number | null;
-        }
-        const matchingRow = (adminProds as AdminProdRow[]).find(
-          (r) =>
-            r.id === resolvedProduct.id ||
-            r.id === resolvedProduct.dbId ||
-            r.slug === resolvedProduct.slug
-        );
-        if (matchingRow && matchingRow.hpp !== undefined && matchingRow.hpp !== null) {
-          fetchedHpp = Number(matchingRow.hpp);
-        }
+      const targetId = resolvedProduct.dbId || resolvedProduct.id;
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
+      let directQuery = client.from("products").select("id, slug, hpp");
+      if (isUuid) {
+        directQuery = directQuery.eq("id", targetId);
       } else {
-        // Direct table query fallback: fetch authoritative HPP directly from products table
-        const targetId = resolvedProduct.dbId || resolvedProduct.id;
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
-        let directQuery = client.from("products").select("id, slug, hpp");
-        if (isUuid) {
-          directQuery = directQuery.eq("id", targetId);
-        } else {
-          directQuery = directQuery.eq("slug", resolvedProduct.slug || targetId);
-        }
-        const { data: directProd, error: directErr } = await directQuery.maybeSingle();
-        if (!directErr && directProd && directProd.hpp !== undefined && directProd.hpp !== null) {
-          fetchedHpp = Number(directProd.hpp);
-        }
+        directQuery = directQuery.eq("slug", resolvedProduct.slug || targetId);
+      }
+      const { data: directProd, error: directErr } = await directQuery.maybeSingle();
+      if (!directErr && directProd && directProd.hpp !== undefined && directProd.hpp !== null) {
+        fetchedHpp = Number(directProd.hpp);
       }
     } catch {
       // In dev or fallback mode, continue gracefully
