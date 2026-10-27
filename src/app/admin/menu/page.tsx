@@ -1,6 +1,7 @@
 import React from "react";
 import { requireAdminAuth } from "@/lib/supabase/admin-auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { MenuManager } from "@/components/admin/MenuManager";
 import {
@@ -43,10 +44,24 @@ export default async function AdminMenuPage() {
     products = fetchedProds.length > 0 ? fetchedProds : PRODUCTS;
     addons = fetchedAddons.length > 0 ? fetchedAddons : DEFAULT_ADDONS;
 
-    // Securely retrieve HPP via public.get_admin_products() RPC for verified admin
+    // Securely retrieve HPP via public.get_admin_products() RPC with direct table fallback for verified admin
     try {
-      const supabase = await createServerSupabaseClient();
-      const { data: adminProds } = await supabase.rpc("get_admin_products");
+      const serviceClient = getServiceRoleSupabaseClient();
+      const supabase = serviceClient || (await createServerSupabaseClient());
+      let adminProds: { id: string; slug: string; hpp?: number | null }[] | null = null;
+
+      const { data: rpcProds, error: rpcErr } = await supabase.rpc("get_admin_products");
+      if (!rpcErr && Array.isArray(rpcProds)) {
+        adminProds = rpcProds;
+      } else {
+        const { data: directProds, error: directErr } = await supabase
+          .from("products")
+          .select("id, slug, hpp");
+        if (!directErr && Array.isArray(directProds)) {
+          adminProds = directProds;
+        }
+      }
+
       if (adminProds && Array.isArray(adminProds)) {
         interface AdminRow {
           id: string;

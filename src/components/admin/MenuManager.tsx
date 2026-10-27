@@ -39,6 +39,19 @@ export function MenuManager({
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Sync state if server props change without triggering cascading render effect
+  const [prevInitialProducts, setPrevInitialProducts] = useState(initialProducts);
+  if (initialProducts !== prevInitialProducts) {
+    setPrevInitialProducts(initialProducts);
+    setProducts(initialProducts);
+  }
+
+  const [prevInitialCategories, setPrevInitialCategories] = useState(initialCategories);
+  if (initialCategories !== prevInitialCategories) {
+    setPrevInitialCategories(initialCategories);
+    setCategories(initialCategories);
+  }
+
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -280,10 +293,15 @@ export function MenuManager({
                       {product.description || "Tidak ada deskripsi"}
                     </p>
 
-                    <div className="flex items-center gap-2 pt-0.5">
+                    <div className="flex items-center gap-2 pt-0.5 flex-wrap">
                       <span className="text-xs font-extrabold text-[#111111]">
                         {formatRupiah(product.basePrice)}
                       </span>
+                      {product.hpp !== undefined && product.hpp !== null && (
+                        <span className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 rounded font-medium">
+                          HPP: {formatRupiah(product.hpp)}
+                        </span>
+                      )}
                       <span className="text-[10px] text-[#737373] bg-neutral-100 px-1.5 py-0.5 rounded">
                         {product.categoryName || "Umum"}
                       </span>

@@ -121,6 +121,9 @@ export async function createProductAction(
       return { success: false, error: authCheck.error };
     }
 
+    const serviceClient = getServiceRoleSupabaseClient();
+    const client = serviceClient || supabase;
+
     // 2. Input Validations
     const trimmedName = (input.name || "").trim();
     if (!trimmedName || trimmedName.length < 2) {
@@ -163,10 +166,10 @@ export async function createProductAction(
 
     // 3. Automatically generate a unique slug from product name
     const baseSlug = generateSlug(trimmedName);
-    let finalSlug = await resolveUniqueSlug(supabase, baseSlug);
+    let finalSlug = await resolveUniqueSlug(client, baseSlug);
 
     // 4. Calculate next sort_order
-    const { data: maxSortData } = await supabase
+    const { data: maxSortData } = await client
       .from("products")
       .select("sort_order")
       .order("sort_order", { ascending: false })
@@ -181,7 +184,7 @@ export async function createProductAction(
     let insertAttempts = 0;
 
     while (!insertSuccess && insertAttempts < 3) {
-      const { error: insertProdErr } = await supabase
+      const { error: insertProdErr } = await client
         .from("products")
         .insert({
           id: productId,
@@ -371,6 +374,9 @@ export async function updateProductAction(
       return { success: false, error: authCheck.error };
     }
 
+    const serviceClient = getServiceRoleSupabaseClient();
+    const client = serviceClient || supabase;
+
     // 2. Validate input fields
     const trimmedName = (input.name || "").trim();
     if (!trimmedName || trimmedName.length < 2) {
@@ -413,7 +419,7 @@ export async function updateProductAction(
 
     // 3. Resolve existing product by ID or slug
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.id);
-    let findQuery = supabase.from("products").select("id, slug, name, is_available, is_highlight");
+    let findQuery = client.from("products").select("id, slug, name, is_available, is_highlight, hpp");
     if (isUuid) {
       findQuery = findQuery.eq("id", input.id);
     } else {
@@ -440,7 +446,7 @@ export async function updateProductAction(
         targetSlug = existingProd.slug.trim();
       } else {
         const baseSlug = generateSlug(trimmedName);
-        targetSlug = await resolveUniqueSlug(supabase, baseSlug, resolvedProductId);
+        targetSlug = await resolveUniqueSlug(client, baseSlug, resolvedProductId);
       }
 
       // Preserve existing availability and highlight if not passed in form
@@ -454,8 +460,16 @@ export async function updateProductAction(
           ? Boolean(input.isHighlight)
           : (existingProd.is_highlight ?? false);
 
+      // Preserve existing HPP if input.hpp was not passed (undefined)
+      const finalHpp =
+        input.hpp !== undefined
+          ? hppNum
+          : existingProd.hpp !== undefined && existingProd.hpp !== null
+          ? Number(existingProd.hpp)
+          : null;
+
       // Update public.products
-      const { error: updateErr } = await supabase
+      const { error: updateErr } = await client
         .from("products")
         .update({
           category_id: input.categoryId,
@@ -463,7 +477,7 @@ export async function updateProductAction(
           slug: targetSlug,
           description: input.description?.trim() || null,
           price: priceNum,
-          hpp: hppNum,
+          hpp: finalHpp,
           is_available: finalIsAvailable,
           is_highlight: finalIsHighlight,
           updated_at: new Date().toISOString(),
@@ -482,9 +496,9 @@ export async function updateProductAction(
 
       // If an existing valid slug was passed from mock, preserve it; otherwise generate unique
       const candidateSlug = input.slug ? generateSlug(input.slug) : generateSlug(trimmedName);
-      targetSlug = await resolveUniqueSlug(supabase, candidateSlug, resolvedProductId);
+      targetSlug = await resolveUniqueSlug(client, candidateSlug, resolvedProductId);
 
-      const { data: maxSortData } = await supabase
+      const { data: maxSortData } = await client
         .from("products")
         .select("sort_order")
         .order("sort_order", { ascending: false })
@@ -493,14 +507,14 @@ export async function updateProductAction(
 
       const nextSortOrder = (maxSortData?.sort_order ?? 0) + 1;
 
-      const { error: insertErr } = await supabase.from("products").insert({
+      const { error: insertErr } = await client.from("products").insert({
         id: resolvedProductId,
         category_id: input.categoryId,
         name: trimmedName,
         slug: targetSlug,
         description: input.description?.trim() || null,
         price: priceNum,
-        hpp: hppNum,
+        hpp: input.hpp !== undefined ? hppNum : null,
         is_available: input.isAvailable !== undefined ? Boolean(input.isAvailable) : true,
         is_archived: false,
         is_highlight: input.isHighlight !== undefined ? Boolean(input.isHighlight) : false,
@@ -788,10 +802,13 @@ export async function getAdminProductForEditAction(
       }
     }
 
-    // 3. Fetch HPP via public.get_admin_products() RPC (authorized admins only)
+    // 3. Fetch HPP via public.get_admin_products() RPC with direct table fallback (authorized admins only)
     let fetchedHpp: number | null = null;
     try {
-      const { data: adminProds, error: rpcErr } = await supabase.rpc("get_admin_products");
+      const serviceClient = getServiceRoleSupabaseClient();
+      const client = serviceClient || supabase;
+
+      const { data: adminProds, error: rpcErr } = await client.rpc("get_admin_products");
       if (!rpcErr && Array.isArray(adminProds)) {
         interface AdminProdRow {
           id: string;
@@ -806,6 +823,20 @@ export async function getAdminProductForEditAction(
         );
         if (matchingRow && matchingRow.hpp !== undefined && matchingRow.hpp !== null) {
           fetchedHpp = Number(matchingRow.hpp);
+        }
+      } else {
+        // Direct table query fallback: fetch authoritative HPP directly from products table
+        const targetId = resolvedProduct.dbId || resolvedProduct.id;
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
+        let directQuery = client.from("products").select("id, slug, hpp");
+        if (isUuid) {
+          directQuery = directQuery.eq("id", targetId);
+        } else {
+          directQuery = directQuery.eq("slug", resolvedProduct.slug || targetId);
+        }
+        const { data: directProd, error: directErr } = await directQuery.maybeSingle();
+        if (!directErr && directProd && directProd.hpp !== undefined && directProd.hpp !== null) {
+          fetchedHpp = Number(directProd.hpp);
         }
       }
     } catch {
