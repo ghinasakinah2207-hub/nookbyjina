@@ -5,8 +5,8 @@ import { getAdminHomepageSections } from "@/lib/supabase/homepage-sections";
 import { getAdminHomeBanners } from "@/lib/supabase/banners";
 import {
   getActiveCategories,
-  getVisibleProducts,
 } from "@/lib/supabase/catalog";
+import { getAdminProductsServer } from "@/lib/supabase/admin-catalog";
 import { CATEGORIES, PRODUCTS } from "@/data/dummy-data";
 import { Category, Product, HomepageSection, Banner } from "@/types";
 
@@ -25,7 +25,7 @@ export default async function AdminHomepageSectionsPage() {
       await Promise.all([
         getAdminHomeBanners(),
         getAdminHomepageSections(),
-        getVisibleProducts(),
+        getAdminProductsServer(),
         getActiveCategories().catch(() => []),
       ]);
 

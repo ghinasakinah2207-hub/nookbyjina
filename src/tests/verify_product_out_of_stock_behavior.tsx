@@ -4,7 +4,13 @@ import { Product, Order, CartItem } from "@/types";
 import { ProductCard } from "@/components/product/ProductCard";
 import { CartProvider } from "@/context/CartContext";
 import { calculateReportStats } from "@/lib/admin-reports";
-import { mapDbProductToUiProduct, DbProductRow } from "@/lib/supabase/catalog";
+import {
+  mapDbProductToUiProduct,
+  DbProductRow,
+  getAdminCatalogProducts,
+} from "@/lib/supabase/catalog";
+import { getAdminProductsServer } from "@/lib/supabase/admin-catalog";
+import { SupabaseClient } from "@supabase/supabase-js";
 
 function assert(condition: boolean, message: string) {
   if (!condition) {
@@ -437,4 +443,156 @@ assert(!dbErrorResult.clearedCache && dbErrorResult.revalidated.length === 0, "D
 const blankResult = simulateToggleAction("   ", false, () => ({ data: [], error: null }));
 assert(!blankResult.success && !blankResult.clearedCache, "Blank identifier rejected before DB call");
 
-console.log("\n🎉 ALL 8 OUT-OF-STOCK REGRESSION TEST SUITES PASSED SUCCESSFULLY!\n");
+// =========================================================================
+// 9. Testing Dedicated Admin Product Loader (getAdminCatalogProducts & getAdminProductsServer)
+// =========================================================================
+console.log("\n--- 9. Testing Dedicated Admin Product Loader ---");
+
+// Mock Supabase client for getAdminCatalogProducts
+function createMockAdminClient(
+  mockRows: DbProductRow[],
+  errorToThrow: { message: string } | null = null
+) {
+  return {
+    from: (table: string) => {
+      assert(table === "products", `Admin loader queries table 'products'`);
+      return {
+        select: (columns: string) => {
+          assert(columns.includes("hpp"), "Admin loader explicitly selects HPP column");
+          assert(columns.includes("is_available"), "Admin loader selects is_available column");
+          assert(columns.includes("is_archived"), "Admin loader selects is_archived column");
+          assert(columns.includes("categories"), "Admin loader joins categories relation");
+          assert(columns.includes("product_images"), "Admin loader joins product_images relation");
+          return {
+            eq: (col: string, val: unknown) => {
+              assert(col === "is_archived" && val === false, "Admin loader queries is_archived = false");
+              return {
+                order: (orderCol: string, opts: { ascending: boolean }) => {
+                  assert(orderCol === "sort_order" && opts.ascending === true, "Admin loader orders by sort_order ASC");
+                  if (errorToThrow) {
+                    return Promise.resolve({ data: null, error: errorToThrow });
+                  }
+                  const filtered = mockRows.filter((r) => r.is_archived === false);
+                  return Promise.resolve({ data: filtered, error: null });
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  } as unknown as SupabaseClient;
+}
+
+const mockDbRows: DbProductRow[] = [
+  {
+    id: "b0000001-0000-4000-8000-000000000001",
+    name: "Nasi Bakar Cakalang",
+    slug: "nasi-bakar-cakalang",
+    description: "Nasi bakar gurih",
+    price: 25000,
+    hpp: 10000,
+    is_available: true,
+    is_archived: false,
+    sort_order: 1,
+    category_id: "cat-1",
+    tags: [],
+    categories: { id: "cat-1", name: "Makanan", slug: "makanan" },
+    product_images: [{ id: "img-1", image_url: "/images/nasi-bakar.webp", sort_order: 1 }],
+  },
+  {
+    id: "b0000001-0000-4000-8000-000000000003",
+    name: "Risol Mayo Beef (Habis)",
+    slug: "risol-mayo-beef",
+    description: "Risol gurih lumer",
+    price: 18000,
+    hpp: 7500,
+    is_available: false, // OUT OF STOCK!
+    is_archived: false,
+    sort_order: 2,
+    category_id: "cat-2",
+    tags: [],
+    categories: { id: "cat-2", name: "Snack", slug: "snack" },
+    product_images: [{ id: "img-2", image_url: "/images/risol.webp", sort_order: 1 }],
+  },
+  {
+    id: "b0000001-0000-4000-8000-000000000099",
+    name: "Produk Terarsip",
+    slug: "produk-terarsip",
+    description: "Menu lama yang diarsipkan",
+    price: 10000,
+    hpp: 4000,
+    is_available: false,
+    is_archived: true, // ARCHIVED!
+    sort_order: 99,
+    category_id: "cat-1",
+    tags: [],
+    categories: { id: "cat-1", name: "Makanan", slug: "makanan" },
+    product_images: [],
+  },
+];
+
+async function runAdminLoaderTests() {
+  const mockClient = createMockAdminClient(mockDbRows);
+  const adminProducts = await getAdminCatalogProducts(mockClient);
+
+  assert(adminProducts.length === 2, "Admin loader returns exactly 2 non-archived products");
+
+  const available = adminProducts.find((p) => p.slug === "nasi-bakar-cakalang");
+  assert(Boolean(available && available.isAvailable === true), "Admin loader includes available products (isAvailable: true)");
+  assert(available?.hpp === 10000, "Admin loader preserves HPP on available products (hpp: 10000)");
+
+  const outOfStock = adminProducts.find((p) => p.slug === "risol-mayo-beef");
+  assert(Boolean(outOfStock && outOfStock.isAvailable === false), "Admin loader includes OUT-OF-STOCK products (isAvailable: false)");
+  assert(outOfStock?.hpp === 7500, "Admin loader preserves HPP on out-of-stock products (hpp: 7500)");
+
+  const archived = adminProducts.find((p) => p.slug === "produk-terarsip");
+  assert(!archived, "Admin loader strictly excludes archived products (is_archived: true)");
+
+  // Test getAdminProductsServer with client override
+  const serverProds = await getAdminProductsServer(mockClient);
+  assert(serverProds.length === 2, "getAdminProductsServer returns non-archived products including out-of-stock");
+  assert(serverProds.some((p) => !p.isAvailable), "getAdminProductsServer preserves isAvailable=false for admin menu view");
+
+  // Test error handling without dummy PRODUCTS fallback
+  const errorClient = createMockAdminClient([], { message: "Database connection failed" });
+  let errorCaught = false;
+  try {
+    await getAdminCatalogProducts(errorClient);
+  } catch (err: unknown) {
+    errorCaught = true;
+    const msg = err instanceof Error ? err.message : String(err);
+    assert(msg.includes("Database connection failed"), "Admin loader propagates database error message");
+  }
+  assert(errorCaught, "Admin loader throws on database failure instead of masking with dummy data");
+
+  // =========================================================================
+  // 10. Testing Public Catalog Security & HPP Isolation Invariants
+  // =========================================================================
+  console.log("\n--- 10. Testing Public Catalog Security & Isolation ---");
+
+  // Ensure mapDbProductToUiProduct maps hpp only when present on row
+  const rowWithoutHpp: DbProductRow = {
+    id: "prod-pub",
+    name: "Produk Publik",
+    slug: "produk-publik",
+    description: "",
+    price: 15000,
+    is_available: false, // out-of-stock
+    is_archived: false,
+    sort_order: 1,
+    category_id: "cat-1",
+    categories: null,
+    product_images: null,
+  };
+  const publicUiProduct = mapDbProductToUiProduct(rowWithoutHpp);
+  assert(publicUiProduct.hpp === undefined, "Public product row without hpp column produces undefined hpp in UI model");
+  assert(publicUiProduct.isAvailable === false, "Public product correctly receives isAvailable: false for badge rendering");
+  assert(publicUiProduct.isArchived === false, "Public product correctly receives isArchived: false");
+
+  console.log("\n🎉 ALL 10 OUT-OF-STOCK REGRESSION TEST SUITES PASSED SUCCESSFULLY!\n");
+}
+runAdminLoaderTests().catch((err) => {
+  console.error("Test suite failed:", err);
+  process.exit(1);
+});

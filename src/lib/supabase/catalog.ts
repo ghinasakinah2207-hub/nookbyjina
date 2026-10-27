@@ -1,4 +1,5 @@
 import { supabase } from "./client";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { Category, Product, OptionGroup, OptionValue, Addon } from "@/types";
 import { getDefaultIconForSlug } from "@/lib/category-icons";
 
@@ -22,6 +23,7 @@ export interface DbProductRow {
   slug: string;
   description: string | null;
   price: number;
+  hpp?: number | null;
   is_available: boolean;
   is_archived: boolean;
   is_highlight?: boolean;
@@ -138,6 +140,7 @@ export function mapDbProductToUiProduct(row: DbProductRow): Product & { category
     optionGroups: [],
     addons: [],
     isHighlight: Boolean(row.is_highlight),
+    hpp: row.hpp !== undefined && row.hpp !== null ? Number(row.hpp) : undefined,
   };
 }
 
@@ -262,6 +265,48 @@ export async function getVisibleProducts(bypassCache = false): Promise<Product[]
 }
 
 /**
+ * Dedicated admin catalog loader that queries all non-archived products (is_archived = false),
+ * including both available and out-of-stock products, categories, images, and HPP.
+ * Requires an authenticated admin SupabaseClient.
+ */
+export async function getAdminCatalogProducts(client: SupabaseClient): Promise<Product[]> {
+  const { data, error } = await client
+    .from("products")
+    .select(`
+      id,
+      name,
+      slug,
+      description,
+      price,
+      hpp,
+      is_available,
+      is_archived,
+      is_highlight,
+      sort_order,
+      category_id,
+      tags,
+      categories (
+        id,
+        name,
+        slug
+      ),
+      product_images (
+        id,
+        image_url,
+        sort_order
+      )
+    `)
+    .eq("is_archived", false)
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    throw new Error(`Gagal memuat produk admin: ${error.message}`);
+  }
+
+  return (data || []).map((row) => mapDbProductToUiProduct(row as unknown as DbProductRow));
+}
+
+/**
  * Fetch limited recommended products for a given category/product.
  * Matches category or is_highlight=true, non-archived, excludes current product.
  */
@@ -355,9 +400,14 @@ export async function getRecommendedProducts(
  * Fetch a single product by slug or UUID with all images, option groups,
  * option values, and linked addons from Supabase.
  */
-export async function getProductBySlugOrId(identifier: string, bypassCache = false): Promise<Product | null> {
+export async function getProductBySlugOrId(
+  identifier: string,
+  bypassCache = false,
+  clientOverride?: SupabaseClient
+): Promise<Product | null> {
+  const dbClient = clientOverride || supabase;
   const now = performance.now();
-  if (!bypassCache) {
+  if (!bypassCache && !clientOverride) {
     const cached = singleProductCache.get(identifier);
     if (cached && now - cached.timestamp < CACHE_TTL_MS) {
       return cached.data;
@@ -366,7 +416,7 @@ export async function getProductBySlugOrId(identifier: string, bypassCache = fal
 
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
 
-  let query = supabase
+  let query = dbClient
     .from("products")
     .select(`
       id,
@@ -410,7 +460,7 @@ export async function getProductBySlugOrId(identifier: string, bypassCache = fal
 
   // Fetch option groups with values, and linked addons in parallel
   const [optionGroupsRes, addonsRes] = await Promise.all([
-    supabase
+    dbClient
       .from("product_option_groups")
       .select(`
         id,
@@ -432,7 +482,7 @@ export async function getProductBySlugOrId(identifier: string, bypassCache = fal
       .eq("product_id", productRow.id)
       .order("sort_order", { ascending: true }),
 
-    supabase
+    dbClient
       .from("product_addons")
       .select(`
         product_id,
@@ -507,12 +557,14 @@ export async function getProductBySlugOrId(identifier: string, bypassCache = fal
     addons,
   };
 
-  singleProductCache.set(identifier, { data: fullProduct, timestamp: now });
-  if (fullProduct.id && fullProduct.id !== identifier) {
-    singleProductCache.set(fullProduct.id, { data: fullProduct, timestamp: now });
-  }
-  if (fullProduct.slug && fullProduct.slug !== identifier) {
-    singleProductCache.set(fullProduct.slug, { data: fullProduct, timestamp: now });
+  if (!clientOverride) {
+    singleProductCache.set(identifier, { data: fullProduct, timestamp: now });
+    if (fullProduct.id && fullProduct.id !== identifier) {
+      singleProductCache.set(fullProduct.id, { data: fullProduct, timestamp: now });
+    }
+    if (fullProduct.slug && fullProduct.slug !== identifier) {
+      singleProductCache.set(fullProduct.slug, { data: fullProduct, timestamp: now });
+    }
   }
 
   return fullProduct;

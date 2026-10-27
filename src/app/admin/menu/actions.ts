@@ -783,8 +783,11 @@ export async function getAdminProductForEditAction(
       return { success: false, error: authCheck.error };
     }
 
-    // 2. Fetch product by slug or id using existing catalog loader
-    const baseProduct = await getProductBySlugOrId(identifier);
+    const serviceClient = getServiceRoleSupabaseClient();
+    const client = serviceClient || supabase;
+
+    // 2. Fetch product by slug or id using catalog loader with authenticated admin client
+    const baseProduct = await getProductBySlugOrId(identifier, true, client);
 
     // Fallback to dummy PRODUCTS if not yet seeded in database
     let resolvedProduct: Product;
@@ -805,9 +808,6 @@ export async function getAdminProductForEditAction(
     // 3. Fetch authoritative HPP directly from products table (authorized admins only)
     let fetchedHpp: number | null = null;
     try {
-      const serviceClient = getServiceRoleSupabaseClient();
-      const client = serviceClient || supabase;
-
       const targetId = resolvedProduct.dbId || resolvedProduct.id;
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
       let directQuery = client.from("products").select("id, slug, hpp");

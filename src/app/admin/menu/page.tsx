@@ -1,15 +1,14 @@
 import React from "react";
 import { requireAdminAuth } from "@/lib/supabase/admin-auth";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
 import { MenuManager } from "@/components/admin/MenuManager";
 import {
   getActiveCategories,
-  getVisibleProducts,
   getActiveAddons,
 } from "@/lib/supabase/catalog";
-import { CATEGORIES, PRODUCTS } from "@/data/dummy-data";
+import { getAdminProductsServer } from "@/lib/supabase/admin-catalog";
+import { CATEGORIES } from "@/data/dummy-data";
 import { Category, Product, Addon } from "@/types";
+import { AlertTriangle } from "lucide-react";
 
 export const instant = false;
 
@@ -32,49 +31,36 @@ export default async function AdminMenuPage() {
   let categories: Category[] = [];
   let products: Product[] = [];
   let addons: Addon[] = [];
+  let loadError: string | null = null;
 
   try {
     const [fetchedCats, fetchedProds, fetchedAddons] = await Promise.all([
       getActiveCategories(),
-      getVisibleProducts(),
+      getAdminProductsServer(),
       getActiveAddons(),
     ]);
     categories = fetchedCats.length > 0 ? fetchedCats : CATEGORIES;
-    products = fetchedProds.length > 0 ? fetchedProds : PRODUCTS;
+    products = fetchedProds;
     addons = fetchedAddons.length > 0 ? fetchedAddons : DEFAULT_ADDONS;
+  } catch (err: unknown) {
+    const msg =
+      err instanceof Error
+        ? err.message
+        : "Terjadi kesalahan saat memuat data menu dari database.";
+    console.error("[AdminMenuPage] Data loading failed:", err);
+    loadError = msg;
+  }
 
-    // Securely retrieve HPP directly from products table for verified admin
-    try {
-      const serviceClient = getServiceRoleSupabaseClient();
-      const supabase = serviceClient || (await createServerSupabaseClient());
-
-      const { data: adminProds, error: directErr } = await supabase
-        .from("products")
-        .select("id, slug, hpp");
-
-      if (!directErr && Array.isArray(adminProds)) {
-        interface AdminRow {
-          id: string;
-          slug: string;
-          hpp?: number | null;
-        }
-        products = products.map((p) => {
-          const match = (adminProds as AdminRow[]).find(
-            (r) => r.id === p.id || r.id === p.dbId || r.slug === p.slug
-          );
-          if (match && match.hpp !== undefined && match.hpp !== null) {
-            return { ...p, hpp: Number(match.hpp) };
-          }
-          return p;
-        });
-      }
-    } catch {
-      // Graceful fallback for offline / development session
-    }
-  } catch {
-    categories = CATEGORIES;
-    products = PRODUCTS;
-    addons = DEFAULT_ADDONS;
+  if (loadError) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center space-y-2">
+        <h3 className="text-sm font-bold text-red-800 flex items-center justify-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-red-600" />
+          Gagal Memuat Menu Admin
+        </h3>
+        <p className="text-xs text-red-600">{loadError}</p>
+      </div>
+    );
   }
 
   return (
