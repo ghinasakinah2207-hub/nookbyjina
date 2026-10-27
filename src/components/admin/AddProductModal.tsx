@@ -78,7 +78,6 @@ export function AddProductModal({
 function ProductFormModalContent({
   onClose,
   categories,
-  availableAddons = [],
   initialProduct,
   onProductCreated,
   onProductUpdated,
@@ -338,24 +337,6 @@ function ProductFormModalContent({
     setProductAddons((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const handleAddFromMaster = (master: Addon) => {
-    setProductAddons((prev) => {
-      const exists = prev.some(
-        (p) =>
-          (p.id && p.id === master.id) ||
-          p.name.trim().toLowerCase() === master.name.trim().toLowerCase()
-      );
-      if (exists) return prev;
-      return [
-        ...prev,
-        {
-          id: master.id,
-          name: master.name,
-          price: String(master.price ?? 0),
-        },
-      ];
-    });
-  };
 
   // Submit handler
   const handleSubmit = async (e: React.FormEvent) => {
@@ -921,16 +902,17 @@ function ProductFormModalContent({
               <button
                 type="button"
                 onClick={handleAddOptionGroup}
-                className="inline-flex items-center gap-1 text-[11px] text-[#F25B09] hover:underline font-semibold cursor-pointer"
+                aria-label="+ Varian"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#F25B09] bg-white hover:bg-orange-50 text-[#F25B09] text-xs font-semibold transition-colors cursor-pointer shadow-xs"
               >
-                <Plus className="w-3 h-3" />
-                <span>Tambah Grup Opsi</span>
+                <Plus className="w-3.5 h-3.5" />
+                <span>Varian</span>
               </button>
             </div>
 
             {optionGroups.length === 0 ? (
               <p className="text-[11px] text-[#737373] italic">
-                Menu ini belum memiliki grup opsi. Klik &ldquo;Tambah Grup Opsi&rdquo; jika produk memerlukan pilihan varian seperti level pedas atau porsi.
+                Menu ini belum memiliki grup opsi. Klik &ldquo;+ Varian&rdquo; jika produk memerlukan pilihan varian seperti level pedas atau porsi.
               </p>
             ) : (
               <div className="space-y-2.5">
@@ -1086,50 +1068,19 @@ function ProductFormModalContent({
               <button
                 type="button"
                 onClick={handleAddAddon}
-                className="inline-flex items-center gap-1 text-[11px] text-[#F25B09] hover:underline font-semibold cursor-pointer"
+                aria-label="+ Add-on"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#F25B09] bg-white hover:bg-orange-50 text-[#F25B09] text-xs font-semibold transition-colors cursor-pointer shadow-xs"
               >
-                <Plus className="w-3 h-3" />
-                <span>Tambah Add-on Baru</span>
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add-on</span>
               </button>
             </div>
-
-            {/* Master Add-on Quick Selector */}
-            {availableAddons.length > 0 && (
-              <div className="flex items-center gap-2 text-[11px] text-[#737373]">
-                <span className="flex-shrink-0">Pilih dari master:</span>
-                <select
-                  onChange={(e) => {
-                    const found = availableAddons.find((a) => a.id === e.target.value);
-                    if (found) handleAddFromMaster(found);
-                    e.target.value = "";
-                  }}
-                  defaultValue=""
-                  className="px-2.5 py-1 bg-white border border-[#E5E5E5] rounded-lg text-xs font-medium text-[#111111] focus:outline-none focus:border-[#F25B09] cursor-pointer"
-                >
-                  <option value="" disabled>-- Tambahkan Master Add-on Tersedia --</option>
-                  {availableAddons
-                    .filter(
-                      (ma) =>
-                        !productAddons.some(
-                          (pa) =>
-                            (pa.id && pa.id === ma.id) ||
-                            pa.name.trim().toLowerCase() === ma.name.trim().toLowerCase()
-                        )
-                    )
-                    .map((ma) => (
-                      <option key={ma.id} value={ma.id}>
-                        {ma.name} (+{formatRupiah(ma.price)})
-                      </option>
-                    ))}
-                </select>
-              </div>
-            )}
 
             {productAddons.length === 0 ? (
               <div className="p-3.5 rounded-xl border border-dashed border-neutral-200 bg-[#FAF9F8] text-center space-y-1">
                 <p className="text-xs font-semibold text-[#111111]">Belum Ada Add-on / Ekstra</p>
                 <p className="text-[11px] text-[#737373]">
-                  Klik &ldquo;+ Tambah Add-on Baru&rdquo; untuk membuat opsi ekstra seperti sambal, telur, atau kerupuk khusus untuk menu ini, atau pilih dari daftar master.
+                  Klik &ldquo;+ Add-on&rdquo; untuk menambahkan opsi ekstra seperti sambal, telur, atau kerupuk khusus untuk menu ini.
                 </p>
               </div>
             ) : (

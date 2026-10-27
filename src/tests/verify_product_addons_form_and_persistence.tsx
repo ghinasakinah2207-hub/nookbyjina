@@ -78,12 +78,21 @@ assert(
   "Form Tambah Menu renders '5. Add-on / Ekstra' section header"
 );
 assert(
-  addModalHtml.includes("Tambah Add-on Baru"),
-  "Form Tambah Menu renders '+ Tambah Add-on Baru' action button"
+  addModalHtml.includes("Add-on") &&
+    addModalHtml.includes("border-[#F25B09]") &&
+    addModalHtml.includes("text-[#F25B09]") &&
+    addModalHtml.includes("rounded-xl"),
+  "Form Tambah Menu renders outlined orange '+ Add-on' action button"
 );
 assert(
-  addModalHtml.includes("Pilih dari master:"),
-  "Form Tambah Menu provides master addon quick picker option"
+  addModalHtml.includes("Varian") &&
+    addModalHtml.includes("+ Varian") &&
+    addModalHtml.includes("border-[#F25B09]"),
+  "Form Tambah Menu renders outlined orange '+ Varian' action button"
+);
+assert(
+  !addModalHtml.includes("Pilih dari master:"),
+  "Form Tambah Menu removes master addon dropdown picker UI"
 );
 assert(
   addModalHtml.includes("Belum Ada Add-on / Ekstra"),
