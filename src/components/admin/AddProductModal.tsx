@@ -589,10 +589,11 @@ function ProductFormModalContent({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block font-semibold text-[#111111] mb-1">
+                <label htmlFor="product-name" className="block font-semibold text-[#111111] mb-1">
                   Nama Produk <span className="text-red-500">*</span>
                 </label>
                 <input
+                  id="product-name"
                   type="text"
                   required
                   value={name}
@@ -603,10 +604,11 @@ function ProductFormModalContent({
               </div>
 
               <div>
-                <label className="block font-semibold text-[#111111] mb-1">
+                <label htmlFor="product-category" className="block font-semibold text-[#111111] mb-1">
                   Kategori Menu <span className="text-red-500">*</span>
                 </label>
                 <select
+                  id="product-category"
                   required
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
@@ -619,6 +621,20 @@ function ProductFormModalContent({
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="product-description" className="block font-semibold text-[#111111] mb-1">
+                Deskripsi Produk <span className="text-[11px] text-[#737373] font-normal">(Opsional)</span>
+              </label>
+              <textarea
+                id="product-description"
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="cth: Nasi bakar gurih beraroma daun pisang dengan isian suwiran ikan cakalang asap bumbu pedas khas Manado."
+                className="w-full px-3 py-2 bg-white border border-[#E5E5E5] rounded-xl text-xs text-[#111111] placeholder:text-[#737373] focus:border-[#111111] outline-none transition-colors resize-y leading-relaxed"
+              />
             </div>
           </div>
 

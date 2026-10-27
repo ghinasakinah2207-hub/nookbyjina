@@ -14,7 +14,7 @@ export interface CreateProductInput {
   name: string;
   slug?: string;
   categoryId: string;
-  description?: string;
+  description?: string | null;
   price: number;
   hpp?: number | null;
   isAvailable?: boolean;
@@ -45,7 +45,7 @@ export interface UpdateProductInput {
   name: string;
   slug?: string;
   categoryId: string;
-  description?: string;
+  description?: string | null;
   price: number;
   hpp?: number | null;
   isAvailable?: boolean;
@@ -419,7 +419,7 @@ export async function updateProductAction(
 
     // 3. Resolve existing product by ID or slug
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.id);
-    let findQuery = client.from("products").select("id, slug, name, is_available, is_highlight, hpp");
+    let findQuery = client.from("products").select("id, slug, name, is_available, is_highlight, hpp, description");
     if (isUuid) {
       findQuery = findQuery.eq("id", input.id);
     } else {
@@ -468,6 +468,12 @@ export async function updateProductAction(
           ? Number(existingProd.hpp)
           : null;
 
+      // Preserve existing description if input.description was not passed (undefined)
+      const finalDescription =
+        input.description !== undefined
+          ? (input.description?.trim() || null)
+          : (existingProd.description ?? null);
+
       // Update public.products
       const { error: updateErr } = await client
         .from("products")
@@ -475,7 +481,7 @@ export async function updateProductAction(
           category_id: input.categoryId,
           name: trimmedName,
           slug: targetSlug,
-          description: input.description?.trim() || null,
+          description: finalDescription,
           price: priceNum,
           hpp: finalHpp,
           is_available: finalIsAvailable,
@@ -512,7 +518,7 @@ export async function updateProductAction(
         category_id: input.categoryId,
         name: trimmedName,
         slug: targetSlug,
-        description: input.description?.trim() || null,
+        description: input.description !== undefined ? (input.description?.trim() || null) : null,
         price: priceNum,
         hpp: input.hpp !== undefined ? hppNum : null,
         is_available: input.isAvailable !== undefined ? Boolean(input.isAvailable) : true,
