@@ -7,6 +7,7 @@ import {
   isPendingQrisStatus,
   isPendingCashStatus,
   isPaidStatus,
+  isOrderExpired,
 } from "@/lib/orders-store";
 
 export type ReportTimeRange = "today" | "7days" | "30days" | "all";
@@ -182,13 +183,14 @@ export function calculateDashboardMetrics(
   let dibatalkanPayment = 0;
 
   for (const order of orders) {
-    const isCancelled = order.orderStatus === "Dibatalkan";
+    const isExpired = isOrderExpired(order);
+    const isCancelled = order.orderStatus === "Dibatalkan" || isExpired;
     const isPaid = order.paymentStatus === "Lunas";
     const orderWibKey = getWIBDateKey(order.createdAt);
     const isToday = orderWibKey === todayKey;
 
     // Order status counts
-    if (order.orderStatus === "Pesanan baru") {
+    if (order.orderStatus === "Pesanan baru" && !isExpired) {
       newOrdersCount++;
     } else if (order.orderStatus === "Diproses" || order.orderStatus === "Siap") {
       inProgressCount++;
@@ -204,14 +206,14 @@ export function calculateDashboardMetrics(
     const isPaidOrder = isPaidStatus(order.paymentStatus);
 
     // Payment verification antrean
-    if (isQris && isPendingVerifikasi) {
+    if (isQris && isPendingVerifikasi && !isExpired) {
       pendingQrisCount++;
     }
 
     // Payment status distribution
     if (isPaidOrder) {
       lunas++;
-    } else if (isPendingVerifikasi) {
+    } else if (isPendingVerifikasi && !isExpired) {
       menungguVerifikasi++;
       unpaidOrdersCount++;
     } else if (isPendingPembayaran) {
@@ -219,6 +221,7 @@ export function calculateDashboardMetrics(
       unpaidOrdersCount++;
     } else if (
       order.paymentStatus === "Dibatalkan" ||
+      isExpired ||
       String(order.paymentStatus || "").toLowerCase() === "dibatalkan" ||
       String(order.paymentStatus || "").toLowerCase() === "gagal"
     ) {

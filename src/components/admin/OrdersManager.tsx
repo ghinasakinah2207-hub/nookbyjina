@@ -21,7 +21,12 @@ import { StatusBadge } from "@/components/ui/Badge";
 import { formatRupiah } from "@/data/dummy-data";
 import { OrderReceipt } from "./OrderReceipt";
 import { printThermalReceipt } from "@/lib/print-receipt";
-import { isQrisMethod, isPendingQrisStatus, isPendingCashStatus } from "@/lib/order-normalizer";
+import {
+  isQrisMethod,
+  isPendingQrisStatus,
+  isPendingCashStatus,
+  isOrderExpired,
+} from "@/lib/order-normalizer";
 
 type FilterTab = "semua" | "verifikasi" | "kas" | "berjalan" | "selesai" | "dibatalkan";
 
@@ -39,14 +44,31 @@ export function OrdersManager() {
   const [printError, setPrintError] = useState<string | null>(null);
 
   React.useEffect(() => {
-    fetch("/api/admin/orders")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data && data.success && Array.isArray(data.orders)) {
-          mergeOrders(data.orders);
-        }
-      })
-      .catch(() => {});
+    let ignore = false;
+    const fetchOrders = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      fetch("/api/admin/orders")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!ignore && data && data.success && Array.isArray(data.orders)) {
+            mergeOrders(data.orders);
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 15000);
+    const handleVis = () => {
+      if (document.visibilityState === "visible") fetchOrders();
+    };
+    document.addEventListener("visibilitychange", handleVis);
+
+    return () => {
+      ignore = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVis);
+    };
   }, [mergeOrders]);
 
   const handlePrintReceipt = (order: Order) => {
@@ -64,13 +86,13 @@ export function OrdersManager() {
   const tabCounts = useMemo(() => {
     return {
       semua: orders.length,
-      verifikasi: orders.filter((o) => isQrisMethod(o.paymentMethod) && isPendingQrisStatus(o.paymentStatus)).length,
+      verifikasi: orders.filter((o) => isQrisMethod(o.paymentMethod) && isPendingQrisStatus(o.paymentStatus) && !isOrderExpired(o)).length,
       kas: orders.filter((o) => o.paymentMethod === "Cash" && isPendingCashStatus(o.paymentStatus)).length,
       berjalan: orders.filter(
-        (o) => o.orderStatus === "Pesanan baru" || o.orderStatus === "Diproses" || o.orderStatus === "Siap"
+        (o) => (o.orderStatus === "Pesanan baru" || o.orderStatus === "Diproses" || o.orderStatus === "Siap") && !isOrderExpired(o)
       ).length,
       selesai: orders.filter((o) => o.orderStatus === "Selesai").length,
-      dibatalkan: orders.filter((o) => o.orderStatus === "Dibatalkan").length,
+      dibatalkan: orders.filter((o) => o.orderStatus === "Dibatalkan" || isOrderExpired(o)).length,
     };
   }, [orders]);
 
@@ -80,17 +102,17 @@ export function OrdersManager() {
 
     // Filter by tab
     if (activeTab === "verifikasi") {
-      result = result.filter((o) => isQrisMethod(o.paymentMethod) && isPendingQrisStatus(o.paymentStatus));
+      result = result.filter((o) => isQrisMethod(o.paymentMethod) && isPendingQrisStatus(o.paymentStatus) && !isOrderExpired(o));
     } else if (activeTab === "kas") {
       result = result.filter((o) => o.paymentMethod === "Cash" && isPendingCashStatus(o.paymentStatus));
     } else if (activeTab === "berjalan") {
       result = result.filter(
-        (o) => o.orderStatus === "Pesanan baru" || o.orderStatus === "Diproses" || o.orderStatus === "Siap"
+        (o) => (o.orderStatus === "Pesanan baru" || o.orderStatus === "Diproses" || o.orderStatus === "Siap") && !isOrderExpired(o)
       );
     } else if (activeTab === "selesai") {
       result = result.filter((o) => o.orderStatus === "Selesai");
     } else if (activeTab === "dibatalkan") {
-      result = result.filter((o) => o.orderStatus === "Dibatalkan");
+      result = result.filter((o) => o.orderStatus === "Dibatalkan" || isOrderExpired(o));
     }
 
     // Filter by search query (Order ID or Customer Name)
@@ -129,6 +151,18 @@ export function OrdersManager() {
 
   const handleMarkLunas = async (orderId: string) => {
     if (processingRef.current || processingOrderId) return;
+
+    const targetOrder = orders.find((o) => o.id === orderId);
+    if (targetOrder && isOrderExpired(targetOrder)) {
+      alert("Batas waktu pembayaran pesanan telah kedaluwarsa (30 menit). Pembayaran tidak dapat diverifikasi.");
+      setConfirmLunasOrder(null);
+      fetch("/api/admin/orders")
+        .then((r) => r.json())
+        .then((d) => d.success && mergeOrders(d.orders))
+        .catch(() => {});
+      return;
+    }
+
     processingRef.current = true;
     setProcessingOrderId(orderId);
     try {
@@ -415,8 +449,9 @@ export function OrdersManager() {
             });
 
             const isCashOrder = order.paymentMethod === "Cash";
+            const isExpired = isOrderExpired(order);
             const needsQrisVerification =
-              !isCashOrder && order.paymentStatus === "Menunggu Verifikasi";
+              !isCashOrder && order.paymentStatus === "Menunggu Verifikasi" && !isExpired;
             const needsCashReceipt =
               isCashOrder && order.paymentStatus === "Menunggu Pembayaran";
 
@@ -455,8 +490,13 @@ export function OrdersManager() {
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <StatusBadge status={order.paymentStatus} type="payment" />
-                    <StatusBadge status={order.orderStatus} type="order" />
+                    <StatusBadge status={isExpired ? "Dibatalkan" : order.paymentStatus} type="payment" />
+                    <StatusBadge status={isExpired ? "Dibatalkan" : order.orderStatus} type="order" />
+                    {isExpired && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                        Kedaluwarsa (30 Menit)
+                      </span>
+                    )}
                   </div>
                 </div>
 

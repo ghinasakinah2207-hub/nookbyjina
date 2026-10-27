@@ -17,7 +17,7 @@ import { StatusBadge } from "@/components/ui/Badge";
 import { useOrder } from "@/context/OrderContext";
 import { formatRupiah, STORE_SETTINGS } from "@/data/dummy-data";
 import { saveOrderToken, getOrderToken } from "@/lib/order-token-vault";
-import { isPendingQrisStatus, isPendingCashStatus } from "@/lib/order-normalizer";
+import { isPendingQrisStatus, isPendingCashStatus, isOrderExpired } from "@/lib/order-normalizer";
 import { Order } from "@/types";
 import { Suspense } from "react";
 
@@ -388,8 +388,8 @@ Terima kasih telah memesan di Nook by Jina!`;
 
           {/* Status Indicators */}
           <div className="pt-3 border-t border-[#E5E5E5] flex flex-wrap items-center gap-2">
-            <StatusBadge status={order.orderStatus} type="order" />
-            <StatusBadge status={order.paymentStatus} type="payment" />
+            <StatusBadge status={isOrderExpired(order) ? "Dibatalkan" : order.orderStatus} type="order" />
+            <StatusBadge status={isOrderExpired(order) ? "Dibatalkan" : order.paymentStatus} type="payment" />
           </div>
 
           <div className="text-[10px] text-[#737373] flex items-center justify-between pt-1">
@@ -405,8 +405,18 @@ Terima kasih telah memesan di Nook by Jina!`;
           </div>
         </section>
 
-        {/* Payment Banner if pending or lunas */}
-        {isPendingQrisStatus(order.paymentStatus) ? (
+        {/* Payment Banner if pending, lunas, or expired */}
+        {order.orderStatus === "Dibatalkan" || order.paymentStatus === "Dibatalkan" || isOrderExpired(order) ? (
+          <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl space-y-1 text-xs text-[#B42318]">
+            <div className="flex items-center gap-1.5 font-semibold text-red-900">
+              <span className="w-2 h-2 rounded-full bg-red-500" />
+              <span>Pesanan Kedaluwarsa / Dibatalkan</span>
+            </div>
+            <p className="text-[11px] text-red-800 leading-relaxed">
+              Batas waktu pembayaran QRIS (30 menit) telah berakhir atau pesanan telah dibatalkan oleh sistem.
+            </p>
+          </div>
+        ) : isPendingQrisStatus(order.paymentStatus) ? (
           <div className="p-3.5 bg-[#FFF4E5] border border-[#FBD38D] rounded-xl flex items-center justify-between text-xs text-[#8A4B08]">
             <div>
               <p className="font-semibold">Pembayaran Menunggu Verifikasi</p>

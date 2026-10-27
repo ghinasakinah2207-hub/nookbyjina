@@ -66,6 +66,81 @@ export function isPaidStatus(status?: unknown): boolean {
   return String(status).trim().toLowerCase() === "lunas";
 }
 
+export const ORDER_PAYMENT_DEADLINE_MS = 30 * 60 * 1000;
+
+/**
+ * Checks whether an order has exceeded its authoritative 30-minute QRIS payment window.
+ *
+ * Invariants:
+ * 1. Paid orders ("Lunas") never expire.
+ * 2. In-progress or completed orders ("Diproses", "Siap", "Selesai") never expire.
+ * 3. Already cancelled orders return true (already expired/cancelled).
+ * 4. Applies to QRIS orders waiting for verification or initial order creation.
+ * 5. Uses UTC timestamp parsing for timezone-agnostic comparison against nowMs (default: Date.now()).
+ */
+export function isOrderExpired(
+  order?: {
+    paymentMethod?: unknown;
+    payment_method?: unknown;
+    paymentDeadline?: unknown;
+    payment_deadline?: unknown;
+    paymentStatus?: unknown;
+    payment_status?: unknown;
+    orderStatus?: unknown;
+    order_status?: unknown;
+    createdAt?: unknown;
+    created_at?: unknown;
+  } | null,
+  nowMs: number = Date.now()
+): boolean {
+  if (!order) return false;
+
+  const paymentStatus = String(order.paymentStatus || order.payment_status || "").trim().toLowerCase();
+  const orderStatus = String(order.orderStatus || order.order_status || "").trim();
+  const paymentMethod = String(order.paymentMethod || order.payment_method || "").trim();
+
+  // 1. Paid orders never expire
+  if (isPaidStatus(paymentStatus)) {
+    return false;
+  }
+
+  // 2. Orders that are being processed, ready, or completed never expire
+  if (orderStatus === "Diproses" || orderStatus === "Siap" || orderStatus === "Selesai") {
+    return false;
+  }
+
+  // 3. Already cancelled orders are terminal and not pending expiration
+  if (orderStatus === "Dibatalkan" || paymentStatus === "dibatalkan" || paymentStatus === "gagal") {
+    return false;
+  }
+
+  // 4. Only QRIS payment method is subject to the 30-minute verification window
+  if (!isQrisMethod(paymentMethod)) {
+    return false;
+  }
+
+  // 5. Must be an unpaid order waiting for verification or in newly created state
+  const isPending = isPendingQrisStatus(paymentStatus) || orderStatus === "Pesanan baru";
+  if (!isPending) {
+    return false;
+  }
+
+  // 6. Authoritative deadline check
+  const rawDeadline = String(order.paymentDeadline || order.payment_deadline || "").trim();
+  const rawCreatedAt = String(order.createdAt || order.created_at || "").trim();
+
+  let deadlineMs: number;
+  if (rawDeadline && !isNaN(Date.parse(rawDeadline))) {
+    deadlineMs = new Date(rawDeadline).getTime();
+  } else if (rawCreatedAt && !isNaN(Date.parse(rawCreatedAt))) {
+    deadlineMs = new Date(rawCreatedAt).getTime() + ORDER_PAYMENT_DEADLINE_MS;
+  } else {
+    return false;
+  }
+
+  return nowMs >= deadlineMs;
+}
+
 /**
  * Normalizes any Order object or raw RPC/row object to guarantee canonical field types.
  */

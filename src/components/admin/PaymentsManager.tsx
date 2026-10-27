@@ -18,6 +18,7 @@ import {
   isPendingQrisStatus,
   isPendingCashStatus,
   isPaidStatus,
+  isOrderExpired,
 } from "@/lib/order-normalizer";
 
 export function PaymentsManager() {
@@ -59,22 +60,34 @@ export function PaymentsManager() {
 
   React.useEffect(() => {
     let ignore = false;
-    fetch("/api/admin/orders")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!ignore && data && data.success && Array.isArray(data.orders)) {
-          mergeOrders(data.orders);
-        }
-      })
-      .catch(() => {});
+    const fetchOrders = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      fetch("/api/admin/orders")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!ignore && data && data.success && Array.isArray(data.orders)) {
+            mergeOrders(data.orders);
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 15000);
+    const handleVis = () => {
+      if (document.visibilityState === "visible") fetchOrders();
+    };
+    document.addEventListener("visibilitychange", handleVis);
 
     return () => {
       ignore = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVis);
     };
   }, [mergeOrders]);
 
   const pendingQrisPayments = orders.filter(
-    (o) => isQrisMethod(o.paymentMethod) && isPendingQrisStatus(o.paymentStatus)
+    (o) => isQrisMethod(o.paymentMethod) && isPendingQrisStatus(o.paymentStatus) && !isOrderExpired(o)
   );
 
   const pendingCashPayments = orders.filter(
@@ -85,6 +98,15 @@ export function PaymentsManager() {
 
   const handleConfirmQrisLunas = async (orderId: string) => {
     if (confirmingRef.current || confirmingId) return;
+
+    const targetOrder = orders.find((o) => o.id === orderId);
+    if (targetOrder && isOrderExpired(targetOrder)) {
+      alert("Batas waktu pembayaran pesanan telah kedaluwarsa (30 menit). Pembayaran tidak dapat diverifikasi.");
+      setConfirmQrisOrder(null);
+      fetchOrders();
+      return;
+    }
+
     confirmingRef.current = true;
     setConfirmingId(orderId);
     try {
@@ -286,11 +308,16 @@ export function PaymentsManager() {
                       </a>
 
                       <button
+                        disabled={isOrderExpired(order)}
                         onClick={() => setConfirmQrisOrder(order)}
-                        className="px-3.5 py-2 rounded-xl bg-[#18794E] hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        className={`px-3.5 py-2 rounded-xl text-white text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                          isOrderExpired(order)
+                            ? "bg-neutral-300 text-neutral-500 cursor-not-allowed"
+                            : "bg-[#18794E] hover:bg-emerald-700 cursor-pointer"
+                        }`}
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Verifikasi QRIS</span>
+                        <span>{isOrderExpired(order) ? "Kedaluwarsa" : "Verifikasi QRIS"}</span>
                       </button>
                     </div>
                   </div>

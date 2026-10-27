@@ -78,6 +78,24 @@ export function DashboardOverview({
     }
   }, []);
 
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        refreshData();
+      }
+    }, 20000);
+    const handleVis = () => {
+      if (document.visibilityState === "visible") {
+        refreshData();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVis);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVis);
+    };
+  }, [refreshData]);
+
   // Safe fallback if metrics are still loading on client mount
   const currentMetrics = metrics || {
     newOrdersCount: 0,

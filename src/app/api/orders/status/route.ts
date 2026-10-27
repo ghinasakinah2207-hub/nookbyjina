@@ -151,7 +151,8 @@ export async function PATCH(request: Request) {
     const isClientError =
       message.includes("tidak dapat") ||
       message.includes("tidak valid") ||
-      message.includes("Akses ditolak");
+      message.includes("Akses ditolak") ||
+      message.includes("kedaluwarsa");
     return NextResponse.json(
       { success: false, error: message },
       { status: isClientError ? 400 : 500 }

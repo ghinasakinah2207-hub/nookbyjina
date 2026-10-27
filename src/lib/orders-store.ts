@@ -2,6 +2,7 @@ import { Order, OrderStatus, PaymentStatus } from "@/types";
 import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
 import { hashOrderToken, isValidTokenFormat } from "@/lib/token-security";
 import {
+  isOrderExpired,
   normalizeOrder,
   normalizePaymentMethod,
   normalizePaymentStatus,
@@ -267,8 +268,16 @@ export async function getOrderByToken(token: string): Promise<Order | null> {
       throw new Error("SUPABASE_SERVICE_ROLE_KEY belum dikonfigurasi.");
     }
     const devOrder = devOrdersByHash.get(tokenHash);
-    return devOrder ? { ...devOrder, token: cleanToken } : null;
+    if (!devOrder) return null;
+    if (isOrderExpired(devOrder)) {
+      devOrder.orderStatus = "Dibatalkan";
+      devOrder.paymentStatus = "Dibatalkan";
+      devOrdersById.set(devOrder.id, devOrder);
+    }
+    return { ...devOrder, token: cleanToken };
   }
+
+  let order: Order | null = null;
 
   // 1. Try lookup_order_by_token_hash RPC
   const { data: rpcResult, error: rpcErr } = await client.rpc(
@@ -277,35 +286,45 @@ export async function getOrderByToken(token: string): Promise<Order | null> {
   );
 
   if (!rpcErr && rpcResult && typeof rpcResult === "object") {
-    return normalizeOrder({
+    order = normalizeOrder({
       ...(rpcResult as Order),
       token: cleanToken,
     });
+  } else {
+    // 2. Direct relational query fallback
+    const { data: tokenRecord, error: tokenErr } = await client
+      .from("anonymous_order_tokens")
+      .select("order_id")
+      .eq("token_hash", tokenHash)
+      .is("revoked_at", null)
+      .maybeSingle();
+
+    if (!tokenErr && tokenRecord?.order_id) {
+      const { data: orderRecord, error: orderErr } = await client
+        .from("orders")
+        .select("*")
+        .eq("id", tokenRecord.order_id)
+        .maybeSingle();
+
+      if (!orderErr && orderRecord) {
+        order = mapDatabaseRowToOrder(orderRecord as Record<string, unknown>, cleanToken);
+      }
+    }
   }
 
-  // 2. Direct relational query fallback
-  const { data: tokenRecord, error: tokenErr } = await client
-    .from("anonymous_order_tokens")
-    .select("order_id")
-    .eq("token_hash", tokenHash)
-    .is("revoked_at", null)
-    .maybeSingle();
-
-  if (tokenErr || !tokenRecord?.order_id) {
-    return null;
+  if (order && isOrderExpired(order)) {
+    if (order.orderStatus !== "Dibatalkan" || order.paymentStatus !== "Dibatalkan") {
+      try {
+        await updateOrderStatusServer(order.id, "Dibatalkan", "Dibatalkan");
+      } catch (err) {
+        console.error("[getOrderByToken] Auto-cancel expired order failed:", err);
+      }
+      order.orderStatus = "Dibatalkan";
+      order.paymentStatus = "Dibatalkan";
+    }
   }
 
-  const { data: orderRecord, error: orderErr } = await client
-    .from("orders")
-    .select("*")
-    .eq("id", tokenRecord.order_id)
-    .maybeSingle();
-
-  if (orderErr || !orderRecord) {
-    return null;
-  }
-
-  return mapDatabaseRowToOrder(orderRecord as Record<string, unknown>, cleanToken);
+  return order;
 }
 
 /**
@@ -343,11 +362,18 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
     for (const h of hashes) {
       const devOrder = devOrdersByHash.get(h);
       if (devOrder) {
+        if (isOrderExpired(devOrder)) {
+          devOrder.orderStatus = "Dibatalkan";
+          devOrder.paymentStatus = "Dibatalkan";
+          devOrdersById.set(devOrder.id, devOrder);
+        }
         results.push({ ...devOrder, token: tokenHashMap.get(h) || "" });
       }
     }
     return results;
   }
+
+  let fetchedOrders: Order[] = [];
 
   // 1. Try lookup_orders_by_token_hashes RPC
   const { data: rpcResult, error: rpcErr } = await client.rpc(
@@ -356,7 +382,7 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
   );
 
   if (!rpcErr && Array.isArray(rpcResult)) {
-    return (rpcResult as Order[]).map((o) => {
+    fetchedOrders = (rpcResult as Order[]).map((o) => {
       // Restore client's own token for matching
       const token = validTokens.find((t) => hashOrderToken(t) === o.id) || "";
       return normalizeOrder({
@@ -364,40 +390,66 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
         token,
       });
     });
-  }
+  } else {
+    // 2. Direct query fallback
+    const { data: tokenRecords, error: tokenErr } = await client
+      .from("anonymous_order_tokens")
+      .select("order_id, token_hash")
+      .in("token_hash", hashes)
+      .is("revoked_at", null);
 
-  // 2. Direct query fallback
-  const { data: tokenRecords, error: tokenErr } = await client
-    .from("anonymous_order_tokens")
-    .select("order_id, token_hash")
-    .in("token_hash", hashes)
-    .is("revoked_at", null);
-
-  if (tokenErr || !tokenRecords || tokenRecords.length === 0) {
-    return [];
-  }
-
-  const orderIdToToken = new Map<string, string>();
-  for (const record of tokenRecords) {
-    const rawT = tokenHashMap.get(record.token_hash);
-    if (rawT && record.order_id) {
-      orderIdToToken.set(String(record.order_id), rawT);
+    if (tokenErr || !tokenRecords || tokenRecords.length === 0) {
+      return [];
     }
+
+    const orderIdToToken = new Map<string, string>();
+    for (const record of tokenRecords) {
+      const rawT = tokenHashMap.get(record.token_hash);
+      if (rawT && record.order_id) {
+        orderIdToToken.set(String(record.order_id), rawT);
+      }
+    }
+
+    const orderIds = tokenRecords.map((r) => r.order_id);
+    const { data: orderRows, error: ordersErr } = await client
+      .from("orders")
+      .select("*")
+      .in("id", orderIds)
+      .order("created_at", { ascending: false });
+
+    if (ordersErr || !orderRows) {
+      return [];
+    }
+
+    fetchedOrders = (orderRows as Record<string, unknown>[]).map((row) =>
+      mapDatabaseRowToOrder(row, orderIdToToken.get(String(row.id)))
+    );
   }
 
-  const orderIds = tokenRecords.map((r) => r.order_id);
-  const { data: orderRows, error: ordersErr } = await client
-    .from("orders")
-    .select("*")
-    .in("id", orderIds)
-    .order("created_at", { ascending: false });
+  await syncExpiredOrders(fetchedOrders);
+  return fetchedOrders;
+}
 
-  if (ordersErr || !orderRows) {
-    return [];
-  }
+/**
+ * Automatically synchronizes any expired unverified QRIS orders to 'Dibatalkan' state
+ * across database rows and returned order objects.
+ */
+async function syncExpiredOrders(orders: Order[]): Promise<void> {
+  const expiredOrders = orders.filter(
+    (o) => isOrderExpired(o) && o.orderStatus !== "Dibatalkan"
+  );
+  if (expiredOrders.length === 0) return;
 
-  return (orderRows as Record<string, unknown>[]).map((row) =>
-    mapDatabaseRowToOrder(row, orderIdToToken.get(String(row.id)))
+  await Promise.allSettled(
+    expiredOrders.map(async (o) => {
+      try {
+        await updateOrderStatusServer(o.id, "Dibatalkan", "Dibatalkan");
+      } catch (err) {
+        console.error(`[syncExpiredOrders] Auto-cancel expired order ${o.id} failed:`, err);
+      }
+      o.orderStatus = "Dibatalkan";
+      o.paymentStatus = "Dibatalkan";
+    })
   );
 }
 
@@ -421,6 +473,24 @@ export async function updateOrderStatusServer(
       const existingPaymentStatus = devOrder.paymentStatus;
       let targetPaymentStatus = paymentStatus;
       let targetOrderStatus = orderStatus;
+
+      // Transition Rule 0: Expired Orders Cannot Be Verified or Re-activated
+      if (isOrderExpired(devOrder)) {
+        devOrder.orderStatus = "Dibatalkan";
+        devOrder.paymentStatus = "Dibatalkan";
+        if (devOrder.token) {
+          const hash = hashOrderToken(devOrder.token);
+          devOrdersByHash.set(hash, devOrder);
+        }
+        if (
+          targetPaymentStatus === "Lunas" ||
+          (targetOrderStatus && targetOrderStatus !== "Dibatalkan")
+        ) {
+          throw new Error(
+            "Batas waktu pembayaran pesanan telah kedaluwarsa (30 menit). Pembayaran tidak dapat diverifikasi."
+          );
+        }
+      }
 
       // Transition Rule 1: Paid Orders Cannot Be Cancelled
       if (existingPaymentStatus === "Lunas") {
@@ -506,6 +576,39 @@ export async function updateOrderStatusServer(
     return null;
   }
 
+  // Verify order payment deadline validity before applying any status transition
+  const { data: existingRow, error: fetchErr } = await client
+    .from("orders")
+    .select("id, order_number, order_status, payment_status, payment_method, payment_deadline, created_at")
+    .or(`order_number.eq.${identifier},id.eq.${identifier}`)
+    .maybeSingle();
+
+  if (!fetchErr && existingRow) {
+    if (isOrderExpired(existingRow)) {
+      // Ensure database state is cancelled if still preliminary
+      if (existingRow.order_status !== "Dibatalkan" || existingRow.payment_status !== "Dibatalkan") {
+        try {
+          await client.rpc("admin_update_order_status", {
+            p_order_id: identifier,
+            p_order_status: "Dibatalkan",
+            p_payment_status: "Dibatalkan",
+          });
+        } catch {
+          // Ignore if already cancelled or locked
+        }
+      }
+
+      if (
+        paymentStatus === "Lunas" ||
+        (orderStatus && orderStatus !== "Dibatalkan")
+      ) {
+        throw new Error(
+          "Batas waktu pembayaran pesanan telah kedaluwarsa (30 menit). Pembayaran tidak dapat diverifikasi."
+        );
+      }
+    }
+  }
+
   // Atomic PostgreSQL RPC — the only safe way to update order/payment status.
   // The RPC enforces transition rules (immutable completed orders, no resurrection
   // of cancelled orders, no cancellation of paid orders, status synchronization).
@@ -535,7 +638,8 @@ export async function updateOrderStatusServer(
     rawMsg.includes("tidak valid") ||
     rawMsg.includes("Akses ditolak") ||
     rawMsg.includes("dibatalkan") ||
-    rawMsg.includes("selesai");
+    rawMsg.includes("selesai") ||
+    rawMsg.includes("kedaluwarsa");
 
   const safeMsg = isIntentionalMessage
     ? rawMsg
@@ -562,74 +666,85 @@ export async function getAdminOrdersServer(): Promise<Order[]> {
     if (process.env.NODE_ENV === "production") {
       throw new Error("SUPABASE_SERVICE_ROLE_KEY belum dikonfigurasi.");
     }
+    for (const devOrder of devOrdersById.values()) {
+      if (isOrderExpired(devOrder)) {
+        devOrder.orderStatus = "Dibatalkan";
+        devOrder.paymentStatus = "Dibatalkan";
+      }
+    }
     return Array.from(devOrdersById.values())
       .map(normalizeOrder)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
+  let adminOrders: Order[] = [];
+
   // 1. Try get_admin_orders RPC
   const { data: rpcResult, error: rpcErr } = await client.rpc("get_admin_orders");
   if (!rpcErr && Array.isArray(rpcResult)) {
-    return (rpcResult as Order[]).map(normalizeOrder);
-  }
+    adminOrders = (rpcResult as Order[]).map(normalizeOrder);
+  } else {
+    // 2. Direct query fallback
+    const { data: rows, error: rowsErr } = await client
+      .from("orders")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-  // 2. Direct query fallback
-  const { data: rows, error: rowsErr } = await client
-    .from("orders")
-    .select("*")
-    .order("created_at", { ascending: false });
+    if (rowsErr || !rows) {
+      return [];
+    }
 
-  if (rowsErr || !rows) {
-    return [];
-  }
+    // Resilient item resolution: if items_snapshot is not yet populated, join order_items
+    const hasSnapshot = rows.some((r) => Array.isArray((r as Record<string, unknown>).items_snapshot));
+    const itemsByOrderId = new Map<string, Order["items"]>();
 
-  // Resilient item resolution: if items_snapshot is not yet populated, join order_items
-  const hasSnapshot = rows.some((r) => Array.isArray((r as Record<string, unknown>).items_snapshot));
-  const itemsByOrderId = new Map<string, Order["items"]>();
+    if (!hasSnapshot && rows.length > 0) {
+      try {
+        const orderIds = rows.map((r) => (r as Record<string, unknown>).id).filter(Boolean);
+        const { data: itemRows } = await client
+          .from("order_items")
+          .select("id, order_id, product_id, product_name, quantity, unit_price, item_note")
+          .in("order_id", orderIds);
 
-  if (!hasSnapshot && rows.length > 0) {
-    try {
-      const orderIds = rows.map((r) => (r as Record<string, unknown>).id).filter(Boolean);
-      const { data: itemRows } = await client
-        .from("order_items")
-        .select("id, order_id, product_id, product_name, quantity, unit_price, item_note")
-        .in("order_id", orderIds);
-
-      if (itemRows && Array.isArray(itemRows)) {
-        for (const item of itemRows) {
-          const oId = String(item.order_id);
-          const list = itemsByOrderId.get(oId) || [];
-          const qty = Number(item.quantity) || 1;
-          const uPrice = Number(item.unit_price) || 0;
-          list.push({
-            id: String(item.id),
-            productId: String(item.product_id),
-            productName: String(item.product_name),
-            productImage: "",
-            basePrice: uPrice,
-            selectedOptions: [],
-            selectedAddons: [],
-            itemNote: String(item.item_note || ""),
-            quantity: qty,
-            unitPrice: uPrice,
-            itemTotal: uPrice * qty,
-            isAvailable: true,
-          });
-          itemsByOrderId.set(oId, list);
+        if (itemRows && Array.isArray(itemRows)) {
+          for (const item of itemRows) {
+            const oId = String(item.order_id);
+            const list = itemsByOrderId.get(oId) || [];
+            const qty = Number(item.quantity) || 1;
+            const uPrice = Number(item.unit_price) || 0;
+            list.push({
+              id: String(item.id),
+              productId: String(item.product_id),
+              productName: String(item.product_name),
+              productImage: "",
+              basePrice: uPrice,
+              selectedOptions: [],
+              selectedAddons: [],
+              itemNote: String(item.item_note || ""),
+              quantity: qty,
+              unitPrice: uPrice,
+              itemTotal: uPrice * qty,
+              isAvailable: true,
+            });
+            itemsByOrderId.set(oId, list);
+          }
         }
+      } catch {
+        // Graceful fallback if order_items is not queryable
       }
-    } catch {
-      // Graceful fallback if order_items is not queryable
     }
+
+    adminOrders = (rows as Record<string, unknown>[]).map((row) => {
+      const mapped = mapDatabaseRowToOrder(row);
+      if ((!mapped.items || mapped.items.length === 0) && itemsByOrderId.has(String(row.id))) {
+        mapped.items = itemsByOrderId.get(String(row.id)) || [];
+      }
+      return normalizeOrder(mapped);
+    });
   }
 
-  return (rows as Record<string, unknown>[]).map((row) => {
-    const mapped = mapDatabaseRowToOrder(row);
-    if ((!mapped.items || mapped.items.length === 0) && itemsByOrderId.has(String(row.id))) {
-      mapped.items = itemsByOrderId.get(String(row.id)) || [];
-    }
-    return normalizeOrder(mapped);
-  });
+  await syncExpiredOrders(adminOrders);
+  return adminOrders;
 }
 
 /**
