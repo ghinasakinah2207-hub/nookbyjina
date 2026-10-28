@@ -1,6 +1,6 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Product, Category, Addon } from "@/types";
+import { Product, Category } from "@/types";
 import { AddProductModal } from "@/components/admin/AddProductModal";
 import {
   mapDbProductToUiProduct,
@@ -23,10 +23,6 @@ console.log("=== REGRESSION TEST: Product Description Form & Persistence ===\n")
 const mockCategories: Category[] = [
   { id: "cat-kopi", name: "Kopi & Minuman", slug: "kopi" },
   { id: "cat-makanan", name: "Makanan Utama", slug: "makanan" },
-];
-
-const mockAddons: Addon[] = [
-  { id: "add-1", name: "Ekstra Shot Espresso", price: 4000 },
 ];
 
 const sampleProductWithDescription: Product = {
@@ -66,7 +62,6 @@ const addModalHtml = renderToStaticMarkup(
     isOpen={true}
     onClose={() => {}}
     categories={mockCategories}
-    availableAddons={mockAddons}
     initialProduct={null}
     onProductCreated={() => {}}
     onProductUpdated={() => {}}
@@ -119,7 +114,6 @@ const editModalHtml = renderToStaticMarkup(
     isOpen={true}
     onClose={() => {}}
     categories={mockCategories}
-    availableAddons={mockAddons}
     initialProduct={sampleProductWithDescription}
     onProductCreated={() => {}}
     onProductUpdated={() => {}}
@@ -147,7 +141,6 @@ const editModalEmptyDescHtml = renderToStaticMarkup(
     isOpen={true}
     onClose={() => {}}
     categories={mockCategories}
-    availableAddons={mockAddons}
     initialProduct={sampleProductWithoutDescription}
     onProductCreated={() => {}}
     onProductUpdated={() => {}}

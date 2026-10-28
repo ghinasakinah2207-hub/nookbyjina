@@ -30,13 +30,6 @@ export interface ProductAddonInputItem {
   price: number;
 }
 
-interface MasterAddonRow {
-  id: string;
-  name: string;
-  price: number;
-  is_active: boolean;
-}
-
 export interface CreateProductInput {
   name: string;
   slug?: string;
@@ -101,12 +94,9 @@ export interface UpdateProductResult {
 }
 
 /**
- * Resolves product addons against the master `addons` table using a Hybrid Copy-on-Write strategy:
- * 1. Exact match (name & price identical): Reuses existing master addon record without duplication.
- * 2. Unshared modification: If addon is modified and ONLY used by this product, updates the master record.
- * 3. Shared modification: If addon is modified and used by other products, creates a new record (Copy-on-Write)
- *    to strictly protect other products from unintended price/name alterations.
- * 4. New addon: Inserts a new record in `addons` and links to this product.
+ * Synchronizes product-scoped addons directly for a product.
+ * MASTER ADD-ON GLOBAL IS PERMANENTLY REMOVED:
+ * Each product manages its own add-ons directly. No global master reuse across products.
  */
 async function resolveAndSyncProductAddons(
   client: SupabaseClient,
@@ -114,18 +104,20 @@ async function resolveAndSyncProductAddons(
   items: ProductAddonInputItem[]
 ): Promise<{ success: boolean; resolvedAddonIds?: string[]; error?: string }> {
   try {
-    const { data: masterAddons, error: masterErr } = await client
-      .from("addons")
-      .select("id, name, price, is_active");
+    // 1. Fetch current addons linked to this product
+    const { data: currentLinks, error: linkErr } = await client
+      .from("product_addons")
+      .select("addon_id")
+      .eq("product_id", productId);
 
-    if (masterErr) {
+    if (linkErr) {
       return {
         success: false,
-        error: `Gagal membaca daftar master add-on: ${masterErr.message}`,
+        error: `Gagal membaca relasi add-on produk: ${linkErr.message}`,
       };
     }
 
-    const masters: MasterAddonRow[] = (masterAddons || []) as unknown as MasterAddonRow[];
+    const currentAddonIds = new Set((currentLinks || []).map((l) => l.addon_id));
     const resolvedIds: string[] = [];
 
     const validItems = items
@@ -137,58 +129,29 @@ async function resolveAndSyncProductAddons(
       .filter((it) => it.name.length > 0);
 
     for (const item of validItems) {
-      // Step A: Check if an exact match already exists in master (name & price match)
-      const exactMatch = masters.find(
-        (m) =>
-          m.name.trim().toLowerCase() === item.name.toLowerCase() &&
-          Number(m.price) === item.price &&
-          m.is_active !== false
-      );
+      // If item has an existing ID that belongs to this product, update it
+      if (item.id && currentAddonIds.has(item.id)) {
+        const { error: updErr } = await client
+          .from("addons")
+          .update({
+            name: item.name,
+            price: item.price,
+            is_active: true,
+          })
+          .eq("id", item.id);
 
-      if (exactMatch) {
-        resolvedIds.push(exactMatch.id);
+        if (updErr) {
+          return {
+            success: false,
+            error: `Gagal memperbarui add-on "${item.name}": ${updErr.message}`,
+          };
+        }
+
+        resolvedIds.push(item.id);
         continue;
       }
 
-      // Step B: Check if item carries an existing addon ID that belongs to this product
-      if (item.id) {
-        const existingMaster = masters.find((m) => m.id === item.id);
-        if (existingMaster) {
-          // Check if this addon is shared with OTHER products
-          const { count, error: countErr } = await client
-            .from("product_addons")
-            .select("*", { count: "exact", head: true })
-            .eq("addon_id", item.id)
-            .neq("product_id", productId);
-
-          if (!countErr && (count ?? 0) === 0) {
-            // Unshared: safe to update this master record directly
-            const { error: updErr } = await client
-              .from("addons")
-              .update({
-                name: item.name,
-                price: item.price,
-                is_active: true,
-              })
-              .eq("id", item.id);
-
-            if (updErr) {
-              return {
-                success: false,
-                error: `Gagal memperbarui add-on "${item.name}": ${updErr.message}`,
-              };
-            }
-
-            resolvedIds.push(item.id);
-            existingMaster.name = item.name;
-            existingMaster.price = item.price;
-            continue;
-          }
-          // Shared with other products: do not mutate existingMaster! Proceed to create copy-on-write record below.
-        }
-      }
-
-      // Step C: Create a new master record in `addons`
+      // Otherwise, create a new product-scoped addon
       const newAddonId = crypto.randomUUID();
       const { error: insErr } = await client.from("addons").insert({
         id: newAddonId,
@@ -205,12 +168,28 @@ async function resolveAndSyncProductAddons(
       }
 
       resolvedIds.push(newAddonId);
-      masters.push({
-        id: newAddonId,
-        name: item.name,
-        price: item.price,
-        is_active: true,
-      });
+    }
+
+    // Clean up any old addons of this product that were removed by the admin
+    const newResolvedIdSet = new Set(resolvedIds);
+    for (const oldId of currentAddonIds) {
+      if (!newResolvedIdSet.has(oldId)) {
+        await client
+          .from("product_addons")
+          .delete()
+          .eq("product_id", productId)
+          .eq("addon_id", oldId);
+
+        // Check if unshared and safe to delete from addons table
+        const { count } = await client
+          .from("product_addons")
+          .select("*", { count: "exact", head: true })
+          .eq("addon_id", oldId);
+
+        if (!count || count === 0) {
+          await client.from("addons").delete().eq("id", oldId);
+        }
+      }
     }
 
     const uniqueResolvedIds = Array.from(new Set(resolvedIds));
@@ -1074,7 +1053,7 @@ export async function deleteProductPermanentlyAction(
 
     const productDbId = targetProduct.id;
 
-    // 3. Check transaction history in order_items (Scenario C)
+    // 3. Check transaction history in order_items
     const { count: orderItemsCount, error: orderCountErr } = await client
       .from("order_items")
       .select("id", { count: "exact", head: true })
@@ -1087,46 +1066,8 @@ export async function deleteProductPermanentlyAction(
       };
     }
 
-    // CASE 1: PRODUCT HAS ORDER HISTORY -> PRESERVE TRANSACTION INTEGRITY (SOFT-ARCHIVE)
-    if (orderItemsCount && orderItemsCount > 0) {
-      const { error: archiveErr } = await client
-        .from("products")
-        .update({
-          is_archived: true,
-          is_available: false,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", productDbId);
+    const hasTransactions = Boolean(orderItemsCount && orderItemsCount > 0);
 
-      if (archiveErr) {
-        return {
-          success: false,
-          error: `Gagal mengarsipkan menu berriwayat pesanan: ${archiveErr.message}`,
-        };
-      }
-
-      // Unlink from active homepage section assignments
-      await client
-        .from("homepage_section_products")
-        .delete()
-        .eq("product_id", productDbId);
-
-      clearCatalogCache();
-      revalidatePath("/admin/menu");
-      revalidatePath("/menu");
-      revalidatePath("/home");
-      revalidatePath("/");
-
-      return {
-        success: true,
-        action: "archived",
-        hasTransactions: true,
-        orderCount: orderItemsCount,
-        message: `Menu memiliki ${orderItemsCount} riwayat pesanan pelanggan. Demi menjaga integritas pembukuan dan pesanan pelanggan, menu diarsipkan dari etalase toko (bukan dihapus permanen).`,
-      };
-    }
-
-    // CASE 2: ZERO ORDER ITEMS -> EXECUTE FULL PERMANENT CLEANUP
     // Step A: Fetch all product images metadata
     const { data: imageRows, error: imgFetchErr } = await client
       .from("product_images")
@@ -1194,61 +1135,42 @@ export async function deleteProductPermanentlyAction(
       queueItems = queueResult.items;
     }
 
-    // Step D: Delete child relations in strict FK order
-    // 1. homepage_section_products
-    await client
-      .from("homepage_section_products")
-      .delete()
-      .eq("product_id", productDbId);
+    // Step D: Execute atomic database deletion exclusively via RPC
+    // Guarantees all-or-nothing atomicity: order_items decoupling and catalog cleanup
+    // occur in a single PostgreSQL transaction. Zero risk of partial state or polluting historical transactions.
+    const { data: rpcRes, error: rpcErr } = await client.rpc(
+      "admin_delete_product_permanently",
+      { p_product_id: productDbId }
+    );
 
-    // 2. product_images
-    const { error: imgDelErr } = await client
-      .from("product_images")
-      .delete()
-      .eq("product_id", productDbId);
-
-    if (imgDelErr) {
+    if (rpcErr) {
       return {
         success: false,
-        error: `Gagal menghapus metadata gambar: ${imgDelErr.message}`,
+        error: `Penghapusan menu dibatalkan: Transaksi database atomik 'admin_delete_product_permanently' gagal (${rpcErr.message}). Seluruh data katalog dan transaksi tetap utuh tanpa perubahan parsial.`,
       };
     }
 
-    // 3. product_addons (linking records only, master addons remain untouched)
-    await client
-      .from("product_addons")
-      .delete()
-      .eq("product_id", productDbId);
+    const rpcData = rpcRes as {
+      success?: boolean;
+      action?: "deleted" | "already_deleted";
+      error?: string;
+      order_count?: number;
+    } | null;
 
-    // 4. product_option_values & product_option_groups
-    const { data: optionGroups } = await client
-      .from("product_option_groups")
-      .select("id")
-      .eq("product_id", productDbId);
-
-    if (optionGroups && optionGroups.length > 0) {
-      const groupIds = optionGroups.map((g) => g.id);
-      await client
-        .from("product_option_values")
-        .delete()
-        .in("group_id", groupIds);
-
-      await client
-        .from("product_option_groups")
-        .delete()
-        .eq("product_id", productDbId);
-    }
-
-    // Step E: Delete product row from public.products
-    const { error: prodDelErr } = await client
-      .from("products")
-      .delete()
-      .eq("id", productDbId);
-
-    if (prodDelErr) {
+    if (!rpcData?.success) {
       return {
         success: false,
-        error: `Gagal menghapus produk dari database: ${prodDelErr.message}`,
+        error:
+          rpcData?.error ||
+          "Penghapusan menu dibatalkan: Prosedur database atomik mengembalikan status gagal.",
+      };
+    }
+
+    if (rpcData.action === "already_deleted") {
+      return {
+        success: true,
+        action: "already_deleted",
+        message: "Menu sudah tidak ada atau telah dihapus sebelumnya.",
       };
     }
 
@@ -1311,22 +1233,30 @@ export async function deleteProductPermanentlyAction(
       return {
         success: true,
         action: "deleted",
+        hasTransactions,
+        orderCount: orderItemsCount ?? 0,
         warning: `Menu berhasil dihapus dari database, namun pembersihan ${failedStorageFiles.length} file gambar storage gagal (${failedStorageFiles.join(", ")}). ${queueNotice}`,
         deletedImagesCount: actualDeletedImagesCount,
         sharedImagesPreservedCount,
         failedStorageFiles,
-        message: "Menu dihapus dari database dengan catatan kendala storage.",
+        message: hasTransactions
+          ? `Menu berhasil dihapus permanen. ${orderItemsCount} riwayat pesanan pelanggan tetap dipertahankan dengan aman.`
+          : "Menu dihapus dari database dengan catatan kendala storage.",
       };
     }
 
     return {
       success: true,
       action: "deleted",
+      hasTransactions,
+      orderCount: orderItemsCount ?? 0,
       deletedImagesCount: actualDeletedImagesCount,
       sharedImagesPreservedCount,
-      message: `Menu dan ${actualDeletedImagesCount} file gambar eksklusif berhasil dihapus permanen.${
-        sharedImagesPreservedCount > 0 ? ` (${sharedImagesPreservedCount} file gambar bersama dipertahankan).` : ""
-      }`,
+      message: hasTransactions
+        ? `Menu "${targetProduct.name}" berhasil dihapus permanen. Sebanyak ${orderItemsCount} riwayat transaksi pelanggan tetap dipertahankan dengan aman.`
+        : `Menu dan ${actualDeletedImagesCount} file gambar eksklusif berhasil dihapus permanen.${
+            sharedImagesPreservedCount > 0 ? ` (${sharedImagesPreservedCount} file gambar bersama dipertahankan).` : ""
+          }`,
     };
   } catch (err: unknown) {
     const message =

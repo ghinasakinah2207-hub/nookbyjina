@@ -639,23 +639,10 @@ export async function getProductBySlugOrId(
 }
 
 /**
- * Fetch all active addons from Supabase, ordered by name.
+ * @deprecated Master add-on global dihapus secara permanen dari sistem.
+ * Add-on sekarang dikelola secara langsung dalam konteks masing-masing produk (product-scoped).
  */
 export async function getActiveAddons(): Promise<Addon[]> {
-  const { data, error } = await supabase
-    .from("addons")
-    .select("id, name, description, price, is_active")
-    .eq("is_active", true)
-    .order("name", { ascending: true });
-
-  if (error) {
-    return [];
-  }
-
-  return (data || []).map((a) => ({
-    id: a.id,
-    name: a.name,
-    price: Number(a.price || 0),
-  }));
+  return [];
 }
 

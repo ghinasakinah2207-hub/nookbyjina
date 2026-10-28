@@ -346,27 +346,82 @@ async function runTestSuite() {
   console.log("  [PASS] [MOCK] Repeated deletion returns idempotent success without throwing exceptions");
 
   // --------------------------------------------------------------------------
-  // SCENARIO I: Accounting Protection for Products with Transactions
+  // SCENARIO I: Transaction Preservation During Permanent Product Deletion (Requirement C)
   // --------------------------------------------------------------------------
-  console.log("\n--- Scenario I: Financial & Accounting Protection (order_items guard) ---");
-  function simulateProductDeletion(orderItemsCount: number) {
-    if (orderItemsCount > 0) {
-      return {
-        success: true,
-        action: "archived" as const,
-        hasTransactions: true,
-        orderCount: orderItemsCount,
-        message: `Menu memiliki ${orderItemsCount} riwayat pesanan pelanggan. Demi menjaga integritas pembukuan, menu diarsipkan dari etalase toko.`,
-      };
-    }
-    return { success: true, action: "deleted" as const, hasTransactions: false };
+  console.log("\n--- Scenario I: Transaction & Snapshot Preservation on Permanent Delete ---");
+  interface MockOrderItem {
+    id: string;
+    orderId: string;
+    productId: string | null;
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
   }
 
-  const guardedDeletion = simulateProductDeletion(2);
-  assert.strictEqual(guardedDeletion.action, "archived");
-  assert.strictEqual(guardedDeletion.hasTransactions, true);
-  assert.strictEqual(guardedDeletion.orderCount, 2);
-  console.log("  [PASS] [MOCK] Product with order items automatically diverted to soft-archive:", guardedDeletion.message);
+  function simulateProductPermanentDeletionWithTransactions(
+    targetProductId: string,
+    existingOrderItems: MockOrderItem[]
+  ) {
+    // 1. Identify order items referencing this product
+    const relevantItems = existingOrderItems.filter((oi) => oi.productId === targetProductId);
+    const orderItemsCount = relevantItems.length;
+    const hasTransactions = orderItemsCount > 0;
+
+    // 2. Unlink order_items (set product_id = null) to preserve transaction rows & snapshots
+    if (hasTransactions) {
+      existingOrderItems.forEach((oi) => {
+        if (oi.productId === targetProductId) {
+          oi.productId = null;
+        }
+      });
+    }
+
+    // 3. Product catalog row deleted
+    return {
+      success: true,
+      action: "deleted" as const,
+      hasTransactions,
+      orderCount: orderItemsCount,
+      message: `Menu berhasil dihapus permanen. Sebanyak ${orderItemsCount} data riwayat pesanan pelanggan tetap dipertahankan dengan aman.`,
+    };
+  }
+
+  const mockDbOrderItems: MockOrderItem[] = [
+    {
+      id: "oi-1",
+      orderId: "ord-1",
+      productId: "prod-with-orders",
+      productName: "Es Kopi Susu Aren",
+      quantity: 2,
+      unitPrice: 18000,
+      lineTotal: 36000,
+    },
+    {
+      id: "oi-2",
+      orderId: "ord-2",
+      productId: "prod-with-orders",
+      productName: "Es Kopi Susu Aren",
+      quantity: 1,
+      unitPrice: 18000,
+      lineTotal: 18000,
+    },
+  ];
+
+  const permanentDeletionResult = simulateProductPermanentDeletionWithTransactions(
+    "prod-with-orders",
+    mockDbOrderItems
+  );
+
+  assert.strictEqual(permanentDeletionResult.action, "deleted");
+  assert.strictEqual(permanentDeletionResult.hasTransactions, true);
+  assert.strictEqual(permanentDeletionResult.orderCount, 2);
+  // Invariants: Order items count must remain exactly 2, never deleted
+  assert.strictEqual(mockDbOrderItems.length, 2);
+  assert.strictEqual(mockDbOrderItems[0].productId, null);
+  assert.strictEqual(mockDbOrderItems[0].productName, "Es Kopi Susu Aren");
+  assert.strictEqual(mockDbOrderItems[0].lineTotal, 36000);
+  console.log("  [PASS] [MOCK] Product deleted permanently while 100% of transaction rows and snapshots preserved:", permanentDeletionResult.message);
 
   // --------------------------------------------------------------------------
   // SCENARIO J: Concurrency Re-Check Aborts Removal on Concurrent Reference

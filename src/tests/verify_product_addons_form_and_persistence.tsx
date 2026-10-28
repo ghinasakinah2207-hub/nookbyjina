@@ -20,12 +20,6 @@ const mockCategories: Category[] = [
   { id: "cat-makanan", name: "Makanan Utama", slug: "makanan" },
 ];
 
-const mockMasterAddons: Addon[] = [
-  { id: "add-sambal", name: "Ekstra Sambal Cakalang", price: 4000 },
-  { id: "add-telur", name: "Telur Dadar Iris Gurih", price: 3000 },
-  { id: "add-kerupuk", name: "Kerupuk Kaleng Renyah", price: 2000 },
-];
-
 const sampleProductWithAddons: Product = {
   id: "nasi-bakar-cakalang",
   dbId: "b0000001-0000-4000-8000-000000000001",
@@ -66,7 +60,6 @@ const addModalHtml = renderToStaticMarkup(
     isOpen={true}
     onClose={() => {}}
     categories={mockCategories}
-    availableAddons={mockMasterAddons}
     initialProduct={null}
     onProductCreated={() => {}}
     onProductUpdated={() => {}}
@@ -125,7 +118,6 @@ const editModalHtml = renderToStaticMarkup(
     isOpen={true}
     onClose={() => {}}
     categories={mockCategories}
-    availableAddons={mockMasterAddons}
     initialProduct={sampleProductWithAddons}
     onProductCreated={() => {}}
     onProductUpdated={() => {}}
@@ -157,7 +149,6 @@ const editModalNoAddonsHtml = renderToStaticMarkup(
     isOpen={true}
     onClose={() => {}}
     categories={mockCategories}
-    availableAddons={mockMasterAddons}
     initialProduct={sampleProductWithoutAddons}
     onProductCreated={() => {}}
     onProductUpdated={() => {}}

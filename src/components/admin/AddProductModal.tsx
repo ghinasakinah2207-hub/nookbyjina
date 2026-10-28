@@ -32,7 +32,6 @@ interface AddProductModalProps {
   isOpen: boolean;
   onClose: () => void;
   categories: Category[];
-  availableAddons?: Addon[];
   initialProduct?: Product | null;
   onProductCreated?: (newProduct: Product) => void;
   onProductUpdated?: (updatedProduct: Product) => void;
@@ -55,7 +54,6 @@ export function AddProductModal({
   isOpen,
   onClose,
   categories,
-  availableAddons = [],
   initialProduct = null,
   onProductCreated,
   onProductUpdated,
@@ -67,7 +65,6 @@ export function AddProductModal({
       key={initialProduct ? initialProduct.id || initialProduct.slug : "new-product"}
       onClose={onClose}
       categories={categories}
-      availableAddons={availableAddons}
       initialProduct={initialProduct}
       onProductCreated={onProductCreated}
       onProductUpdated={onProductUpdated}
@@ -451,7 +448,6 @@ function ProductFormModalContent({
               priceDelta: Math.round(Number(v.priceDelta) || 0),
             })),
           })),
-          addonIds: validAddonsPayload.map((a) => a.id).filter(Boolean) as string[],
           addons: validAddonsPayload,
         };
 
@@ -522,7 +518,6 @@ function ProductFormModalContent({
               priceDelta: Math.round(Number(v.priceDelta) || 0),
             })),
           })),
-          addonIds: validAddonsPayload.map((a) => a.id).filter(Boolean) as string[],
           addons: validAddonsPayload,
         };
 

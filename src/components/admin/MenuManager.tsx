@@ -13,7 +13,7 @@ import {
   FolderTree,
   LayoutGrid,
 } from "lucide-react";
-import { Product, Category, Addon } from "@/types";
+import { Product, Category } from "@/types";
 import { formatRupiah } from "@/data/dummy-data";
 import { AddProductModal } from "./AddProductModal";
 import { CategoryManagerModal } from "./CategoryManagerModal";
@@ -28,13 +28,11 @@ import {
 interface MenuManagerProps {
   initialProducts: Product[];
   initialCategories: Category[];
-  availableAddons?: Addon[];
 }
 
 export function MenuManager({
   initialProducts,
   initialCategories,
-  availableAddons = [],
 }: MenuManagerProps) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [categories, setCategories] = useState<Category[]>(initialCategories);
@@ -513,7 +511,6 @@ export function MenuManager({
           setEditingProduct(null);
         }}
         categories={categories}
-        availableAddons={availableAddons}
         initialProduct={editingProduct}
         onProductCreated={(newProduct) => {
           setProducts((prev) => [newProduct, ...prev]);
@@ -564,7 +561,7 @@ export function MenuManager({
                       <strong className="text-amber-900">Arsipkan Saja:</strong> Sembunyikan dari katalog tanpa menghapus data atau file gambar.
                     </li>
                     <li>
-                      <strong className="text-[#B42318]">Hapus Permanen:</strong> Bersihkan total produk dan file gambar eksklusif. Jika menu sudah memiliki riwayat pesanan, sistem otomatis mengarsipkannya agar laporan keuangan tetap aman.
+                      <strong className="text-[#B42318]">Hapus Permanen:</strong> Bersihkan total produk dari katalog dan file gambar eksklusif. Seluruh riwayat transaksi pelanggan dan pembukuan terdahulu tetap dipertahankan dengan aman.
                     </li>
                   </ul>
                 </div>
