@@ -164,11 +164,6 @@ export async function saveOrder(order: Order): Promise<Order> {
 
   const tokenHash = hashOrderToken(order.token);
 
-  // Always keep in-memory fallback up to date for dev / test lookups and idempotency
-  const devOrderEntry: Order = { ...order };
-  devOrdersByHash.set(tokenHash, devOrderEntry);
-  devOrdersById.set(order.id, devOrderEntry);
-
   const client = getServiceRoleSupabaseClient();
   if (!client) {
     if (process.env.NODE_ENV === "production") {
@@ -177,7 +172,12 @@ export async function saveOrder(order: Order): Promise<Order> {
         "Atur environment variable SUPABASE_SERVICE_ROLE_KEY di .env.local dan Vercel Project Settings."
       );
     }
-    return order;
+    // Only in development when no Supabase database is configured
+    const assignedId = order.id && order.id.length > 0 ? order.id : `TJ-${getWIBDateString()}-001`;
+    const devOrderEntry: Order = { ...order, id: assignedId };
+    devOrdersByHash.set(tokenHash, devOrderEntry);
+    devOrdersById.set(assignedId, devOrderEntry);
+    return devOrderEntry;
   }
 
   // Atomic PostgreSQL RPC — the only safe way to persist orders.
@@ -577,11 +577,18 @@ export async function updateOrderStatusServer(
   }
 
   // Verify order payment deadline validity before applying any status transition
-  const { data: existingRow, error: fetchErr } = await client
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
+  let query = client
     .from("orders")
-    .select("id, order_number, order_status, payment_status, payment_method, payment_deadline, created_at")
-    .or(`order_number.eq.${identifier},id.eq.${identifier}`)
-    .maybeSingle();
+    .select("id, order_number, order_status, payment_status, payment_method, payment_deadline, created_at");
+
+  if (isUuid) {
+    query = query.eq("id", identifier);
+  } else {
+    query = query.eq("order_number", identifier);
+  }
+
+  const { data: existingRow, error: fetchErr } = await query.maybeSingle();
 
   if (!fetchErr && existingRow) {
     if (isOrderExpired(existingRow)) {
@@ -589,7 +596,7 @@ export async function updateOrderStatusServer(
       if (existingRow.order_status !== "Dibatalkan" || existingRow.payment_status !== "Dibatalkan") {
         try {
           await client.rpc("admin_update_order_status", {
-            p_order_id: identifier,
+            p_order_id: existingRow.order_number || identifier,
             p_order_status: "Dibatalkan",
             p_payment_status: "Dibatalkan",
           });
@@ -613,10 +620,11 @@ export async function updateOrderStatusServer(
   // The RPC enforces transition rules (immutable completed orders, no resurrection
   // of cancelled orders, no cancellation of paid orders, status synchronization).
   // NO direct-update fallback: it would bypass all transition enforcement.
+  const targetOrderId = existingRow?.order_number || identifier;
   const { data: rpcResult, error: rpcErr } = await client.rpc(
     "admin_update_order_status",
     {
-      p_order_id: identifier,
+      p_order_id: targetOrderId,
       p_order_status: orderStatus || null,
       p_payment_status: paymentStatus || null,
     }
@@ -775,8 +783,8 @@ export async function getAdminOrdersServer(options?: GetAdminOrdersOptions): Pro
     return normalizeOrder(mapped);
   });
 
-  // Include any in-memory dev/test orders that were saved in the active process
-  if (devOrdersById.size > 0) {
+  // Include any in-memory dev/test orders ONLY when operating in non-database dev mode
+  if (!client && devOrdersById.size > 0) {
     const dbOrderIds = new Set(adminOrders.map((o) => o.id));
     for (const devOrder of devOrdersById.values()) {
       if (!dbOrderIds.has(devOrder.id)) {

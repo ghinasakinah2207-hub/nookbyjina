@@ -48,9 +48,10 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
   }>({});
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = React.useRef(false);
 
   // Stable idempotency token for this checkout session to defend against duplicate orders on retry
-  const [checkoutToken, setCheckoutToken] = useState<string>(() => generateOrderToken());
+  const [checkoutToken] = useState<string>(() => generateOrderToken());
 
   // Dynamic Payment Methods configured authoritatively by store admin
   const availablePaymentMethods: PaymentMethod[] = useMemo(() => {
@@ -179,6 +180,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current || isSubmitting) return;
     if (hasSoldOutItem) return;
 
     if (!storeSettings) {
@@ -216,6 +218,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setSubmitError(null);
 
@@ -246,9 +249,6 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
         throw new Error(data.error || "Gagal membuat pesanan.");
       }
 
-      // Reset checkout idempotency token for any subsequent order
-      setCheckoutToken(generateOrderToken());
-
       // Persist raw token immediately to token vault
       if (data.order?.id && data.order?.token) {
         saveOrderToken(data.order.id, data.order.token);
@@ -267,12 +267,13 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
         router.push(`/pembayaran/${data.order.id}`);
       }
     } catch (err: unknown) {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
       const msg =
         err instanceof Error
           ? err.message
           : "Terjadi kesalahan saat memproses pesanan.";
       setSubmitError(msg);
-      setIsSubmitting(false);
     }
   };
 

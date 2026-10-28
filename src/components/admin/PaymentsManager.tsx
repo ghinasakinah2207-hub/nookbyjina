@@ -72,6 +72,9 @@ export function PaymentsManager({ initialOrders }: PaymentsManagerProps = {}) {
       setConfirmQrisOrder(null);
       if (!res.success) {
         alert(res.error || "Gagal memverifikasi pembayaran QRIS.");
+        if (res.error?.includes("tidak ditemukan")) {
+          fetchOrders(true);
+        }
       }
     } finally {
       confirmingRef.current = false;
@@ -91,6 +94,9 @@ export function PaymentsManager({ initialOrders }: PaymentsManagerProps = {}) {
       setConfirmCashOrder(null);
       if (!res.success) {
         alert(res.error || "Gagal mengonfirmasi pembayaran tunai.");
+        if (res.error?.includes("tidak ditemukan")) {
+          fetchOrders(true);
+        }
       }
     } finally {
       confirmingRef.current = false;

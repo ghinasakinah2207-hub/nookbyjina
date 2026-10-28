@@ -143,6 +143,9 @@ export function OrdersManager({ initialOrders }: OrdersManagerProps = {}) {
       setConfirmLunasOrder(null);
       if (!res.success) {
         alert(res.error || "Gagal mengonfirmasi pembayaran lunas.");
+        if (res.error?.includes("tidak ditemukan")) {
+          fetchOrders(true);
+        }
         return;
       }
       if (selectedOrder?.id === orderId) {
@@ -168,6 +171,9 @@ export function OrdersManager({ initialOrders }: OrdersManagerProps = {}) {
       setConfirmCashOrder(null);
       if (!res.success) {
         alert(res.error || "Gagal mengonfirmasi pembayaran tunai.");
+        if (res.error?.includes("tidak ditemukan")) {
+          fetchOrders(true);
+        }
         return;
       }
       if (selectedOrder?.id === orderId) {

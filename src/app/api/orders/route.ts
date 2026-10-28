@@ -4,7 +4,7 @@ import { getProductBySlugOrId } from "@/lib/supabase/catalog";
 import { calculateDeliveryFee } from "@/lib/delivery-fee";
 import { Order, CartItem, FulfillmentType, SelectedOption, SelectedAddon, OptionGroup, OptionValue } from "@/types";
 import { validateIndonesianPhone } from "@/lib/phone";
-import { saveOrder, generateDailyOrderNumber, getOrderByToken } from "@/lib/orders-store";
+import { saveOrder, getOrderByToken } from "@/lib/orders-store";
 import { generateSecureOrderToken, isValidTokenFormat } from "@/lib/token-security";
 
 export async function POST(request: Request) {
@@ -428,12 +428,10 @@ export async function POST(request: Request) {
     const PAYMENT_DEADLINE_MS = 30 * 60 * 1000;
     const deadline = new Date(now.getTime() + PAYMENT_DEADLINE_MS);
 
-    const orderId = await generateDailyOrderNumber();
-
     const isCashOrder = canonicalMethod === "Cash";
 
     const order: Order = {
-      id: orderId,
+      id: "", // create_order_atomic assigns canonical order_number sequentially inside DB transaction
       token,
       createdAt: now.toISOString(),
       customerName: cleanName,
