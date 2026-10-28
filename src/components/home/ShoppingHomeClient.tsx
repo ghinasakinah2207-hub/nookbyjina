@@ -244,15 +244,15 @@ export default function ShoppingHomeClient({
       <Header storeSettings={storeSettings} />
 
       <main className="max-w-md mx-auto px-3.5 pt-1.5 space-y-3.5">
-        {/* 2. Functional Search Bar directly below header */}
+        {/* 2. Promotional Banner Carousel (hidden during active search) */}
+        {!searchQuery && <PromoCarousel banners={banners} />}
+
+        {/* 3. Functional Search Bar directly below banner */}
         <SearchBar
           value={searchQuery}
           onChange={setSearchQuery}
           placeholder="Mau order apa, bestie..."
         />
-
-        {/* 3. Promotional Banner Carousel (hidden during active search) */}
-        {!searchQuery && <PromoCarousel banners={banners} />}
 
         {/* 4. Category Shortcuts */}
         <section aria-label="Kategori Menu" className="space-y-2">
