@@ -69,6 +69,7 @@ export function BottomNavigation() {
     <nav
       aria-label="Navigasi Utama Pelanggan"
       className="fixed bottom-0 left-0 right-0 z-40 bg-[#FFFFFF] border-t border-[#E5E5E5]"
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
       <div className="max-w-md mx-auto flex items-center justify-around h-16 px-2">
         {navItems.map((item) => {
@@ -78,28 +79,32 @@ export function BottomNavigation() {
               key={item.href}
               href={item.href}
               prefetch={true}
-              className={`flex flex-col items-center justify-center flex-1 h-full py-1 min-h-[48px] transition-colors select-none ${
-                item.isActive
-                  ? "text-[#F25B09] font-medium"
-                  : "text-[#737373] hover:text-[#111111]"
-              }`}
+              className="flex flex-col items-center justify-center flex-1 h-full py-1 min-h-[48px] select-none"
             >
-              <div className="relative flex items-center justify-center w-6 h-6">
-                <IconComponent
-                  className="w-5 h-5 transition-transform"
-                  strokeWidth={item.isActive ? 2.3 : 1.8}
-                  aria-hidden="true"
-                />
-                {item.badgeCount !== undefined && item.badgeCount > 0 ? (
-                  <span
-                    className="absolute -top-1.5 -right-2 bg-[#F25B09] text-white text-[10px] font-semibold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border border-white"
-                    aria-label={`${item.badgeCount} item di keranjang`}
-                  >
-                    {item.badgeCount > 99 ? "99+" : item.badgeCount}
-                  </span>
-                ) : null}
+              <div
+                className={`w-[64px] h-[48px] rounded-xl flex flex-col items-center justify-center transition-all duration-200 ${
+                  item.isActive
+                    ? "bg-[#FFF0E8] text-[#F25B09] font-medium"
+                    : "bg-transparent text-[#737373] hover:text-[#111111]"
+                }`}
+              >
+                <div className="relative flex items-center justify-center w-6 h-6">
+                  <IconComponent
+                    className="w-5 h-5 transition-transform"
+                    strokeWidth={item.isActive ? 2.3 : 1.8}
+                    aria-hidden="true"
+                  />
+                  {item.badgeCount !== undefined && item.badgeCount > 0 ? (
+                    <span
+                      className="absolute -top-1.5 -right-2 bg-[#F25B09] text-white text-[10px] font-semibold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border border-white"
+                      aria-label={`${item.badgeCount} item di keranjang`}
+                    >
+                      {item.badgeCount > 99 ? "99+" : item.badgeCount}
+                    </span>
+                  ) : null}
+                </div>
+                <span className="text-[11px] mt-0.5 leading-none">{item.label}</span>
               </div>
-              <span className="text-[11px] mt-1 leading-none">{item.label}</span>
             </Link>
           );
         })}
