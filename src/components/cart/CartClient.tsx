@@ -126,7 +126,7 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
         </div>
       ) : null}
 
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-3">
+      <main className="max-w-md mx-auto px-4 pt-4 space-y-2.5">
         {/* Warning if store is closed */}
         {!storeOpen ? (
           <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 animate-landing-fade">
@@ -182,7 +182,7 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
             ) : null}
 
             {/* Cart Items List */}
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               {cart.map((item) => (
                 <div
                   key={item.id}

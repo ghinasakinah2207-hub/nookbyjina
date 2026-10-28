@@ -357,7 +357,7 @@ Terima kasih telah memesan di Nook by Jina!`;
         showCart={false}
       />
 
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-3">
+      <main className="max-w-md mx-auto px-4 pt-4 space-y-2.5">
         {/* Order Header Card */}
         <section className="bg-white border border-[#E5E5E5] rounded-2xl p-4 space-y-3">
           <div className="flex items-start justify-between gap-2">

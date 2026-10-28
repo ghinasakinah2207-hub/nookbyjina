@@ -291,7 +291,7 @@ export default function ProductDetailClient({
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F6F6F7] pb-28">
-        <main className="max-w-md mx-auto px-3.5 pt-3 space-y-3">
+        <main className="max-w-md mx-auto px-3.5 pt-3 space-y-2.5">
           {/* Skeleton Hero Image */}
           <div className="relative aspect-[4/3] w-full bg-neutral-200 rounded-2xl overflow-hidden animate-pulse border border-[#E5E5E5]">
             <div className="absolute top-2.5 left-2.5 w-8 h-8 rounded-full bg-white/70" />
@@ -404,7 +404,7 @@ export default function ProductDetailClient({
 
   return (
     <div className="min-h-screen bg-[#F6F6F7] pb-28">
-      <main className="max-w-md mx-auto px-3.5 pt-3 space-y-3">
+      <main className="max-w-md mx-auto px-3.5 pt-3 space-y-2.5">
         {/* Store Closed Warning Banner */}
         {!storeOpen && (
           <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2.5 text-xs text-[#B42318] animate-landing-fade">

@@ -291,7 +291,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
         showCart={false}
       />
 
-      <main className="max-w-md mx-auto px-4 pt-3 space-y-3">
+      <main className="max-w-md mx-auto px-4 pt-3 space-y-2.5">
         {/* Explicit Error Display if Settings Loading Failed (Never Silent Fallback) */}
         {settingsError ? (
           <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-[#B42318] space-y-1">
@@ -311,7 +311,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
           </div>
         ) : null}
 
-        <form id="checkout-form" onSubmit={handleCreateOrder} className="space-y-3">
+        <form id="checkout-form" onSubmit={handleCreateOrder} className="space-y-2.5">
           {/* Card 1: Customer Contact Info (Without "Data Pemesan (Tanpa Login)" heading) */}
           <div className="bg-white border border-[#E5E5E5] rounded-2xl p-4 space-y-3.5">
             {/* Customer Name */}
@@ -427,7 +427,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
             </h2>
 
             {/* Compact Shipping Option Cards */}
-            <div role="radiogroup" aria-label="Opsi Pengiriman" className="space-y-2.5">
+            <div role="radiogroup" aria-label="Opsi Pengiriman" className="space-y-2">
               {/* Option 1: Ambil Sendiri */}
               <button
                 type="button"

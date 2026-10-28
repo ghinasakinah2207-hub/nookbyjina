@@ -48,7 +48,7 @@ export default function OrderHistoryPage() {
         showBack={false}
       />
 
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-3">
+      <main className="max-w-md mx-auto px-4 pt-4 space-y-2.5">
         {!isHydrated ? (
           <div className="p-8 text-center bg-white border border-[#E5E5E5] rounded-2xl space-y-3 my-8">
             <p className="text-xs text-[#737373]">Memuat riwayat pesanan...</p>
@@ -75,7 +75,7 @@ export default function OrderHistoryPage() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {syncError ? (
               <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-xs text-[#B42318]">
                 <span>{syncError}</span>

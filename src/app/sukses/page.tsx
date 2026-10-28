@@ -64,7 +64,7 @@ function OrderSuccessContent() {
     <div className="min-h-screen pb-16 bg-[#F6F6F7]">
       <Header title="Pesanan Dibuat" showBack={false} showCart={false} />
 
-      <main className="max-w-md mx-auto px-4 pt-5 space-y-3">
+      <main className="max-w-md mx-auto px-4 pt-5 space-y-2.5">
         {/* Success Icon Card */}
         <div className="bg-white border border-[#E5E5E5] rounded-2xl p-6 text-center space-y-3">
           <div className="w-16 h-16 mx-auto rounded-full bg-emerald-50 text-[#18794E] flex items-center justify-center border border-emerald-100">

@@ -168,7 +168,7 @@ function PaymentContent() {
           backHref="/home"
           showCart={false}
         />
-        <main className="max-w-md mx-auto px-3 sm:px-4 pt-4 space-y-2.5">
+        <main className="max-w-md mx-auto px-3 sm:px-4 pt-4 space-y-2">
           <div className="bg-white border border-[#E5E5E5] rounded-2xl p-4 sm:p-5 space-y-3 animate-pulse">
             <div className="h-4 bg-neutral-200 rounded w-1/3" />
             <div className="h-8 bg-neutral-200 rounded w-1/2" />
@@ -324,7 +324,7 @@ Mohon dicek di riwayat transaksi merchant. Terima kasih!`;
         showCart={false}
       />
 
-      <main className="max-w-md mx-auto px-3 sm:px-4 pt-3.5 space-y-2.5">
+      <main className="max-w-md mx-auto px-3 sm:px-4 pt-3.5 space-y-2">
         {/* =========================================================================
             ORDER SUMMARY CARD
             ========================================================================= */}
@@ -426,7 +426,7 @@ Mohon dicek di riwayat transaksi merchant. Terima kasih!`;
           </div>
         ) : (
           /* Active Payment: 30-Minute Countdown & Subtle Pending Guidance */
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {/* Subtle Pending Status Notice */}
             <div className="p-3 bg-neutral-100/80 border border-[#E5E5E5] rounded-xl flex items-center justify-between text-xs text-[#737373]">
               <span className="font-medium text-[#111111]">
