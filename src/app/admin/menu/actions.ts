@@ -10,6 +10,19 @@ import { PRODUCTS } from "@/data/dummy-data";
 import { Product } from "@/types";
 import { generateSlug, resolveUniqueSlug } from "@/lib/slug";
 import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
+import {
+  extractStoragePathFromUrl,
+  normalizeStoragePath,
+  ALLOWED_STORAGE_PREFIXES,
+} from "@/lib/supabase/storage-utils";
+import {
+  enqueueStorageCleanup,
+  getPendingStorageCleanups,
+  updateStorageCleanupStatus,
+  auditLiveReferences,
+  EnqueueResult,
+  StorageCleanupItem,
+} from "@/lib/supabase/storage-cleanup-queue";
 
 export interface ProductAddonInputItem {
   id?: string;
@@ -968,6 +981,13 @@ export async function archiveProductAction(
       };
     }
 
+    // Unlink from active homepage sections to prevent ghost listings
+    const serviceClient = getServiceRoleSupabaseClient();
+    const client = serviceClient || supabase;
+    if (isUuid) {
+      await client.from("homepage_section_products").delete().eq("product_id", productId);
+    }
+
     // 3. Invalidate cache and revalidate Next.js paths
     clearCatalogCache();
     revalidatePath("/admin/menu");
@@ -979,6 +999,582 @@ export async function archiveProductAction(
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : "Terjadi kesalahan saat mengarsipkan menu.";
+    return { success: false, error: message };
+  }
+}
+
+export interface DeleteProductResult {
+  success: boolean;
+  action?: "deleted" | "archived" | "already_deleted";
+  hasTransactions?: boolean;
+  orderCount?: number;
+  message?: string;
+  warning?: string;
+  deletedImagesCount?: number;
+  sharedImagesPreservedCount?: number;
+  failedStorageFiles?: string[];
+  error?: string;
+}
+
+/**
+ * Server Action for consistent, permanent product and image deletion.
+ *
+ * CORE RULES:
+ * 1. Server-side dual authorization (Rejects unauthenticated or non-admin callers).
+ * 2. Idempotent: If product is already deleted, returns success without corrupting data.
+ * 3. Financial & Accounting Protection: If product has order_items history, hard-delete
+ *    is BLOCKED and the product is automatically soft-archived to protect transaction history.
+ * 4. Shared Asset Protection: Never deletes an image file if it is referenced by another
+ *    product, banner, or store setting.
+ * 5. Exclusive Image Cleanup: Deletes unreferenced storage objects via Supabase Storage API.
+ * 6. Non-Atomic Storage Resilience: If storage cleanup fails after DB deletion, returns
+ *    actionable warning with failed paths for manual or scheduled retry.
+ */
+export async function deleteProductPermanentlyAction(
+  productId: string
+): Promise<DeleteProductResult> {
+  try {
+    const supabase = await createServerSupabaseClient();
+
+    // 1. Dual authorization check
+    const authCheck = await verifyAdminCaller(supabase);
+    if (!authCheck.isAuthorized) {
+      return { success: false, error: authCheck.error };
+    }
+
+    const serviceClient = getServiceRoleSupabaseClient();
+    const client = serviceClient || supabase;
+
+    // 2. Resolve target product in public.products
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productId);
+    let findQuery = client.from("products").select("id, name, slug, is_archived");
+    if (isUuid) {
+      findQuery = findQuery.eq("id", productId);
+    } else {
+      findQuery = findQuery.eq("slug", productId);
+    }
+
+    const { data: targetProduct, error: findErr } = await findQuery.maybeSingle();
+
+    if (findErr) {
+      return {
+        success: false,
+        error: `Gagal mencari data menu: ${findErr.message}`,
+      };
+    }
+
+    // Scenario G: If product already deleted or not found, return idempotent success
+    if (!targetProduct) {
+      return {
+        success: true,
+        action: "already_deleted",
+        message: "Menu sudah tidak ada atau telah dihapus sebelumnya.",
+      };
+    }
+
+    const productDbId = targetProduct.id;
+
+    // 3. Check transaction history in order_items (Scenario C)
+    const { count: orderItemsCount, error: orderCountErr } = await client
+      .from("order_items")
+      .select("id", { count: "exact", head: true })
+      .eq("product_id", productDbId);
+
+    if (orderCountErr) {
+      return {
+        success: false,
+        error: `Gagal memeriksa riwayat transaksi menu: ${orderCountErr.message}`,
+      };
+    }
+
+    // CASE 1: PRODUCT HAS ORDER HISTORY -> PRESERVE TRANSACTION INTEGRITY (SOFT-ARCHIVE)
+    if (orderItemsCount && orderItemsCount > 0) {
+      const { error: archiveErr } = await client
+        .from("products")
+        .update({
+          is_archived: true,
+          is_available: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", productDbId);
+
+      if (archiveErr) {
+        return {
+          success: false,
+          error: `Gagal mengarsipkan menu berriwayat pesanan: ${archiveErr.message}`,
+        };
+      }
+
+      // Unlink from active homepage section assignments
+      await client
+        .from("homepage_section_products")
+        .delete()
+        .eq("product_id", productDbId);
+
+      clearCatalogCache();
+      revalidatePath("/admin/menu");
+      revalidatePath("/menu");
+      revalidatePath("/home");
+      revalidatePath("/");
+
+      return {
+        success: true,
+        action: "archived",
+        hasTransactions: true,
+        orderCount: orderItemsCount,
+        message: `Menu memiliki ${orderItemsCount} riwayat pesanan pelanggan. Demi menjaga integritas pembukuan dan pesanan pelanggan, menu diarsipkan dari etalase toko (bukan dihapus permanen).`,
+      };
+    }
+
+    // CASE 2: ZERO ORDER ITEMS -> EXECUTE FULL PERMANENT CLEANUP
+    // Step A: Fetch all product images metadata
+    const { data: imageRows, error: imgFetchErr } = await client
+      .from("product_images")
+      .select("id, image_url")
+      .eq("product_id", productDbId);
+
+    if (imgFetchErr) {
+      return {
+        success: false,
+        error: `Gagal memuat metadata gambar menu: ${imgFetchErr.message}`,
+      };
+    }
+
+    const imageUrls = (imageRows || []).map((r) => r.image_url).filter(Boolean);
+
+    // Step B: Determine exclusive vs shared images using precise canonical matching
+    const exclusiveStoragePaths: string[] = [];
+    let sharedImagesPreservedCount = 0;
+
+    for (const url of imageUrls) {
+      const storagePath = extractStoragePathFromUrl(url, "store-assets");
+      if (!storagePath) {
+        // Static repo asset (/images/...) or non-storage image, safely ignore
+        continue;
+      }
+
+      // Check live references across all entities (excluding this product being deleted)
+      const auditResult = await auditLiveReferences(
+        client,
+        storagePath,
+        "store-assets",
+        productDbId
+      );
+
+      if (auditResult.isReferenced) {
+        sharedImagesPreservedCount++;
+      } else {
+        exclusiveStoragePaths.push(storagePath);
+      }
+    }
+
+    // Step C: Enqueue exclusive storage paths into persistent queue BEFORE database deletion
+    // This ensures no image metadata is lost if queue persistence fails.
+    const failedStorageFiles: string[] = [];
+    let actualDeletedImagesCount = 0;
+    let queueItems: StorageCleanupItem[] = [];
+    let queueResult: EnqueueResult | null = null;
+
+    if (exclusiveStoragePaths.length > 0) {
+      queueResult = await enqueueStorageCleanup(
+        client,
+        exclusiveStoragePaths.map((p) => ({ bucket: "store-assets", filePath: p }))
+      );
+
+      // In production cloud environments, if database queue is not available,
+      // abort product deletion to prevent creating untracked orphan storage objects
+      if (!queueResult.isDatabaseQueueAvailable && process.env.NODE_ENV === "production") {
+        return {
+          success: false,
+          error:
+            "Penghapusan menu dibatalkan: Antrean database 'storage_cleanup_queue' belum tersedia di Supabase. Harap jalankan migrasi database terlebih dahulu agar berkas gambar dapat dibersihkan secara persisten.",
+        };
+      }
+
+      queueItems = queueResult.items;
+    }
+
+    // Step D: Delete child relations in strict FK order
+    // 1. homepage_section_products
+    await client
+      .from("homepage_section_products")
+      .delete()
+      .eq("product_id", productDbId);
+
+    // 2. product_images
+    const { error: imgDelErr } = await client
+      .from("product_images")
+      .delete()
+      .eq("product_id", productDbId);
+
+    if (imgDelErr) {
+      return {
+        success: false,
+        error: `Gagal menghapus metadata gambar: ${imgDelErr.message}`,
+      };
+    }
+
+    // 3. product_addons (linking records only, master addons remain untouched)
+    await client
+      .from("product_addons")
+      .delete()
+      .eq("product_id", productDbId);
+
+    // 4. product_option_values & product_option_groups
+    const { data: optionGroups } = await client
+      .from("product_option_groups")
+      .select("id")
+      .eq("product_id", productDbId);
+
+    if (optionGroups && optionGroups.length > 0) {
+      const groupIds = optionGroups.map((g) => g.id);
+      await client
+        .from("product_option_values")
+        .delete()
+        .in("group_id", groupIds);
+
+      await client
+        .from("product_option_groups")
+        .delete()
+        .eq("product_id", productDbId);
+    }
+
+    // Step E: Delete product row from public.products
+    const { error: prodDelErr } = await client
+      .from("products")
+      .delete()
+      .eq("id", productDbId);
+
+    if (prodDelErr) {
+      return {
+        success: false,
+        error: `Gagal menghapus produk dari database: ${prodDelErr.message}`,
+      };
+    }
+
+    // Step F: Execute physical removal from storage for registered queue items
+    if (queueItems.length > 0) {
+      for (const item of queueItems) {
+        // Concurrency guard: Re-audit to verify no other process linked this image
+        const recheck = await auditLiveReferences(client, item.filePath, item.bucket);
+
+        if (recheck.isReferenced) {
+          // Re-referenced concurrently! Cancel cleanup and preserve file.
+          await updateStorageCleanupStatus(
+            client,
+            item.id,
+            "cancelled",
+            `File re-referenced by: ${recheck.references.join(", ")}`
+          );
+          sharedImagesPreservedCount++;
+          continue;
+        }
+
+        try {
+          const { error: storageRemoveErr } = await client.storage
+            .from(item.bucket)
+            .remove([item.filePath]);
+
+          if (storageRemoveErr) {
+            await updateStorageCleanupStatus(
+              client,
+              item.id,
+              "failed",
+              storageRemoveErr.message
+            );
+            failedStorageFiles.push(item.filePath);
+          } else {
+            await updateStorageCleanupStatus(client, item.id, "completed");
+            actualDeletedImagesCount++;
+          }
+        } catch (removeErr) {
+          const errMsg = removeErr instanceof Error ? removeErr.message : "Network/storage error";
+          await updateStorageCleanupStatus(client, item.id, "failed", errMsg);
+          failedStorageFiles.push(item.filePath);
+        }
+      }
+    }
+
+    // Step F: Invalidate caches and revalidate Next.js paths
+    clearCatalogCache();
+    revalidatePath("/admin/menu");
+    revalidatePath("/menu");
+    revalidatePath("/home");
+    revalidatePath("/");
+
+    // Scenario D: If storage deletion failed, report actionable warning without claiming total success
+    if (failedStorageFiles.length > 0) {
+      const queueNotice = queueResult?.isDatabaseQueueAvailable
+        ? `File tercatat di antrean database 'storage_cleanup_queue' dan dapat dicoba ulang.`
+        : `PERHATIAN: Tabel 'storage_cleanup_queue' belum aktif di database Supabase (file lokal tidak persisten di serverless Vercel). Gunakan tombol coba ulang sekarang atau jalankan migrasi database.`;
+
+      return {
+        success: true,
+        action: "deleted",
+        warning: `Menu berhasil dihapus dari database, namun pembersihan ${failedStorageFiles.length} file gambar storage gagal (${failedStorageFiles.join(", ")}). ${queueNotice}`,
+        deletedImagesCount: actualDeletedImagesCount,
+        sharedImagesPreservedCount,
+        failedStorageFiles,
+        message: "Menu dihapus dari database dengan catatan kendala storage.",
+      };
+    }
+
+    return {
+      success: true,
+      action: "deleted",
+      deletedImagesCount: actualDeletedImagesCount,
+      sharedImagesPreservedCount,
+      message: `Menu dan ${actualDeletedImagesCount} file gambar eksklusif berhasil dihapus permanen.${
+        sharedImagesPreservedCount > 0 ? ` (${sharedImagesPreservedCount} file gambar bersama dipertahankan).` : ""
+      }`,
+    };
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "Terjadi kesalahan saat menghapus menu.";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Server Action to retry cleaning up failed storage files from the persistent queue.
+ * Re-checks that no other product, banner, store settings, or category references the files
+ * before issuing the storage removal.
+ */
+export async function retryDeleteStorageImagesAction(
+  storagePaths?: string[]
+): Promise<{
+  success: boolean;
+  deletedCount?: number;
+  remainingFailed?: string[];
+  preservedCount?: number;
+  error?: string;
+  message?: string;
+}> {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const authCheck = await verifyAdminCaller(supabase);
+    if (!authCheck.isAuthorized) {
+      return { success: false, error: authCheck.error };
+    }
+
+    const serviceClient = getServiceRoleSupabaseClient();
+    const client = serviceClient || supabase;
+
+    // Load items to retry from persistent queue (with targeted paths or batch)
+    const cleanPaths = storagePaths?.map(normalizeStoragePath).filter(Boolean);
+    const itemsToProcess = await getPendingStorageCleanups(client, 20, cleanPaths);
+
+    if (cleanPaths && cleanPaths.length > 0) {
+      const existingQueuePaths = new Set(itemsToProcess.map((i) => i.filePath));
+      const missingPaths = cleanPaths.filter((p) => !existingQueuePaths.has(p));
+      if (missingPaths.length > 0) {
+        const newlyEnqueued = await enqueueStorageCleanup(
+          client,
+          missingPaths.map((p) => ({ bucket: "store-assets", filePath: p }))
+        );
+        itemsToProcess.push(...newlyEnqueued.items);
+      }
+    }
+
+    if (itemsToProcess.length === 0) {
+      return {
+        success: true,
+        deletedCount: 0,
+        preservedCount: 0,
+        remainingFailed: [],
+        message: "Tidak ada file storage dalam antrean retry.",
+      };
+    }
+
+    let deletedCount = 0;
+    let preservedCount = 0;
+    const remainingFailed: string[] = [];
+
+    for (const item of itemsToProcess) {
+      // 1. Audit live references across all entities with precise canonical matching
+      const audit = await auditLiveReferences(client, item.filePath, item.bucket);
+
+      if (audit.isReferenced) {
+        // File has active references! Cancel queue item and preserve file.
+        await updateStorageCleanupStatus(
+          client,
+          item.id,
+          "cancelled",
+          `File actively referenced by: ${audit.references.join(", ")}`
+        );
+        preservedCount++;
+        continue;
+      }
+
+      // 2. Attempt removal
+      try {
+        const { error: removeErr } = await client.storage
+          .from(item.bucket)
+          .remove([item.filePath]);
+
+        if (removeErr) {
+          await updateStorageCleanupStatus(client, item.id, "failed", removeErr.message);
+          remainingFailed.push(item.filePath);
+        } else {
+          await updateStorageCleanupStatus(client, item.id, "completed");
+          deletedCount++;
+        }
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : "Storage removal failed";
+        await updateStorageCleanupStatus(client, item.id, "failed", errMsg);
+        remainingFailed.push(item.filePath);
+      }
+    }
+
+    if (remainingFailed.length > 0) {
+      return {
+        success: false,
+        remainingFailed,
+        deletedCount,
+        preservedCount,
+        error: `Gagal membersihkan ${remainingFailed.length} file dari storage. Tercatat untuk percobaan berikutnya.`,
+      };
+    }
+
+    return {
+      success: true,
+      deletedCount,
+      preservedCount,
+      message: `Berhasil membersihkan ${deletedCount} file storage.${
+        preservedCount > 0 ? ` (${preservedCount} file dipertahankan karena berstatus aktif/bersama).` : ""
+      }`,
+    };
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "Terjadi kesalahan saat retry pembersihan storage.";
+    return { success: false, error: message };
+  }
+}
+
+export interface GarbageCollectorOptions {
+  bucket?: string;
+  prefix?: string;
+  batchSize?: number;
+  dryRun?: boolean;
+}
+
+/**
+ * Server Action for admin garbage collection of unreferenced files in store-assets.
+ * Whitelisted prefixes only ("products", "banners").
+ * Dry-run mode by default to ensure safe inspection before physical removal.
+ */
+export async function cleanupUnreferencedStorageImagesAction(
+  options?: GarbageCollectorOptions
+): Promise<{
+  success: boolean;
+  dryRun?: boolean;
+  scannedCount?: number;
+  orphanCandidates?: string[];
+  deletedCount?: number;
+  preservedCount?: number;
+  error?: string;
+  message?: string;
+}> {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const authCheck = await verifyAdminCaller(supabase);
+    if (!authCheck.isAuthorized) {
+      return { success: false, error: authCheck.error };
+    }
+
+    const serviceClient = getServiceRoleSupabaseClient();
+    const client = serviceClient || supabase;
+
+    const bucket = options?.bucket || "store-assets";
+    const prefix = normalizeStoragePath(options?.prefix || "products");
+    const batchSize = Math.min(100, Math.max(1, options?.batchSize || 50));
+    const dryRun = options?.dryRun !== false; // Default: true for safety!
+
+    // Prefix validation against whitelist
+    if (!ALLOWED_STORAGE_PREFIXES.some((p) => prefix === p || prefix.startsWith(`${p}/`))) {
+      return {
+        success: false,
+        error: `Prefix "${prefix}" tidak diizinkan. Prefix yang didukung: ${ALLOWED_STORAGE_PREFIXES.join(", ")}`,
+      };
+    }
+
+    // List files from storage
+    const { data: fileList, error: listErr } = await client.storage
+      .from(bucket)
+      .list(prefix, { limit: batchSize });
+
+    if (listErr) {
+      return { success: false, error: `Gagal membaca list storage: ${listErr.message}` };
+    }
+
+    if (!fileList || fileList.length === 0) {
+      return {
+        success: true,
+        dryRun,
+        scannedCount: 0,
+        deletedCount: 0,
+        preservedCount: 0,
+        orphanCandidates: [],
+        message: `Storage "${bucket}/${prefix}" kosong.`,
+      };
+    }
+
+    const orphanCandidates: string[] = [];
+    let preservedCount = 0;
+
+    for (const file of fileList) {
+      if (!file.name || file.name === ".emptyFolderPlaceholder") continue;
+      const fullPath = `${prefix}/${file.name}`;
+
+      // Audit live references across all entities using exact canonical path
+      const audit = await auditLiveReferences(client, fullPath, bucket);
+
+      if (audit.isReferenced) {
+        preservedCount++;
+      } else {
+        orphanCandidates.push(fullPath);
+      }
+    }
+
+    // In dryRun mode, report candidates without mutating storage
+    if (dryRun) {
+      return {
+        success: true,
+        dryRun: true,
+        scannedCount: fileList.length,
+        deletedCount: 0,
+        orphanCandidates,
+        preservedCount,
+        message: `[DRY-RUN] Ditemukan ${orphanCandidates.length} file orphan dari ${fileList.length} file yang dipindai (${preservedCount} file aktif dipertahankan). Tidak ada file yang dihapus.`,
+      };
+    }
+
+    // Actual execution mode (dryRun: false)
+    if (orphanCandidates.length > 0) {
+      const { error: removeErr } = await client.storage
+        .from(bucket)
+        .remove(orphanCandidates);
+
+      if (removeErr) {
+        return {
+          success: false,
+          error: `Gagal menghapus file orphan dari storage: ${removeErr.message}`,
+        };
+      }
+    }
+
+    return {
+      success: true,
+      dryRun: false,
+      scannedCount: fileList.length,
+      deletedCount: orphanCandidates.length,
+      orphanCandidates,
+      preservedCount,
+      message: `Pembersihan storage selesai: ${orphanCandidates.length} file orphan berhasil dihapus (${preservedCount} file aktif dipertahankan).`,
+    };
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "Terjadi kesalahan saat pembersihan orphan storage.";
     return { success: false, error: message };
   }
 }

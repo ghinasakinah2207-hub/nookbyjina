@@ -40,5 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# supabase local temp
+# supabase local temp & backups
 /supabase/.temp/
+/supabase/backups/
+.data/

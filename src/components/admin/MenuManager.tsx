@@ -21,6 +21,8 @@ import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import {
   toggleProductAvailabilityAction,
   archiveProductAction,
+  deleteProductPermanentlyAction,
+  retryDeleteStorageImagesAction,
 } from "@/app/admin/menu/actions";
 
 interface MenuManagerProps {
@@ -128,7 +130,41 @@ export function MenuManager({
     }
   };
 
-  const handleConfirmDelete = async () => {
+  const [actionFeedback, setActionFeedback] = useState<{
+    type: "success" | "warning";
+    message: string;
+    failedFiles?: string[];
+  } | null>(null);
+  const [isRetryingStorage, setIsRetryingStorage] = useState(false);
+
+  const handleRetryStorageCleanup = async (files: string[]) => {
+    setIsRetryingStorage(true);
+    try {
+      const res = await retryDeleteStorageImagesAction(files);
+      if (res.success) {
+        setActionFeedback({
+          type: "success",
+          message: res.message || "File storage berhasil dibersihkan.",
+        });
+      } else {
+        setActionFeedback({
+          type: "warning",
+          message: res.error || "Gagal membersihkan file storage.",
+          failedFiles: res.remainingFailed,
+        });
+      }
+    } catch {
+      setActionFeedback({
+        type: "warning",
+        message: "Gagal terhubung saat membersihkan storage.",
+        failedFiles: files,
+      });
+    } finally {
+      setIsRetryingStorage(false);
+    }
+  };
+
+  const handleConfirmArchive = async () => {
     if (!deleteProduct) return;
     setIsDeleting(true);
     setDeleteError(null);
@@ -136,13 +172,56 @@ export function MenuManager({
     try {
       const res = await archiveProductAction(deleteProduct.id || deleteProduct.slug);
       if (!res.success) {
-        throw new Error(res.error || "Gagal menghapus/mengarsipkan menu.");
+        throw new Error(res.error || "Gagal mengarsipkan menu.");
+      }
+
+      setProducts((prev) =>
+        prev.filter((p) => p.id !== deleteProduct.id && p.slug !== deleteProduct.slug)
+      );
+
+      setActionFeedback({
+        type: "success",
+        message: `Menu "${deleteProduct.name}" berhasil diarsipkan dari katalog.`,
+      });
+
+      setDeleteProduct(null);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Terjadi kesalahan saat mengarsipkan menu.";
+      setDeleteError(msg);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteProduct) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const res = await deleteProductPermanentlyAction(deleteProduct.id || deleteProduct.slug);
+      if (!res.success) {
+        throw new Error(res.error || "Gagal menghapus menu.");
       }
 
       // Remove from active local catalog state
       setProducts((prev) =>
         prev.filter((p) => p.id !== deleteProduct.id && p.slug !== deleteProduct.slug)
       );
+
+      if (res.warning) {
+        setActionFeedback({
+          type: "warning",
+          message: res.warning,
+          failedFiles: res.failedStorageFiles,
+        });
+      } else {
+        setActionFeedback({
+          type: "success",
+          message: res.message || `Menu "${deleteProduct.name}" berhasil diproses.`,
+        });
+      }
 
       setDeleteProduct(null);
     } catch (err: unknown) {
@@ -156,6 +235,45 @@ export function MenuManager({
 
   return (
     <div className="space-y-3">
+      {actionFeedback && (
+        <div
+          className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-3 animate-landing-fade ${
+            actionFeedback.type === "warning"
+              ? "bg-amber-50 border-amber-200 text-amber-900"
+              : "bg-emerald-50 border-emerald-200 text-emerald-900"
+          }`}
+        >
+          <div className="flex items-center gap-2 flex-1 flex-wrap">
+            <span>{actionFeedback.message}</span>
+            {actionFeedback.failedFiles && actionFeedback.failedFiles.length > 0 && (
+              <button
+                type="button"
+                disabled={isRetryingStorage}
+                onClick={() => handleRetryStorageCleanup(actionFeedback.failedFiles!)}
+                className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 font-semibold rounded-lg text-[11px] transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
+              >
+                {isRetryingStorage ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>Membersihkan...</span>
+                  </>
+                ) : (
+                  <span>Coba Bersihkan File Ulang</span>
+                )}
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionFeedback(null)}
+            className="text-neutral-400 hover:text-neutral-700 font-bold ml-2 cursor-pointer text-sm leading-none"
+            aria-label="Tutup notifikasi"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* =========================================================================
           ACTION SECTION (SIMPLE, COMPACT & MINIMAL SPACING)
           ========================================================================= */}
@@ -431,19 +549,24 @@ export function MenuManager({
               </div>
               <div className="space-y-1">
                 <h3 className="text-sm sm:text-base font-bold text-[#111111]">
-                  Hapus Menu dari Katalog?
+                  Hapus atau Arsipkan Menu?
                 </h3>
                 <p className="text-xs text-[#737373] leading-relaxed">
-                  Apakah Anda yakin ingin menghapus <strong className="text-[#111111]">{deleteProduct.name}</strong>?
+                  Tindakan untuk menu <strong className="text-[#111111]">{deleteProduct.name}</strong>:
                 </p>
-                <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-[11px] text-amber-900 mt-2 space-y-1">
+                <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-[11px] text-amber-900 mt-2 space-y-1.5">
                   <div className="font-semibold flex items-center gap-1.5 text-amber-800">
                     <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span>Perlindungan Data Transaksi</span>
+                    <span>Kebijakan Integritas & Penyimpanan</span>
                   </div>
-                  <p className="leading-relaxed">
-                    Menu ini akan diarsipkan dari katalog aktif sehingga tidak lagi tampil di etalase toko. Riwayat transaksi dan pesanan terdahulu pelanggan tetap tersimpan aman.
-                  </p>
+                  <ul className="list-disc pl-4 space-y-1 leading-relaxed text-[#737373]">
+                    <li>
+                      <strong className="text-amber-900">Arsipkan Saja:</strong> Sembunyikan dari katalog tanpa menghapus data atau file gambar.
+                    </li>
+                    <li>
+                      <strong className="text-[#B42318]">Hapus Permanen:</strong> Bersihkan total produk dan file gambar eksklusif. Jika menu sudah memiliki riwayat pesanan, sistem otomatis mengarsipkannya agar laporan keuangan tetap aman.
+                    </li>
+                  </ul>
                 </div>
               </div>
             </div>
@@ -454,7 +577,7 @@ export function MenuManager({
               </div>
             )}
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-100">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-100 flex-wrap">
               <button
                 type="button"
                 onClick={() => {
@@ -462,25 +585,35 @@ export function MenuManager({
                   setDeleteError(null);
                 }}
                 disabled={isDeleting}
-                className="px-4 py-2 rounded-xl border border-[#E5E5E5] text-xs font-semibold text-[#737373] hover:text-[#111111] hover:bg-neutral-50 transition-colors cursor-pointer"
+                className="px-3.5 py-2 rounded-xl border border-[#E5E5E5] text-xs font-semibold text-[#737373] hover:text-[#111111] hover:bg-neutral-50 transition-colors cursor-pointer"
               >
                 Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmArchive}
+                disabled={isDeleting}
+                className="px-3.5 py-2 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                title="Sembunyikan dari etalase toko tanpa menghapus data atau file gambar"
+              >
+                <span>Arsipkan Saja</span>
               </button>
               <button
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
                 className="px-4 py-2 rounded-xl bg-[#B42318] hover:bg-red-700 text-white text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                title="Hapus total produk dan file gambar eksklusif (jika 0 riwayat pesanan)"
               >
                 {isDeleting ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Menghapus...</span>
+                    <span>Memproses...</span>
                   </>
                 ) : (
                   <>
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>Ya, Hapus Menu</span>
+                    <span>Hapus Permanen</span>
                   </>
                 )}
               </button>
