@@ -66,7 +66,7 @@ function OrderSuccessContent() {
 
       <main className="max-w-md mx-auto px-4 pt-5 space-y-2.5">
         {/* Success Icon Card */}
-        <div className="bg-white border border-[#E5E5E5] rounded-2xl p-6 text-center space-y-3">
+        <div className="bg-white rounded-2xl p-6 text-center space-y-3">
           <div className="w-16 h-16 mx-auto rounded-full bg-emerald-50 text-[#18794E] flex items-center justify-center border border-emerald-100">
             <CheckCircle2 className="w-8 h-8" />
           </div>
@@ -90,7 +90,7 @@ function OrderSuccessContent() {
         </div>
 
         {/* Share Token Link Box */}
-        <div className="bg-white border border-[#E5E5E5] rounded-2xl p-4 space-y-3">
+        <div className="bg-white rounded-2xl p-4 space-y-3">
           <div className="flex items-center gap-2">
             <Share2 className="w-4 h-4 text-[#F25B09]" />
             <h2 className="text-xs font-bold text-[#111111]">

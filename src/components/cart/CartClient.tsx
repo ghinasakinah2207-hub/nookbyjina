@@ -144,7 +144,7 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
 
         {cart.length === 0 ? (
           /* Empty State */
-          <div className="p-8 text-center bg-white border border-[#E5E5E5] rounded-2xl space-y-4 my-8">
+          <div className="p-8 text-center bg-white rounded-2xl space-y-4 my-8">
             <div className="w-16 h-16 mx-auto rounded-full bg-neutral-100 flex items-center justify-center text-[#737373]">
               <ShoppingBag className="w-8 h-8 stroke-[1.5]" />
             </div>
@@ -186,10 +186,10 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
               {cart.map((item) => (
                 <div
                   key={item.id}
-                  className={`bg-white border rounded-2xl p-3.5 space-y-3 transition-colors ${
+                  className={`bg-white rounded-2xl p-3.5 space-y-3 transition-colors ${
                     !item.isAvailable
-                      ? "border-red-300 bg-red-50/20"
-                      : "border-[#E5E5E5]"
+                      ? "border border-red-300 bg-red-50/20"
+                      : ""
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -337,7 +337,7 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
             </div>
 
             {/* General Order Note */}
-            <div className="bg-white border border-[#E5E5E5] rounded-2xl p-4 space-y-2">
+            <div className="bg-white rounded-2xl p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <label
                   htmlFor="generalOrderNote"

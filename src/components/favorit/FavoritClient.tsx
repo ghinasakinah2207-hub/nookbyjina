@@ -63,7 +63,7 @@ export default function FavoritClient({ catalogProducts = [] }: FavoritClientPro
           </>
         ) : (
           /* Helpful Empty State */
-          <div className="p-8 text-center bg-white border border-[#E5E5E5] rounded-2xl space-y-3 my-6">
+          <div className="p-8 text-center bg-white rounded-2xl space-y-3 my-6">
             <div className="w-12 h-12 mx-auto rounded-full bg-neutral-100 flex items-center justify-center text-[#737373]">
               <Heart className="w-6 h-6 text-[#737373]" />
             </div>

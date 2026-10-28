@@ -169,11 +169,11 @@ function PaymentContent() {
           showCart={false}
         />
         <main className="max-w-md mx-auto px-3 sm:px-4 pt-4 space-y-2">
-          <div className="bg-white border border-[#E5E5E5] rounded-2xl p-4 sm:p-5 space-y-3 animate-pulse">
+          <div className="bg-white rounded-2xl p-4 sm:p-5 space-y-3 animate-pulse">
             <div className="h-4 bg-neutral-200 rounded w-1/3" />
             <div className="h-8 bg-neutral-200 rounded w-1/2" />
           </div>
-          <div className="bg-white border border-[#E5E5E5] rounded-2xl p-4 space-y-4 text-center animate-pulse flex flex-col items-center justify-center">
+          <div className="bg-white rounded-2xl p-4 space-y-4 text-center animate-pulse flex flex-col items-center justify-center">
             <div className="w-full aspect-square bg-neutral-200 rounded-xl" />
             <div className="h-4 bg-neutral-200 rounded w-3/4" />
           </div>
@@ -328,7 +328,7 @@ Mohon dicek di riwayat transaksi merchant. Terima kasih!`;
         {/* =========================================================================
             ORDER SUMMARY CARD
             ========================================================================= */}
-        <section className="bg-white border border-[#E5E5E5] rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-xs">
+        <section className="bg-white rounded-2xl p-4 sm:p-5 space-y-3.5">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-xs text-[#737373]">No. Pesanan:</span>
@@ -488,7 +488,7 @@ Mohon dicek di riwayat transaksi merchant. Terima kasih!`;
         {!isPaid && !isExpired && (
           <>
             {qrisImageUrl ? (
-              <div className="bg-white border border-[#E5E5E5] rounded-2xl p-3 sm:p-4 shadow-xs flex flex-col items-center justify-center space-y-2.5">
+              <div className="bg-white rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center space-y-2.5">
                 {/* Full card width QR container preserving full uncropped aspect ratio */}
                 <div className="w-full aspect-square relative bg-white flex items-center justify-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -504,7 +504,7 @@ Mohon dicek di riwayat transaksi merchant. Terima kasih!`;
               </div>
             ) : (
               /* Neutral Fallback State if QRIS is not configured by merchant */
-              <div className="p-6 bg-neutral-50 border border-[#E5E5E5] rounded-2xl text-center space-y-3 shadow-xs">
+              <div className="p-6 bg-white rounded-2xl text-center space-y-3">
                 <div className="w-12 h-12 rounded-2xl bg-white border border-[#E5E5E5] text-[#737373] flex items-center justify-center mx-auto shadow-xs">
                   <AlertCircle className="w-6 h-6 text-[#737373]" />
                 </div>
@@ -533,7 +533,7 @@ Mohon dicek di riwayat transaksi merchant. Terima kasih!`;
             )}
 
             {/* Payment Instructions (5 Steps) in a separate clean card */}
-            <section className="bg-white border border-[#E5E5E5] rounded-2xl p-4 sm:p-5 text-xs text-[#737373] space-y-2 shadow-xs">
+            <section className="bg-white rounded-2xl p-4 sm:p-5 text-xs text-[#737373] space-y-2">
               <p className="font-semibold text-[#111111] flex items-center gap-1.5">
                 <Info className="w-4 h-4 text-[#F25B09] flex-shrink-0" />
                 Petunjuk Pembayaran:

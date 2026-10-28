@@ -50,12 +50,12 @@ export default function OrderHistoryPage() {
 
       <main className="max-w-md mx-auto px-4 pt-4 space-y-2.5">
         {!isHydrated ? (
-          <div className="p-8 text-center bg-white border border-[#E5E5E5] rounded-2xl space-y-3 my-8">
+          <div className="p-8 text-center bg-white rounded-2xl space-y-3 my-8">
             <p className="text-xs text-[#737373]">Memuat riwayat pesanan...</p>
           </div>
         ) : orders.length === 0 ? (
           /* Empty State */
-          <div className="p-8 text-center bg-white border border-[#E5E5E5] rounded-2xl space-y-4 my-8">
+          <div className="p-8 text-center bg-white rounded-2xl space-y-4 my-8">
             <div className="w-16 h-16 mx-auto rounded-full bg-neutral-100 flex items-center justify-center text-[#737373]">
               <ReceiptText className="w-8 h-8 stroke-[1.5]" />
             </div>
@@ -121,7 +121,7 @@ export default function OrderHistoryPage() {
               return (
                 <div
                   key={order.id}
-                  className="bg-white border border-[#E5E5E5] rounded-2xl p-4 space-y-3"
+                  className="bg-white rounded-2xl p-4 space-y-3"
                 >
                   {/* Card Header: Order ID & Time */}
                   <div className="flex items-start justify-between gap-2">

@@ -313,7 +313,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
 
         <form id="checkout-form" onSubmit={handleCreateOrder} className="space-y-2.5">
           {/* Card 1: Customer Contact Info (Without "Data Pemesan (Tanpa Login)" heading) */}
-          <div className="bg-white border border-[#E5E5E5] rounded-2xl p-4 space-y-3.5">
+          <div className="bg-white rounded-2xl p-4 space-y-3.5">
             {/* Customer Name */}
             <div className="space-y-1">
               <label
@@ -386,7 +386,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
           </div>
 
           {/* Card 2: Ringkasan Menu */}
-          <div className="bg-white border border-[#E5E5E5] rounded-2xl p-4 space-y-3">
+          <div className="bg-white rounded-2xl p-4 space-y-3">
             <h2 className="text-sm font-bold text-[#111111] flex items-center justify-between">
               <span>Ringkasan Menu</span>
               <span className="text-xs font-normal text-[#737373]">
@@ -421,7 +421,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
           </div>
 
           {/* Card 3: Opsi Pengiriman */}
-          <div className="bg-white border border-[#E5E5E5] rounded-2xl p-4 space-y-3.5">
+          <div className="bg-white rounded-2xl p-4 space-y-3.5">
             <h2 className="text-sm font-bold text-[#111111]">
               Opsi Pengiriman
             </h2>
@@ -732,7 +732,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
           </div>
 
           {/* Card 4: Metode Pembayaran (Dinamis Sesuai Pengaturan Toko) */}
-          <div className="bg-white border border-[#E5E5E5] rounded-2xl p-4 space-y-3">
+          <div className="bg-white rounded-2xl p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-[#111111] flex items-center gap-2">
                 <CreditCard className="w-4 h-4 text-[#F25B09]" />
@@ -826,7 +826,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
           </div>
 
           {/* Card 5: Rincian Pembayaran */}
-          <div className="bg-white border border-[#E5E5E5] rounded-2xl p-4 space-y-3">
+          <div className="bg-white rounded-2xl p-4 space-y-3">
             <h2 className="text-sm font-bold text-[#111111]">
               Rincian Pembayaran
             </h2>

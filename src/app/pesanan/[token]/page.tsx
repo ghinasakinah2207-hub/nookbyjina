@@ -359,7 +359,7 @@ Terima kasih telah memesan di Nook by Jina!`;
 
       <main className="max-w-md mx-auto px-4 pt-4 space-y-2.5">
         {/* Order Header Card */}
-        <section className="bg-white border border-[#E5E5E5] rounded-2xl p-4 space-y-3">
+        <section className="bg-white rounded-2xl p-4 space-y-3">
           <div className="flex items-start justify-between gap-2">
             <div>
               <span className="text-[11px] text-[#737373] block uppercase tracking-wider">
@@ -459,7 +459,7 @@ Terima kasih telah memesan di Nook by Jina!`;
         ) : null}
 
         {/* Items Breakdown (Digital Receipt) */}
-        <section className="bg-white border border-[#E5E5E5] rounded-2xl p-4 space-y-3">
+        <section className="bg-white rounded-2xl p-4 space-y-3">
           <h2 className="text-sm font-bold text-[#111111] flex items-center justify-between">
             <span>Rincian Hidangan</span>
             <span className="text-xs font-normal text-[#737373]">
@@ -529,7 +529,7 @@ Terima kasih telah memesan di Nook by Jina!`;
         </section>
 
         {/* Fulfillment & Payment Method Info */}
-        <section className="bg-white border border-[#E5E5E5] rounded-2xl p-4 space-y-2 text-xs text-[#737373]">
+        <section className="bg-white rounded-2xl p-4 space-y-2 text-xs text-[#737373]">
           <h2 className="text-sm font-bold text-[#111111]">
             Informasi Pemenuhan & Pembayaran
           </h2>
@@ -555,7 +555,7 @@ Terima kasih telah memesan di Nook by Jina!`;
         </section>
 
         {/* Share Token Link Box & Security Note */}
-        <section className="bg-white border border-[#E5E5E5] rounded-2xl p-4 space-y-3">
+        <section className="bg-white rounded-2xl p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold text-[#111111] flex items-center gap-1.5">
               <Share2 className="w-3.5 h-3.5 text-[#F25B09]" />

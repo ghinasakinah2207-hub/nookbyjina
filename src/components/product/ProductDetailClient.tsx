@@ -313,7 +313,7 @@ export default function ProductDetailClient({
           </div>
 
           {/* Skeleton Option Groups */}
-          <div className="bg-white border border-[#E5E5E5] rounded-xl p-3 space-y-2.5">
+          <div className="bg-white rounded-xl p-3 space-y-2.5">
             <div className="h-3 bg-neutral-200 rounded w-24 animate-pulse" />
             <div className="grid grid-cols-2 gap-1.5">
               <div className="h-10 bg-neutral-100 rounded-lg animate-pulse" />
@@ -540,7 +540,7 @@ export default function ProductDetailClient({
           return (
             <section
               key={group.id}
-              className="bg-white border border-[#E5E5E5] rounded-xl p-3 space-y-2.5"
+              className="bg-white rounded-xl p-3 space-y-2.5"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -614,7 +614,7 @@ export default function ProductDetailClient({
 
         {/* 3. Add-ons Section */}
         {product.addons.length > 0 && (
-          <section className="bg-white border border-[#E5E5E5] rounded-xl p-3 space-y-2.5">
+          <section className="bg-white rounded-xl p-3 space-y-2.5">
             <div>
               <h2 className="text-xs font-bold text-[#111111]">
                 Ekstra Tambahan
@@ -666,7 +666,7 @@ export default function ProductDetailClient({
         )}
 
         {/* 4. Special Note for Kitchen */}
-        <section className="bg-white border border-[#E5E5E5] rounded-xl p-3 space-y-1.5">
+        <section className="bg-white rounded-xl p-3 space-y-1.5">
           <label
             htmlFor="item-note"
             className="text-xs font-bold text-[#111111] block"

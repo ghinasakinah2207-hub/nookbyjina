@@ -68,7 +68,7 @@ export function ProductCard({
   return (
     <Link
       href={`/produk/${product.id}`}
-      className="group flex flex-col h-full bg-[#FFFFFF] border border-[#E5E5E5] rounded-2xl overflow-hidden hover:border-neutral-300 transition-colors"
+      className="group flex flex-col h-full bg-[#FFFFFF] rounded-2xl overflow-hidden transition-colors"
     >
       {/* 1. Product Image Container */}
       <div className="relative w-full aspect-[4/3] bg-neutral-100 overflow-hidden flex-shrink-0">

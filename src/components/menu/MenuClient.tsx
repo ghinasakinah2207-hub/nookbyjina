@@ -206,7 +206,7 @@ export default function MenuClient({
 
         {/* Error State */}
         {error ? (
-          <div className="p-8 text-center bg-white border border-[#E5E5E5] rounded-2xl space-y-3 my-6">
+          <div className="p-8 text-center bg-white rounded-2xl space-y-3 my-6">
             <div className="w-12 h-12 mx-auto rounded-full bg-orange-50 flex items-center justify-center text-[#F25B09]">
               <AlertCircle className="w-6 h-6" />
             </div>
@@ -228,7 +228,7 @@ export default function MenuClient({
             {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="flex flex-col h-full bg-[#FFFFFF] border border-[#E5E5E5] rounded-2xl overflow-hidden"
+                className="flex flex-col h-full bg-[#FFFFFF] rounded-2xl overflow-hidden"
               >
                 <div className="w-full aspect-[4/3] bg-neutral-200 animate-pulse" />
                 <div className="p-2 sm:p-2.5 flex flex-col justify-between flex-1 gap-2">
@@ -255,7 +255,7 @@ export default function MenuClient({
             ))}
           </div>
         ) : (
-          <div className="p-8 text-center bg-white border border-[#E5E5E5] rounded-2xl space-y-3 my-6">
+          <div className="p-8 text-center bg-white rounded-2xl space-y-3 my-6">
             <div className="w-12 h-12 mx-auto rounded-full bg-neutral-100 flex items-center justify-center text-[#737373]">
               <UtensilsCrossed className="w-6 h-6" />
             </div>

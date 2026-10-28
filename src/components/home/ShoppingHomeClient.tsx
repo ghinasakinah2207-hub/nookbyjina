@@ -345,7 +345,7 @@ export default function ShoppingHomeClient({
                 ))}
               </div>
             ) : (
-              <div className="p-8 text-center bg-white border border-[#E5E5E5] rounded-2xl space-y-3 my-4">
+              <div className="p-8 text-center bg-white rounded-2xl space-y-3 my-4">
                 <div className="w-12 h-12 mx-auto rounded-full bg-neutral-100 flex items-center justify-center text-[#737373]">
                   <UtensilsCrossed className="w-6 h-6" />
                 </div>
@@ -378,7 +378,7 @@ export default function ShoppingHomeClient({
           </section>
         ) : error ? (
           /* Error Fallback State */
-          <div className="p-6 text-center bg-white border border-[#E5E5E5] rounded-2xl space-y-3 my-4">
+          <div className="p-6 text-center bg-white rounded-2xl space-y-3 my-4">
             <div className="w-10 h-10 mx-auto rounded-full bg-orange-50 flex items-center justify-center text-[#F25B09]">
               <AlertCircle className="w-5 h-5" />
             </div>
@@ -410,7 +410,7 @@ export default function ShoppingHomeClient({
                   {[1, 2, 3].map((cardIdx) => (
                     <div
                       key={cardIdx}
-                      className="w-[145px] sm:w-[155px] h-48 bg-white border border-[#E5E5E5] rounded-2xl overflow-hidden flex-shrink-0"
+                      className="w-[145px] sm:w-[155px] h-48 bg-white rounded-2xl overflow-hidden flex-shrink-0"
                     >
                       <div className="w-full aspect-[4/3] bg-neutral-200 animate-pulse" />
                       <div className="p-2 space-y-2">
@@ -437,7 +437,7 @@ export default function ShoppingHomeClient({
           </div>
         ) : (
           /* Empty State if Admin configured 0 sections */
-          <div className="p-8 text-center bg-white border border-[#E5E5E5] rounded-2xl space-y-2 my-4">
+          <div className="p-8 text-center bg-white rounded-2xl space-y-2 my-4">
             <div className="w-10 h-10 mx-auto rounded-full bg-neutral-100 flex items-center justify-center text-[#737373]">
               <UtensilsCrossed className="w-5 h-5" />
             </div>
