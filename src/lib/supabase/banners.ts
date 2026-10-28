@@ -104,12 +104,16 @@ export function writeLocalBanners(banners: Banner[]): void {
  * Authoritative Supabase fetcher for banners.
  * Queries `public.home_banners` ordered by `sort_order` ASC.
  * Maps `subtitle` column to `targetUrl`.
- * Falls back to local JSON store if table is empty or query fails.
+ *
+ * INVARIANTS:
+ * 1. A successful Supabase query returning [] is a valid empty database state (returns []).
+ * 2. Fallback to local JSON store is NEVER used for admin data loading or when query succeeded with [].
+ * 3. Storefront only falls back to local JSON store if a network/database error truly occurred.
  */
 export async function fetchAuthoritativeBanners(
-  clientOverride?: SupabaseClient
+  clientOverride?: SupabaseClient,
+  options?: { forAdmin?: boolean }
 ): Promise<Banner[]> {
-  const local = readLocalBanners();
   const client = clientOverride || getServiceRoleSupabaseClient() || supabase;
 
   try {
@@ -118,7 +122,7 @@ export async function fetchAuthoritativeBanners(
       .select("id, title, subtitle, image_url, is_active, sort_order, created_at")
       .order("sort_order", { ascending: true });
 
-    if (!error && dbBanners && Array.isArray(dbBanners) && dbBanners.length > 0) {
+    if (!error && dbBanners && Array.isArray(dbBanners)) {
       return dbBanners.map((b) => {
         const rawSubtitle = (b.subtitle || "").trim();
         const isUrl =
@@ -138,11 +142,21 @@ export async function fetchAuthoritativeBanners(
         };
       });
     }
+
+    if (error) {
+      console.warn("Supabase fetch failed in fetchAuthoritativeBanners:", error.message);
+    }
   } catch (err) {
     console.warn("Supabase fetch failed in fetchAuthoritativeBanners:", err);
   }
 
-  return local;
+  // Never fall back to mock banners for admin!
+  // Return [] so admin operations don't resurrect mock data.
+  if (options?.forAdmin) {
+    return [];
+  }
+
+  return readLocalBanners();
 }
 
 const cachedPublicHomeBannersFetcher = unstable_cache(
@@ -159,12 +173,26 @@ const cachedPublicHomeBannersFetcher = unstable_cache(
 
 /**
  * Server-side loader: Fetch all banners for admin management.
- * Checks authoritative Supabase `home_banners` table; falls back to local store.
+ * Checks authoritative Supabase `home_banners` table.
+ * Strictly uses { forAdmin: true } to prevent ever falling back to mock banners.
  */
 export async function getAdminHomeBanners(
   clientOverride?: SupabaseClient
 ): Promise<Banner[]> {
-  return fetchAuthoritativeBanners(clientOverride);
+  let client = clientOverride;
+  if (!client) {
+    client = getServiceRoleSupabaseClient() || undefined;
+  }
+  if (!client) {
+    try {
+      const { createServerSupabaseClient } = await import("./server");
+      client = await createServerSupabaseClient();
+    } catch {
+      // In non-server or non-request runtime (e.g. test suites)
+      client = supabase;
+    }
+  }
+  return fetchAuthoritativeBanners(client, { forAdmin: true });
 }
 
 /**

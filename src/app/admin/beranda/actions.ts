@@ -10,8 +10,6 @@ import {
   writeLocalSections,
 } from "@/lib/supabase/homepage-sections";
 import {
-  writeLocalBanners,
-  getAdminHomeBanners,
   toValidBannerUuid,
 } from "@/lib/supabase/banners";
 import { HomepageSection, Banner } from "@/types";
@@ -468,8 +466,8 @@ export interface SaveBannerInput {
 
 /**
  * Server Action to save or update a homepage slider banner.
- * Ensures persistent storage in Supabase `home_banners` table with valid UUIDs,
- * maps targetUrl to the subtitle column, and invalidates Next.js tag cache.
+ * Saves ONLY the target banner to Supabase `home_banners` table with valid UUID.
+ * Never batch-upserts the entire list to prevent resurrecting deleted or mock banners.
  */
 export async function saveHomeBannerAction(
   input: SaveBannerInput
@@ -490,57 +488,47 @@ export async function saveHomeBannerAction(
   const client =
     getServiceRoleSupabaseClient() || (await createServerSupabaseClient());
 
-  const banners = await getAdminHomeBanners(client);
   const targetUuid = input.id ? toValidBannerUuid(input.id) : crypto.randomUUID();
 
-  let targetBanner: Banner;
-  const existingIndex = banners.findIndex(
-    (b) => b.id === targetUuid || (input.id && b.id === input.id)
-  );
+  let targetSortOrder = 1;
+  let createdAt = new Date().toISOString();
 
-  if (existingIndex !== -1) {
-    targetBanner = {
-      ...banners[existingIndex],
-      id: targetUuid,
-      imageUrl: trimmedUrl,
-      targetUrl: input.targetUrl ? input.targetUrl.trim() : undefined,
-      isActive:
-        input.isActive !== undefined
-          ? Boolean(input.isActive)
-          : banners[existingIndex].isActive,
-    };
-    banners[existingIndex] = targetBanner;
+  if (input.id) {
+    const { data: existing } = await client
+      .from("home_banners")
+      .select("sort_order, created_at, is_active")
+      .eq("id", targetUuid)
+      .maybeSingle();
+
+    if (existing) {
+      targetSortOrder = existing.sort_order ?? 1;
+      createdAt = existing.created_at || createdAt;
+    }
   } else {
-    const nextSortOrder =
-      banners.length > 0
-        ? Math.max(...banners.map((b) => b.sortOrder ?? 0)) + 1
-        : 1;
+    const { data: maxRow } = await client
+      .from("home_banners")
+      .select("sort_order")
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    targetBanner = {
-      id: targetUuid,
-      imageUrl: trimmedUrl,
-      targetUrl: input.targetUrl ? input.targetUrl.trim() : undefined,
-      isActive: input.isActive !== undefined ? Boolean(input.isActive) : true,
-      sortOrder: nextSortOrder,
-      createdAt: new Date().toISOString(),
-    };
-    banners.push(targetBanner);
+    targetSortOrder = (maxRow?.sort_order ?? 0) + 1;
   }
 
-  // Authoritative Supabase persistence: ensure all baseline slides are synced with valid UUIDs
-  const upsertRows = banners.map((b, idx) => ({
-    id: toValidBannerUuid(b.id),
-    image_url: b.imageUrl,
-    title: b.title || "",
-    subtitle: (b.targetUrl || b.subtitle || "").trim(),
-    is_active: Boolean(b.isActive),
-    sort_order: Number(b.sortOrder ?? idx + 1),
-    created_at: b.createdAt || new Date().toISOString(),
-  }));
+  const bannerRow = {
+    id: targetUuid,
+    image_url: trimmedUrl,
+    title: "",
+    subtitle: (input.targetUrl || "").trim(),
+    is_active: input.isActive !== undefined ? Boolean(input.isActive) : true,
+    sort_order: targetSortOrder,
+    created_at: createdAt,
+  };
 
+  // Upsert ONLY this single banner row (prevents resurrecting other banners)
   const { error: upsertError } = await client
     .from("home_banners")
-    .upsert(upsertRows, { onConflict: "id" });
+    .upsert(bannerRow, { onConflict: "id" });
 
   if (upsertError) {
     console.error("Supabase upsert error in saveHomeBannerAction:", upsertError);
@@ -550,10 +538,16 @@ export async function saveHomeBannerAction(
     };
   }
 
-  // Secondary local store fallback
-  writeLocalBanners(banners);
+  const targetBanner: Banner = {
+    id: targetUuid,
+    imageUrl: trimmedUrl,
+    targetUrl: input.targetUrl ? input.targetUrl.trim() : undefined,
+    isActive: bannerRow.is_active,
+    sortOrder: targetSortOrder,
+    createdAt,
+  };
 
-  // Invalidate Next.js cache tags and paths so customer homepage receives fresh data
+  // Invalidate Next.js cache tags and paths so customer storefront receives fresh data
   try {
     revalidateTag("home-banners", { expire: 0 });
   } catch {
@@ -581,25 +575,9 @@ export async function deleteHomeBannerAction(
   const client =
     getServiceRoleSupabaseClient() || (await createServerSupabaseClient());
 
-  const banners = await getAdminHomeBanners(client);
   const targetUuid = toValidBannerUuid(bannerId);
 
-  const filtered = banners.filter(
-    (b) => b.id !== targetUuid && b.id !== bannerId
-  );
-
-  if (filtered.length === banners.length) {
-    return { success: false, error: "Banner tidak ditemukan." };
-  }
-
-  // Re-index sort order
-  const reindexed = filtered.map((b, idx) => ({
-    ...b,
-    id: toValidBannerUuid(b.id),
-    sortOrder: idx + 1,
-  }));
-
-  // Sync delete to Supabase
+  // Sync delete directly to Supabase
   const { error: deleteError } = await client
     .from("home_banners")
     .delete()
@@ -613,26 +591,23 @@ export async function deleteHomeBannerAction(
     };
   }
 
-  // Update sort_order for remaining banners in Supabase
-  if (reindexed.length > 0) {
-    const reindexRows = reindexed.map((b) => ({
-      id: b.id,
-      image_url: b.imageUrl,
-      title: b.title || "",
-      subtitle: (b.targetUrl || b.subtitle || "").trim(),
-      is_active: b.isActive,
-      sort_order: b.sortOrder,
-    }));
-    const { error: reindexError } = await client
-      .from("home_banners")
-      .upsert(reindexRows, { onConflict: "id" });
+  // Fetch remaining live rows from Supabase to re-index sort_order cleanly
+  const { data: remainingBanners } = await client
+    .from("home_banners")
+    .select("id, sort_order")
+    .order("sort_order", { ascending: true });
 
-    if (reindexError) {
-      console.warn("Supabase re-index warning in deleteHomeBannerAction:", reindexError);
+  if (remainingBanners && remainingBanners.length > 0) {
+    for (let idx = 0; idx < remainingBanners.length; idx++) {
+      const expectedSort = idx + 1;
+      if (remainingBanners[idx].sort_order !== expectedSort) {
+        await client
+          .from("home_banners")
+          .update({ sort_order: expectedSort })
+          .eq("id", remainingBanners[idx].id);
+      }
     }
   }
-
-  writeLocalBanners(reindexed);
 
   try {
     revalidateTag("home-banners", { expire: 0 });
@@ -662,33 +637,13 @@ export async function toggleBannerStatusAction(
   const client =
     getServiceRoleSupabaseClient() || (await createServerSupabaseClient());
 
-  const banners = await getAdminHomeBanners(client);
   const targetUuid = toValidBannerUuid(bannerId);
 
-  const target = banners.find(
-    (b) => b.id === targetUuid || b.id === bannerId
-  );
-  if (!target) {
-    return { success: false, error: "Banner tidak ditemukan." };
-  }
-
-  target.isActive = isActive;
-  target.id = targetUuid;
-
-  // Sync to Supabase
+  // Directly update only the is_active flag of this single banner
   const { error: updateError } = await client
     .from("home_banners")
-    .upsert(
-      {
-        id: targetUuid,
-        image_url: target.imageUrl,
-        title: target.title || "",
-        subtitle: (target.targetUrl || target.subtitle || "").trim(),
-        is_active: isActive,
-        sort_order: target.sortOrder ?? 1,
-      },
-      { onConflict: "id" }
-    );
+    .update({ is_active: isActive })
+    .eq("id", targetUuid);
 
   if (updateError) {
     console.error(
@@ -700,8 +655,6 @@ export async function toggleBannerStatusAction(
       error: `Gagal mengubah status banner: ${updateError.message}`,
     };
   }
-
-  writeLocalBanners(banners);
 
   try {
     revalidateTag("home-banners", { expire: 0 });
@@ -730,54 +683,18 @@ export async function reorderHomeBannersAction(
   const client =
     getServiceRoleSupabaseClient() || (await createServerSupabaseClient());
 
-  const banners = await getAdminHomeBanners(client);
-  const map = new Map(banners.map((b) => [toValidBannerUuid(b.id), b]));
+  // Update sort_order for each provided ID directly in Supabase
+  for (let idx = 0; idx < orderedBannerIds.length; idx++) {
+    const uuid = toValidBannerUuid(orderedBannerIds[idx]);
+    const { error: updateErr } = await client
+      .from("home_banners")
+      .update({ sort_order: idx + 1 })
+      .eq("id", uuid);
 
-  const reordered: Banner[] = [];
-  orderedBannerIds.forEach((rawId, idx) => {
-    const uuid = toValidBannerUuid(rawId);
-    const b = map.get(uuid);
-    if (b) {
-      reordered.push({ ...b, id: uuid, sortOrder: idx + 1 });
-      map.delete(uuid);
+    if (updateErr) {
+      console.warn("Supabase update warning in reorderHomeBannersAction:", updateErr.message);
     }
-  });
-
-  // Append any banners omitted from reorder list
-  map.forEach((b) => {
-    reordered.push({
-      ...b,
-      id: toValidBannerUuid(b.id),
-      sortOrder: reordered.length + 1,
-    });
-  });
-
-  // Sync to Supabase in a single batch upsert
-  const upsertRows = reordered.map((b) => ({
-    id: b.id,
-    image_url: b.imageUrl,
-    title: b.title || "",
-    subtitle: (b.targetUrl || b.subtitle || "").trim(),
-    is_active: b.isActive,
-    sort_order: b.sortOrder,
-  }));
-
-  const { error: reorderError } = await client
-    .from("home_banners")
-    .upsert(upsertRows, { onConflict: "id" });
-
-  if (reorderError) {
-    console.error(
-      "Supabase upsert error in reorderHomeBannersAction:",
-      reorderError
-    );
-    return {
-      success: false,
-      error: `Gagal memperbarui urutan banner di database: ${reorderError.message}`,
-    };
   }
-
-  writeLocalBanners(reordered);
 
   try {
     revalidateTag("home-banners", { expire: 0 });

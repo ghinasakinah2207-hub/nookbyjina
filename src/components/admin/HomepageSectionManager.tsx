@@ -374,7 +374,10 @@ export function HomepageSectionManager({
       {/* =========================================================================
           HOMEPAGE HERO BANNER SLIDER MANAGEMENT SECTION
           ========================================================================= */}
-      <BannerSliderManager initialBanners={initialBanners} />
+      <BannerSliderManager
+        key={initialBanners.map((b) => `${b.id}-${b.sortOrder}-${b.isActive}`).join(";")}
+        initialBanners={initialBanners}
+      />
 
       {/* =========================================================================
           HOMEPAGE PRODUCT SECTIONS MANAGEMENT

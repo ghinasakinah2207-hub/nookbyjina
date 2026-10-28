@@ -267,7 +267,138 @@ async function runTestSuite() {
     console.log(`  [INFO] Live Supabase home_banners current row count: ${liveData?.length ?? 0}`);
 
     // =========================================================================
-    // SECTION 6: Summary
+    // SECTION 6: Empty Database Invariant [SIMULATED]
+    // =========================================================================
+    console.log("\n--- Section 6: Empty Database Invariant [SIMULATED] ---");
+
+    const emptyDbClient = {
+      from: () => ({
+        select: () => ({
+          order: () => ({
+            data: [],
+            error: null,
+          }),
+        }),
+      }),
+    } as unknown as SupabaseClient;
+
+    const adminEmptyBanners = await getAdminHomeBanners(emptyDbClient);
+    assert(
+      Array.isArray(adminEmptyBanners) && adminEmptyBanners.length === 0,
+      "Successful query with 0 rows returns [] for admin (does NOT fall back to dummy banners)"
+    );
+
+    const publicEmptyBanners = await getPublicHomeBanners(emptyDbClient, { fresh: true });
+    assert(
+      Array.isArray(publicEmptyBanners) && publicEmptyBanners.length === 0,
+      "Successful query with 0 rows returns [] for storefront (does NOT fall back to dummy banners)"
+    );
+
+    // =========================================================================
+    // SECTION 7: Database Error Invariant [SIMULATED]
+    // =========================================================================
+    console.log("\n--- Section 7: Database Error Invariant [SIMULATED] ---");
+
+    const errorDbClient = {
+      from: () => ({
+        select: () => ({
+          order: () => ({
+            data: null,
+            error: { message: "Simulated connection timeout" },
+          }),
+        }),
+      }),
+    } as unknown as SupabaseClient;
+
+    const adminErrorBanners = await getAdminHomeBanners(errorDbClient);
+    assert(
+      Array.isArray(adminErrorBanners) && adminErrorBanners.length === 0,
+      "Database error returns [] for admin (never pollutes admin state with dummy banners)"
+    );
+
+    // =========================================================================
+    // SECTION 8: Single-Row Save & Resurrection Prevention [SIMULATED]
+    // =========================================================================
+    console.log("\n--- Section 8: Single-Row Save & Resurrection Prevention [SIMULATED] ---");
+
+    const recordedUpserts: Record<string, unknown>[] = [];
+    const simulatedActionClient = {
+      from: () => ({
+        select: () => ({
+          order: () => ({
+            limit: () => ({
+              maybeSingle: async () => ({
+                data: null,
+                error: null,
+              }),
+            }),
+          }),
+        }),
+        upsert: async (row: Record<string, unknown>) => {
+          recordedUpserts.push(row);
+          return { error: null };
+        },
+      }),
+    };
+
+    // Simulate saving a new banner into empty DB
+    const newBannerPayload = {
+      id: "e0000001-0000-4000-8000-000000000001",
+      image_url: "https://example.com/single-new-banner.webp",
+      title: "",
+      subtitle: "/menu",
+      is_active: true,
+      sort_order: 1,
+      created_at: new Date().toISOString(),
+    };
+
+    await simulatedActionClient.from().upsert(newBannerPayload);
+
+    assert(
+      recordedUpserts.length === 1,
+      `Single-row save executes exactly 1 upsert (found ${recordedUpserts.length})`
+    );
+    assert(
+      !Array.isArray(recordedUpserts[0]),
+      "Save operation upserts a single object, NOT a batch array"
+    );
+    assert(
+      recordedUpserts[0].id === "e0000001-0000-4000-8000-000000000001",
+      "Upserted row corresponds strictly to the target banner ID"
+    );
+
+    // =========================================================================
+    // SECTION 9: Restored Serai Jahe Madu File Verification
+    // =========================================================================
+    console.log("\n--- Section 9: Restored Serai Jahe Madu File Verification ---");
+
+    const fs = await import("fs");
+    const path = await import("path");
+    const seraiFilePath = path.join(process.cwd(), "public/images/uploads/serai-jahe-madu-1792082497527.webp");
+
+    assert(
+      fs.existsSync(seraiFilePath),
+      `Restored file exists on disk: ${seraiFilePath}`
+    );
+
+    const stats = fs.statSync(seraiFilePath);
+    assert(
+      stats.size > 10000,
+      `Restored file has valid non-zero size (${(stats.size / 1024).toFixed(1)} KB)`
+    );
+
+    const fileBuf = fs.readFileSync(seraiFilePath);
+    const isRiffWebp =
+      fileBuf.slice(0, 4).toString() === "RIFF" &&
+      fileBuf.slice(8, 12).toString() === "WEBP";
+
+    assert(
+      isRiffWebp,
+      "Restored file contains valid RIFF/WEBP magic header bytes"
+    );
+
+    // =========================================================================
+    // SECTION 10: Summary
     // =========================================================================
     console.log("\n================================================================================");
     console.log(`TEST SUITE PASSED: ${passedCount} / ${totalCount} checks successful.`);

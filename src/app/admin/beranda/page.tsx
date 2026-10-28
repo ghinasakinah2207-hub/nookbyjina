@@ -7,13 +7,13 @@ import {
   getActiveCategories,
 } from "@/lib/supabase/catalog";
 import { getAdminProductsServer } from "@/lib/supabase/admin-catalog";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { CATEGORIES, PRODUCTS } from "@/data/dummy-data";
 import { Category, Product, HomepageSection, Banner } from "@/types";
 
-export const instant = false;
-
 export default async function AdminHomepageSectionsPage() {
   await requireAdminAuth();
+  const supabase = await createServerSupabaseClient();
 
   let sections: HomepageSection[] = [];
   let products: Product[] = [];
@@ -23,7 +23,7 @@ export default async function AdminHomepageSectionsPage() {
   try {
     const [fetchedBanners, fetchedSections, fetchedProds, fetchedCats] =
       await Promise.all([
-        getAdminHomeBanners(),
+        getAdminHomeBanners(supabase),
         getAdminHomepageSections(),
         getAdminProductsServer(),
         getActiveCategories().catch(() => []),
