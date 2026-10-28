@@ -105,12 +105,20 @@ function verifyAdminResponsiveNavigation() {
 
   console.log("\n--- Section 2: Active Indicators & Queue Badges ---");
   assert(
-    content.includes("text-[#F25B09] font-medium"),
-    "Active tabs use Temu by Jina orange (#F25B09) and font-medium"
+    content.includes("bg-[#FFF0E8]") && content.includes("text-[#F25B09] font-medium"),
+    "Active tabs use soft peach rounded rectangle background (#FFF0E8) with brand orange (#F25B09) text/icon"
   );
   assert(
-    content.includes("text-[#737373] hover:text-[#111111]"),
-    "Inactive tabs use neutral muted text (#737373) with hover transition"
+    content.includes("w-[60px] h-[48px] rounded-xl"),
+    "Tab indicators use consistent rounded-xl dimensions for uniform appearance"
+  );
+  assert(
+    content.includes("transition-all duration-200") || content.includes("transition-all duration-150"),
+    "Tab state transitions are smooth between 150-200ms"
+  );
+  assert(
+    content.includes("bg-transparent text-[#737373] hover:text-[#111111]"),
+    "Inactive tabs have transparent background and neutral text (#737373)"
   );
   assert(
     content.includes("orderQueueCount > 0"),

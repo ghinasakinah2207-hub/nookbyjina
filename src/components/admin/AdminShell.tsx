@@ -463,96 +463,112 @@ export function AdminShell({
           <Link
             href="/admin"
             prefetch={true}
-            className={`flex flex-col items-center justify-center flex-1 h-full py-1 min-h-[48px] transition-colors select-none ${
-              isDashboardActive
-                ? "text-[#F25B09] font-medium"
-                : "text-[#737373] hover:text-[#111111]"
-            }`}
+            className="flex flex-col items-center justify-center flex-1 h-full py-1 min-h-[48px] select-none"
           >
-            <div className="relative flex items-center justify-center w-6 h-6">
-              <LayoutDashboard
-                className="w-5 h-5 transition-transform"
-                strokeWidth={isDashboardActive ? 2.3 : 1.8}
-                aria-hidden="true"
-              />
+            <div
+              className={`w-[60px] h-[48px] rounded-xl flex flex-col items-center justify-center transition-all duration-200 ${
+                isDashboardActive
+                  ? "bg-[#FFF0E8] text-[#F25B09] font-medium"
+                  : "bg-transparent text-[#737373] hover:text-[#111111]"
+              }`}
+            >
+              <div className="relative flex items-center justify-center w-6 h-6">
+                <LayoutDashboard
+                  className="w-5 h-5 transition-transform"
+                  strokeWidth={isDashboardActive ? 2.3 : 1.8}
+                  aria-hidden="true"
+                />
+              </div>
+              <span className="text-[11px] mt-0.5 leading-none">Dasbor</span>
             </div>
-            <span className="text-[11px] mt-1 leading-none">Dasbor</span>
           </Link>
 
           {/* 2. Pesanan */}
           <Link
             href="/admin/pesanan"
             prefetch={true}
-            className={`flex flex-col items-center justify-center flex-1 h-full py-1 min-h-[48px] transition-colors select-none ${
-              isOrdersActive
-                ? "text-[#F25B09] font-medium"
-                : "text-[#737373] hover:text-[#111111]"
-            }`}
+            className="flex flex-col items-center justify-center flex-1 h-full py-1 min-h-[48px] select-none"
           >
-            <div className="relative flex items-center justify-center w-6 h-6">
-              <ShoppingBag
-                className="w-5 h-5 transition-transform"
-                strokeWidth={isOrdersActive ? 2.3 : 1.8}
-                aria-hidden="true"
-              />
-              {orderQueueCount > 0 && (
-                <span
-                  className="absolute -top-1.5 -right-2 bg-[#F25B09] text-white text-[10px] font-semibold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border border-white"
-                  aria-label={`${orderQueueCount} pesanan menunggu konfirmasi`}
-                >
-                  {orderQueueCount > 99 ? "99+" : orderQueueCount}
-                </span>
-              )}
+            <div
+              className={`w-[60px] h-[48px] rounded-xl flex flex-col items-center justify-center transition-all duration-200 ${
+                isOrdersActive
+                  ? "bg-[#FFF0E8] text-[#F25B09] font-medium"
+                  : "bg-transparent text-[#737373] hover:text-[#111111]"
+              }`}
+            >
+              <div className="relative flex items-center justify-center w-6 h-6">
+                <ShoppingBag
+                  className="w-5 h-5 transition-transform"
+                  strokeWidth={isOrdersActive ? 2.3 : 1.8}
+                  aria-hidden="true"
+                />
+                {orderQueueCount > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-2 bg-[#F25B09] text-white text-[10px] font-semibold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border border-white"
+                    aria-label={`${orderQueueCount} pesanan menunggu konfirmasi`}
+                  >
+                    {orderQueueCount > 99 ? "99+" : orderQueueCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] mt-0.5 leading-none">Pesanan</span>
             </div>
-            <span className="text-[11px] mt-1 leading-none">Pesanan</span>
           </Link>
 
           {/* 3. Menu */}
           <Link
             href="/admin/menu"
             prefetch={true}
-            className={`flex flex-col items-center justify-center flex-1 h-full py-1 min-h-[48px] transition-colors select-none ${
-              isMenuActive
-                ? "text-[#F25B09] font-medium"
-                : "text-[#737373] hover:text-[#111111]"
-            }`}
+            className="flex flex-col items-center justify-center flex-1 h-full py-1 min-h-[48px] select-none"
           >
-            <div className="relative flex items-center justify-center w-6 h-6">
-              <UtensilsCrossed
-                className="w-5 h-5 transition-transform"
-                strokeWidth={isMenuActive ? 2.3 : 1.8}
-                aria-hidden="true"
-              />
+            <div
+              className={`w-[60px] h-[48px] rounded-xl flex flex-col items-center justify-center transition-all duration-200 ${
+                isMenuActive
+                  ? "bg-[#FFF0E8] text-[#F25B09] font-medium"
+                  : "bg-transparent text-[#737373] hover:text-[#111111]"
+              }`}
+            >
+              <div className="relative flex items-center justify-center w-6 h-6">
+                <UtensilsCrossed
+                  className="w-5 h-5 transition-transform"
+                  strokeWidth={isMenuActive ? 2.3 : 1.8}
+                  aria-hidden="true"
+                />
+              </div>
+              <span className="text-[11px] mt-0.5 leading-none">Menu</span>
             </div>
-            <span className="text-[11px] mt-1 leading-none">Menu</span>
           </Link>
 
           {/* 4. QRIS */}
           <Link
             href="/admin/pembayaran"
             prefetch={true}
-            className={`flex flex-col items-center justify-center flex-1 h-full py-1 min-h-[48px] transition-colors select-none ${
-              isQrisActive
-                ? "text-[#F25B09] font-medium"
-                : "text-[#737373] hover:text-[#111111]"
-            }`}
+            className="flex flex-col items-center justify-center flex-1 h-full py-1 min-h-[48px] select-none"
           >
-            <div className="relative flex items-center justify-center w-6 h-6">
-              <QrCode
-                className="w-5 h-5 transition-transform"
-                strokeWidth={isQrisActive ? 2.3 : 1.8}
-                aria-hidden="true"
-              />
-              {qrisQueueCount > 0 && (
-                <span
-                  className="absolute -top-1.5 -right-2 bg-[#F25B09] text-white text-[10px] font-semibold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border border-white"
-                  aria-label={`${qrisQueueCount} verifikasi QRIS menunggu`}
-                >
-                  {qrisQueueCount > 99 ? "99+" : qrisQueueCount}
-                </span>
-              )}
+            <div
+              className={`w-[60px] h-[48px] rounded-xl flex flex-col items-center justify-center transition-all duration-200 ${
+                isQrisActive
+                  ? "bg-[#FFF0E8] text-[#F25B09] font-medium"
+                  : "bg-transparent text-[#737373] hover:text-[#111111]"
+              }`}
+            >
+              <div className="relative flex items-center justify-center w-6 h-6">
+                <QrCode
+                  className="w-5 h-5 transition-transform"
+                  strokeWidth={isQrisActive ? 2.3 : 1.8}
+                  aria-hidden="true"
+                />
+                {qrisQueueCount > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-2 bg-[#F25B09] text-white text-[10px] font-semibold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border border-white"
+                    aria-label={`${qrisQueueCount} verifikasi QRIS menunggu`}
+                  >
+                    {qrisQueueCount > 99 ? "99+" : qrisQueueCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] mt-0.5 leading-none">QRIS</span>
             </div>
-            <span className="text-[11px] mt-1 leading-none">QRIS</span>
           </Link>
 
           {/* 5. Lainnya */}
@@ -561,20 +577,24 @@ export function AdminShell({
             onClick={() => setMoreSheetOpen((prev) => !prev)}
             aria-expanded={moreSheetOpen}
             aria-controls="admin-more-sheet"
-            className={`flex flex-col items-center justify-center flex-1 h-full py-1 min-h-[48px] transition-colors select-none cursor-pointer ${
-              isMoreActive
-                ? "text-[#F25B09] font-medium"
-                : "text-[#737373] hover:text-[#111111]"
-            }`}
+            className="flex flex-col items-center justify-center flex-1 h-full py-1 min-h-[48px] select-none cursor-pointer"
           >
-            <div className="relative flex items-center justify-center w-6 h-6">
-              <MoreHorizontal
-                className="w-5 h-5 transition-transform"
-                strokeWidth={isMoreActive ? 2.3 : 1.8}
-                aria-hidden="true"
-              />
+            <div
+              className={`w-[60px] h-[48px] rounded-xl flex flex-col items-center justify-center transition-all duration-200 ${
+                isMoreActive
+                  ? "bg-[#FFF0E8] text-[#F25B09] font-medium"
+                  : "bg-transparent text-[#737373] hover:text-[#111111]"
+              }`}
+            >
+              <div className="relative flex items-center justify-center w-6 h-6">
+                <MoreHorizontal
+                  className="w-5 h-5 transition-transform"
+                  strokeWidth={isMoreActive ? 2.3 : 1.8}
+                  aria-hidden="true"
+                />
+              </div>
+              <span className="text-[11px] mt-0.5 leading-none">Lainnya</span>
             </div>
-            <span className="text-[11px] mt-1 leading-none">Lainnya</span>
           </button>
         </div>
       </nav>
