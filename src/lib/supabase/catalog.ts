@@ -73,10 +73,29 @@ export interface DbAddon {
 }
 
 export interface DbProductAddon {
+  id?: string;
   product_id: string;
-  addon_id: string;
+  name?: string;
+  price?: number;
+  is_active?: boolean;
   sort_order: number;
-  addons: DbAddon | DbAddon[] | null;
+  created_at?: string;
+  updated_at?: string;
+  // Legacy optional properties for backward compatibility
+  addon_id?: string;
+  addons?: {
+    id: string;
+    name: string;
+    description?: string | null;
+    price: number;
+    is_active: boolean;
+  } | {
+    id: string;
+    name: string;
+    description?: string | null;
+    price: number;
+    is_active: boolean;
+  }[] | null;
 }
 
 /**
@@ -110,7 +129,8 @@ export function mapDbOptionGroupsToUiOptionGroups(groups: DbOptionGroup[] | null
 }
 
 /**
- * Maps database product-addons join records to the UI Addon model.
+ * Maps database product-addons records to the UI Addon model.
+ * Directly reads name, price, and status from public.product_addons table.
  */
 export function mapDbProductAddonsToUiAddons(productAddons: DbProductAddon[] | null | undefined): Addon[] {
   if (!productAddons || !Array.isArray(productAddons)) return [];
@@ -118,10 +138,21 @@ export function mapDbProductAddonsToUiAddons(productAddons: DbProductAddon[] | n
     .slice()
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
     .map((pa) => {
+      // Primary: Read directly from product_addons table
+      if (pa.name !== undefined && pa.price !== undefined) {
+        if (pa.is_active === false) return null;
+        return {
+          id: pa.id,
+          name: pa.name,
+          price: Number(pa.price || 0),
+        };
+      }
+
+      // Fallback for legacy nested object structures if encountered
       const rawAddon = Array.isArray(pa.addons) ? pa.addons[0] : pa.addons;
       if (!rawAddon || rawAddon.is_active === false) return null;
       return {
-        id: rawAddon.id,
+        id: rawAddon.id || pa.id,
         name: rawAddon.name,
         price: Number(rawAddon.price || 0),
       };
@@ -326,16 +357,12 @@ export async function getVisibleProducts(bypassCache = false): Promise<Product[]
         )
       ),
       product_addons (
+        id,
         product_id,
-        addon_id,
-        sort_order,
-        addons (
-          id,
-          name,
-          description,
-          price,
-          is_active
-        )
+        name,
+        price,
+        is_active,
+        sort_order
       )
     `)
     .eq("is_archived", false)
@@ -585,16 +612,12 @@ export async function getProductBySlugOrId(
     dbClient
       .from("product_addons")
       .select(`
+        id,
         product_id,
-        addon_id,
-        sort_order,
-        addons (
-          id,
-          name,
-          description,
-          price,
-          is_active
-        )
+        name,
+        price,
+        is_active,
+        sort_order
       `)
       .eq("product_id", productRow.id)
       .order("sort_order", { ascending: true }),

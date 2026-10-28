@@ -96,49 +96,53 @@ export interface UpdateProductResult {
 /**
  * Synchronizes product-scoped addons directly for a product.
  * MASTER ADD-ON GLOBAL IS PERMANENTLY REMOVED:
- * Each product manages its own add-ons directly. No global master reuse across products.
+ * Each product manages its own add-ons directly in public.product_addons table.
  */
 async function resolveAndSyncProductAddons(
   client: SupabaseClient,
   productId: string,
   items: ProductAddonInputItem[]
-): Promise<{ success: boolean; resolvedAddonIds?: string[]; error?: string }> {
+): Promise<{ success: boolean; error?: string }> {
   try {
-    // 1. Fetch current addons linked to this product
-    const { data: currentLinks, error: linkErr } = await client
+    // 1. Fetch current product_addons directly for this product
+    const { data: currentRows, error: fetchErr } = await client
       .from("product_addons")
-      .select("addon_id")
+      .select("id, name, price, sort_order, is_active")
       .eq("product_id", productId);
 
-    if (linkErr) {
+    if (fetchErr) {
       return {
         success: false,
-        error: `Gagal membaca relasi add-on produk: ${linkErr.message}`,
+        error: `Gagal membaca add-on produk: ${fetchErr.message}`,
       };
     }
 
-    const currentAddonIds = new Set((currentLinks || []).map((l) => l.addon_id));
-    const resolvedIds: string[] = [];
+    const currentMap = new Map((currentRows || []).map((r) => [r.id, r]));
+    const retainedIds = new Set<string>();
 
     const validItems = items
-      .map((it) => ({
+      .map((it, idx) => ({
         id: it.id?.trim() || undefined,
         name: (it.name || "").trim(),
         price: Math.max(0, Math.round(Number(it.price) || 0)),
+        sortOrder: idx + 1,
       }))
       .filter((it) => it.name.length > 0);
 
     for (const item of validItems) {
-      // If item has an existing ID that belongs to this product, update it
-      if (item.id && currentAddonIds.has(item.id)) {
+      if (item.id && currentMap.has(item.id)) {
+        // Update existing product addon
         const { error: updErr } = await client
-          .from("addons")
+          .from("product_addons")
           .update({
             name: item.name,
             price: item.price,
             is_active: true,
+            sort_order: item.sortOrder,
+            updated_at: new Date().toISOString(),
           })
-          .eq("id", item.id);
+          .eq("id", item.id)
+          .eq("product_id", productId);
 
         if (updErr) {
           return {
@@ -146,54 +150,50 @@ async function resolveAndSyncProductAddons(
             error: `Gagal memperbarui add-on "${item.name}": ${updErr.message}`,
           };
         }
+        retainedIds.add(item.id);
+      } else {
+        // Insert new product-scoped addon
+        const newId = item.id || crypto.randomUUID();
+        const { error: insErr } = await client
+          .from("product_addons")
+          .insert({
+            id: newId,
+            product_id: productId,
+            name: item.name,
+            price: item.price,
+            is_active: true,
+            sort_order: item.sortOrder,
+          });
 
-        resolvedIds.push(item.id);
-        continue;
+        if (insErr) {
+          return {
+            success: false,
+            error: `Gagal menyimpan add-on baru "${item.name}": ${insErr.message}`,
+          };
+        }
+        retainedIds.add(newId);
       }
-
-      // Otherwise, create a new product-scoped addon
-      const newAddonId = crypto.randomUUID();
-      const { error: insErr } = await client.from("addons").insert({
-        id: newAddonId,
-        name: item.name,
-        price: item.price,
-        is_active: true,
-      });
-
-      if (insErr) {
-        return {
-          success: false,
-          error: `Gagal menyimpan add-on baru "${item.name}": ${insErr.message}`,
-        };
-      }
-
-      resolvedIds.push(newAddonId);
     }
 
     // Clean up any old addons of this product that were removed by the admin
-    const newResolvedIdSet = new Set(resolvedIds);
-    for (const oldId of currentAddonIds) {
-      if (!newResolvedIdSet.has(oldId)) {
-        await client
+    for (const [existingId] of currentMap) {
+      if (!retainedIds.has(existingId)) {
+        const { error: delErr } = await client
           .from("product_addons")
           .delete()
-          .eq("product_id", productId)
-          .eq("addon_id", oldId);
+          .eq("id", existingId)
+          .eq("product_id", productId);
 
-        // Check if unshared and safe to delete from addons table
-        const { count } = await client
-          .from("product_addons")
-          .select("*", { count: "exact", head: true })
-          .eq("addon_id", oldId);
-
-        if (!count || count === 0) {
-          await client.from("addons").delete().eq("id", oldId);
+        if (delErr) {
+          return {
+            success: false,
+            error: `Gagal menghapus add-on lama: ${delErr.message}`,
+          };
         }
       }
     }
 
-    const uniqueResolvedIds = Array.from(new Set(resolvedIds));
-    return { success: true, resolvedAddonIds: uniqueResolvedIds };
+    return { success: true };
   } catch (err) {
     const msg =
       err instanceof Error
@@ -443,48 +443,16 @@ export async function createProductAction(
       }
     }
 
-    // 8. Insert linked Add-ons if provided
-    const hasAddonsInput = input.addons !== undefined;
-    const hasAddonIdsInput = input.addonIds !== undefined;
-
-    if (hasAddonsInput || hasAddonIdsInput) {
-      let uniqueAddonIds: string[] = [];
-
-      if (hasAddonsInput) {
-        const syncResult = await resolveAndSyncProductAddons(
-          client,
-          productId,
-          input.addons || []
-        );
-        if (!syncResult.success) {
-          await client.from("products").delete().eq("id", productId);
-          return { success: false, error: syncResult.error };
-        }
-        uniqueAddonIds = syncResult.resolvedAddonIds || [];
-      } else if (hasAddonIdsInput && input.addonIds) {
-        uniqueAddonIds = Array.from(
-          new Set(input.addonIds.map((id) => id.trim()).filter(Boolean))
-        );
-      }
-
-      if (uniqueAddonIds.length > 0) {
-        const addonRows = uniqueAddonIds.map((addonId, aIdx) => ({
-          product_id: productId,
-          addon_id: addonId,
-          sort_order: aIdx + 1,
-        }));
-
-        const { error: addonErr } = await client
-          .from("product_addons")
-          .insert(addonRows);
-
-        if (addonErr) {
-          await client.from("products").delete().eq("id", productId);
-          return {
-            success: false,
-            error: `Gagal menghubungkan add-on produk: ${addonErr.message}`,
-          };
-        }
+    // 8. Insert product-scoped Add-ons directly if provided
+    if (input.addons !== undefined) {
+      const syncResult = await resolveAndSyncProductAddons(
+        client,
+        productId,
+        input.addons || []
+      );
+      if (!syncResult.success) {
+        await client.from("products").delete().eq("id", productId);
+        return { success: false, error: syncResult.error };
       }
     }
 
@@ -806,91 +774,15 @@ export async function updateProductAction(
       }
     }
 
-    // 6. Update linked Addons ONLY if explicitly provided in input
-    // If both input.addons and input.addonIds are undefined, preserve all existing product_addons untouched
-    const hasAddonsInput = input.addons !== undefined;
-    const hasAddonIdsInput = input.addonIds !== undefined;
-
-    if (hasAddonsInput || hasAddonIdsInput) {
-      // 6a. Snapshot existing addons before updating so we can restore if new insert fails
-      const { data: existingAddons, error: fetchAddonErr } = await client
-        .from("product_addons")
-        .select("addon_id, sort_order")
-        .eq("product_id", resolvedProductId)
-        .order("sort_order", { ascending: true });
-
-      if (fetchAddonErr) {
-        return {
-          success: false,
-          error: `Gagal membaca relasi add-on produk: ${fetchAddonErr.message}`,
-        };
-      }
-
-      let uniqueAddonIds: string[] = [];
-
-      if (hasAddonsInput) {
-        const syncResult = await resolveAndSyncProductAddons(
-          client,
-          resolvedProductId,
-          input.addons || []
-        );
-        if (!syncResult.success) {
-          return { success: false, error: syncResult.error };
-        }
-        uniqueAddonIds = syncResult.resolvedAddonIds || [];
-      } else if (hasAddonIdsInput && input.addonIds) {
-        uniqueAddonIds = Array.from(
-          new Set(input.addonIds.map((id) => id.trim()).filter(Boolean))
-        );
-      }
-
-      const currentAddonIds = (existingAddons || []).map((ea) => ea.addon_id);
-      const isUnchanged =
-        currentAddonIds.length === uniqueAddonIds.length &&
-        currentAddonIds.every((id, idx) => id === uniqueAddonIds[idx]);
-
-      // Only perform database mutation if the addons selection actually changed
-      if (!isUnchanged) {
-        const { error: delErr } = await client
-          .from("product_addons")
-          .delete()
-          .eq("product_id", resolvedProductId);
-
-        if (delErr) {
-          return {
-            success: false,
-            error: `Gagal membersihkan relasi add-on lama: ${delErr.message}`,
-          };
-        }
-
-        if (uniqueAddonIds.length > 0) {
-          const addonRows = uniqueAddonIds.map((addonId, aIdx) => ({
-            product_id: resolvedProductId,
-            addon_id: addonId,
-            sort_order: aIdx + 1,
-          }));
-
-          const { error: addonErr } = await client
-            .from("product_addons")
-            .insert(addonRows);
-
-          if (addonErr) {
-            // Restore previous addons snapshot if new insert fails to avoid partial state
-            if (existingAddons && existingAddons.length > 0) {
-              await client.from("product_addons").insert(
-                existingAddons.map((ea) => ({
-                  product_id: resolvedProductId,
-                  addon_id: ea.addon_id,
-                  sort_order: ea.sort_order,
-                }))
-              );
-            }
-            return {
-              success: false,
-              error: `Gagal memperbarui add-on produk: ${addonErr.message}`,
-            };
-          }
-        }
+    // 6. Update product-scoped Addons directly if explicitly provided in input
+    if (input.addons !== undefined) {
+      const syncResult = await resolveAndSyncProductAddons(
+        client,
+        resolvedProductId,
+        input.addons || []
+      );
+      if (!syncResult.success) {
+        return { success: false, error: syncResult.error };
       }
     }
 

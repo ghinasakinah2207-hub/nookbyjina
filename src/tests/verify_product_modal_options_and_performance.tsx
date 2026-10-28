@@ -47,8 +47,8 @@ assert(
 );
 
 assert(
-  catalogSource.includes("product_addons") && catalogSource.includes("addons"),
-  "getVisibleProducts query joins product_addons and addons"
+  catalogSource.includes("product_addons"),
+  "getVisibleProducts query loads product_addons directly"
 );
 
 // Verify archived products are excluded
