@@ -96,8 +96,8 @@ function verifyCustomerBottomNavigation() {
     "Container applies soft floating shadow class"
   );
   assert(
-    (content.includes("px-2.5") || content.includes("px-3")) && content.includes("py-1.5"),
-    "Outer container has comfortable horizontal padding (px-2.5 or px-3) with py-1.5"
+    (content.includes("px-3.5") || content.includes("px-3") || content.includes("px-2.5")) && content.includes("py-1.5"),
+    "Outer container has comfortable horizontal padding (px-3.5 or px-3) with py-1.5"
   );
   assert(
     content.includes("safe-area-inset-bottom"),
@@ -110,8 +110,9 @@ function verifyCustomerBottomNavigation() {
     "Tabs use vertical icon-over-label layout for all tabs"
   );
   assert(
-    content.includes("translateX") && content.includes("activeIndex"),
-    "Shared active indicator glides smoothly using CSS translateX transform"
+    (content.includes("translate3d") || content.includes("translateX")) &&
+      (content.includes("currentIndex") || content.includes("activeIndex")),
+    "Shared active indicator glides smoothly using hardware-accelerated CSS transform"
   );
   assert(
     content.includes("bg-[#F0F0F2]") && content.includes("rounded-2xl"),
@@ -134,7 +135,8 @@ function verifyCustomerBottomNavigation() {
     "Tabs maintain a balanced 4-6px gap (mt-1) between icon and label"
   );
   assert(
-    content.includes("aria-current={item.isActive ? \"page\" : undefined}"),
+    content.includes('aria-current={isSelected ? "page" : undefined}') ||
+      content.includes('aria-current={item.isActive ? "page" : undefined}'),
     "Active tab indicates current page via aria-current"
   );
   assert(
@@ -142,10 +144,10 @@ function verifyCustomerBottomNavigation() {
     "Tabs preserve accessible labels and tooltip titles"
   );
   assert(
-    content.includes("duration-350") &&
+    (content.includes("duration-400") || content.includes("duration-350")) &&
     content.includes("cubic-bezier(0.22,1,0.36,1)") &&
     content.includes("motion-reduce:transition-none"),
-    "Indicator glides smoothly (350ms, cubic-bezier(0.22,1,0.36,1)) and respects motion-reduce preferences"
+    "Indicator glides smoothly (350-400ms, cubic-bezier(0.22,1,0.36,1)) and respects motion-reduce preferences"
   );
 
   console.log("\n--- Section 4: Cart Badge Count & Route Exclusions ---");

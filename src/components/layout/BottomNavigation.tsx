@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, UtensilsCrossed, ShoppingBag, ReceiptText } from "lucide-react";
@@ -9,6 +9,21 @@ import { useCart } from "@/context/CartContext";
 export function BottomNavigation() {
   const pathname = usePathname();
   const { itemCount, isHydrated } = useCart();
+  const [mounted, setMounted] = useState(false);
+  const [optimisticIndex, setOptimisticIndex] = useState<number | null>(null);
+  const [prevPathname, setPrevPathname] = useState(pathname);
+
+  // Reset optimistic state during render when route finishes changing (React official pattern)
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
+    setOptimisticIndex(null);
+  }
+
+  // Prevent initial mount transition flicker by enabling transitions on next frame
+  useEffect(() => {
+    const frameId = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(frameId);
+  }, []);
 
   // Hide bottom navigation on welcome page (/), checkout, payment, success, and admin screens
   if (
@@ -75,40 +90,47 @@ export function BottomNavigation() {
   };
 
   const activeIndex = getActiveIndex();
+  const currentIndex = optimisticIndex !== null ? optimisticIndex : activeIndex;
 
   return (
     <nav
       aria-label="Navigasi Utama Pelanggan"
-      className="fixed left-1/2 -translate-x-1/2 z-40 bg-white/60 backdrop-blur-md border border-neutral-200/80 rounded-full px-2.5 py-1.5 floating-pill-shadow select-none print:hidden"
+      className="fixed left-1/2 -translate-x-1/2 z-40 bg-white/60 backdrop-blur-md border border-neutral-200/80 rounded-full px-3.5 py-1.5 floating-pill-shadow select-none print:hidden"
       style={{
         bottom: "max(1rem, calc(env(safe-area-inset-bottom, 0px) + 0.5rem))",
       }}
     >
       <div className="relative flex items-center w-[264px] h-[50px]">
-        {/* Shared sliding active indicator with comfortable breathing room */}
-        {activeIndex !== -1 && (
-          <div
-            aria-hidden="true"
-            className="absolute top-0 bottom-0 left-0 w-1/4 rounded-2xl bg-[#F0F0F2] transition-transform duration-350 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none pointer-events-none"
-            style={{
-              transform: `translateX(${activeIndex * 100}%)`,
-            }}
-          />
-        )}
+        {/* Shared sliding active indicator with hardware-accelerated compositor transform */}
+        <div
+          aria-hidden="true"
+          className={`absolute top-0 bottom-0 left-0 w-1/4 rounded-2xl bg-[#F0F0F2] pointer-events-none motion-reduce:transition-none ${
+            mounted
+              ? "transition-[transform,opacity] duration-400 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
+              : "transition-none"
+          } ${currentIndex !== -1 ? "opacity-100" : "opacity-0"}`}
+          style={{
+            transform: `translate3d(${Math.max(0, currentIndex) * 100}%, 0, 0)`,
+            willChange: "transform",
+          }}
+        />
 
         {/* 4 Interactive Tab Links with vertical icon-over-label layout */}
-        {navItems.map((item) => {
+        {navItems.map((item, index) => {
           const IconComponent = item.icon;
+          const isSelected = currentIndex === index;
+
           return (
             <Link
               key={item.href}
               href={item.href}
               prefetch={true}
+              onClick={() => setOptimisticIndex(index)}
               aria-label={item.label}
-              aria-current={item.isActive ? "page" : undefined}
+              aria-current={isSelected ? "page" : undefined}
               title={item.label}
               className={`group relative z-10 w-1/4 h-full flex flex-col items-center justify-center px-3.5 py-1 rounded-2xl transition-colors duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none select-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-neutral-400 ${
-                item.isActive
+                isSelected
                   ? "text-[#111111]"
                   : "text-[#737373] hover:text-[#111111]"
               }`}
@@ -116,7 +138,7 @@ export function BottomNavigation() {
               <div className="relative flex items-center justify-center w-5 h-5 flex-shrink-0">
                 <IconComponent
                   className="w-5 h-5 transition-transform duration-200 motion-reduce:transition-none"
-                  strokeWidth={item.isActive ? 2.2 : 1.8}
+                  strokeWidth={isSelected ? 2.2 : 1.8}
                   aria-hidden="true"
                 />
                 {item.badgeCount !== undefined && item.badgeCount > 0 ? (
@@ -131,7 +153,7 @@ export function BottomNavigation() {
 
               <span
                 className={`text-[10px] leading-tight mt-1 whitespace-nowrap transition-colors duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
-                  item.isActive
+                  isSelected
                     ? "font-semibold text-[#111111]"
                     : "font-medium text-[#737373] group-hover:text-[#111111]"
                 }`}
