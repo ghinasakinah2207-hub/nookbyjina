@@ -1,16 +1,18 @@
 /**
- * Test Suite: Customer Frontend Bottom Navigation Verifications
+ * Test Suite: Customer Frontend Floating Pill Bottom Navigation Verifications
  * File: src/tests/verify_customer_bottom_navigation.ts
  *
  * Verifies:
  * 1. Exactly 4 customer tabs: Home, Menu, Keranjang, Pesanan.
- * 2. Active tab soft peach rounded rectangle indicator (#FFF0E8) with brand orange (#F25B09).
- * 3. Inactive tab transparent background with neutral gray (#737373).
- * 4. Consistent dimensions and rounded-xl styling across all tabs.
- * 5. Smooth transition (150-200ms).
- * 6. Safe area insets handling (env(safe-area-inset-bottom)).
- * 7. Cart badge count logic.
- * 8. Excluded routes (admin, checkout, pembayaran, sukses, /).
+ * 2. Floating pill outer container with rounded-full, translucent glass background (bg-white/75-85), backdrop blur, and floating shadow.
+ * 3. Active tab light-gray rounded pill background (#F0F0F2) with dark icon and text (#111111).
+ * 4. Active tab displays icon and text label horizontally.
+ * 5. Inactive tabs display icons only in muted gray (#737373) with accessible labels.
+ * 6. Smooth transitions (280-350ms, cubic-bezier(0.22, 1, 0.36, 1)) with motion-reduce:transition-none.
+ * 7. Safe area insets handling (env(safe-area-inset-bottom)).
+ * 8. Cart badge count logic.
+ * 9. Excluded routes (admin, checkout, pembayaran, sukses).
+ * 10. CSS shadow utility in globals.css.
  */
 
 import fs from "fs";
@@ -32,7 +34,7 @@ function assert(condition: boolean, message: string) {
 
 function verifyCustomerBottomNavigation() {
   console.log("================================================================================");
-  console.log("TEST SUITE: Customer Frontend Bottom Navigation & Invariants");
+  console.log("TEST SUITE: Customer Floating Pill Bottom Navigation & Invariants");
   console.log("================================================================================\n");
 
   const filePath = path.resolve(process.cwd(), "src/components/layout/BottomNavigation.tsx");
@@ -74,39 +76,63 @@ function verifyCustomerBottomNavigation() {
   );
   assert(content.includes("icon: ReceiptText"), "Tab 4 uses ReceiptText icon");
 
-  console.log("\n--- Section 2: Active Peach Indicator & Styling ---");
+  console.log("\n--- Section 2: Floating Pill Outer Container ---");
   assert(
-    content.includes("bg-[#FFF0E8]") && content.includes("text-[#F25B09] font-medium"),
-    "Active tab displays soft peach rounded rectangle (#FFF0E8) with brand orange (#F25B09) text and icon"
+    content.includes("fixed left-1/2 -translate-x-1/2") && content.includes("rounded-full"),
+    "Outer container is a floating centered rounded-full pill"
   );
   assert(
-    content.includes("w-[64px] h-[48px] rounded-xl"),
-    "Tabs use uniform rounded-xl dimensions for consistent shape"
+    (content.includes("bg-white/70") || content.includes("bg-white/75") || content.includes("bg-white/80")) &&
+    (content.includes("backdrop-blur-md") || content.includes("backdrop-blur-lg")),
+    "Container has translucent glass background (bg-white/70) with backdrop blur"
   );
   assert(
-    content.includes("transition-all duration-200") || content.includes("transition-all duration-150"),
-    "Tab state transitions are smooth between 150-200ms"
+    content.includes("border border-neutral-200/80") || content.includes("border border-[#E5E5E5]"),
+    "Container has a subtle border"
   );
   assert(
-    content.includes("bg-transparent text-[#737373] hover:text-[#111111]"),
-    "Inactive tabs have transparent background and neutral text (#737373)"
+    content.includes("floating-pill-shadow"),
+    "Container applies soft floating shadow class"
   );
-
-  console.log("\n--- Section 3: Safe Area & Layout Invariants ---");
   assert(
     content.includes("safe-area-inset-bottom"),
     "Bottom navigation incorporates safe area inset for modern mobile viewports"
   );
+
+  console.log("\n--- Section 3: Active & Inactive Tab Behavior ---");
   assert(
-    content.includes("fixed bottom-0 left-0 right-0 z-40 bg-[#FFFFFF] border-t border-[#E5E5E5]"),
-    "Bar is fixed at the bottom with standard neutral top border"
+    content.includes("bg-[#F0F0F2]") && content.includes("text-[#111111]"),
+    "Active tab displays light-gray rounded pill (#F0F0F2) with dark icon and text (#111111)"
   );
+  assert(
+    content.includes("text-[#737373]") && content.includes("bg-transparent"),
+    "Inactive tabs have muted gray icons (#737373) and transparent background"
+  );
+  assert(
+    (content.includes("grid-cols-[1fr]") || content.includes("max-w-")) &&
+    content.includes("opacity-100") && content.includes("opacity-0"),
+    "Active tab displays label horizontally while inactive tabs collapse label to icon-only"
+  );
+  assert(
+    content.includes("aria-current={item.isActive ? \"page\" : undefined}"),
+    "Active tab indicates current page via aria-current"
+  );
+  assert(
+    content.includes("aria-label={item.label}") && content.includes("title={item.label}"),
+    "Inactive icon-only tabs preserve accessible labels and tooltip titles"
+  );
+  assert(
+    (content.includes("duration-300") || content.includes("duration-280") || content.includes("duration-350")) &&
+    content.includes("cubic-bezier(0.22,1,0.36,1)") &&
+    content.includes("motion-reduce:transition-none"),
+    "Transitions are smooth (280-350ms, cubic-bezier(0.22,1,0.36,1)) and respect motion-reduce preferences"
+  );
+
+  console.log("\n--- Section 4: Cart Badge Count & Route Exclusions ---");
   assert(
     content.includes("badgeCount") && content.includes("itemCount"),
     "Cart badge count is preserved and rendered on Keranjang tab"
   );
-
-  console.log("\n--- Section 4: Route Exclusions ---");
   assert(
     content.includes('pathname.startsWith("/admin")') &&
     content.includes('pathname.startsWith("/checkout")') &&
@@ -115,10 +141,18 @@ function verifyCustomerBottomNavigation() {
     "Bottom navigation correctly hides on admin, checkout, payment, and success screens"
   );
 
+  console.log("\n--- Section 5: CSS Floating Shadow Definition ---");
+  const cssPath = path.resolve(process.cwd(), "src/app/globals.css");
+  assert(fs.existsSync(cssPath), "globals.css exists");
+  const cssContent = fs.readFileSync(cssPath, "utf-8");
+  assert(
+    cssContent.includes(".floating-pill-shadow"),
+    "globals.css defines .floating-pill-shadow"
+  );
+
   console.log("\n================================================================================");
   console.log(`TEST SUMMARY: ${passedCount}/${totalCount} assertions PASSED (0 failures)`);
   console.log("================================================================================\n");
 }
 
 verifyCustomerBottomNavigation();
-

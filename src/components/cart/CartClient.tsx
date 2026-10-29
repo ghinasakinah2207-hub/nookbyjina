@@ -63,7 +63,7 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
   };
 
   return (
-    <div className="min-h-screen pb-32 bg-[#F6F6F7]">
+    <div className="min-h-screen pb-36 bg-[#F6F6F7]">
       <Header
         title={`Keranjang (${cart.length})`}
         showBack={false}
@@ -364,7 +364,12 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
 
       {/* Sticky Bottom Bar for Checkout */}
       {cart.length > 0 ? (
-        <div className="fixed bottom-16 left-0 right-0 z-40 bg-white border-t border-[#E5E5E5]">
+        <div
+          className="fixed left-0 right-0 z-30 bg-white border-t border-[#E5E5E5]"
+          style={{
+            bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))",
+          }}
+        >
           <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between gap-4">
             <div>
               <span className="text-[11px] text-[#737373] block leading-none">
