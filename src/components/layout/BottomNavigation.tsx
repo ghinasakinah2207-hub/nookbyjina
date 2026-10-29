@@ -1,12 +1,15 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, UtensilsCrossed, ShoppingBag, ReceiptText } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 
-export function BottomNavigation() {
+export const BottomNavContext = React.createContext<boolean>(false);
+
+export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
+  const isInsideRootNav = useContext(BottomNavContext);
   const pathname = usePathname();
   const { itemCount, isHydrated } = useCart();
   const [mounted, setMounted] = useState(false);
@@ -24,6 +27,12 @@ export function BottomNavigation() {
     const frameId = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(frameId);
   }, []);
+
+  // If a root persistent BottomNavigation is already active in AppProvider,
+  // prevent duplicate instances from rendering in child page trees while preserving JSX presence.
+  if (!isRoot && isInsideRootNav) {
+    return null;
+  }
 
   // Hide bottom navigation on welcome page (/), checkout, payment, success, and admin screens
   if (

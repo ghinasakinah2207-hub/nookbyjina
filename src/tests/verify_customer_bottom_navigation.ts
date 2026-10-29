@@ -172,6 +172,26 @@ function verifyCustomerBottomNavigation() {
     "globals.css defines .floating-pill-shadow"
   );
 
+  console.log("\n--- Section 6: Persistent Root Mounting & Lifecycle Stability ---");
+  assert(
+    content.includes("export const BottomNavContext = React.createContext") ||
+      content.includes("export const BottomNavContext = createContext"),
+    "BottomNavContext is exported for persistent root navigation lifecycle"
+  );
+  assert(
+    content.includes("isRoot") && content.includes("isInsideRootNav"),
+    "BottomNavigation prevents duplicate instances when mounted at root level"
+  );
+
+  const providerPath = path.resolve(process.cwd(), "src/context/AppProvider.tsx");
+  assert(fs.existsSync(providerPath), "AppProvider.tsx exists");
+  const providerContent = fs.readFileSync(providerPath, "utf-8");
+  assert(
+    providerContent.includes("<BottomNavigation isRoot />") &&
+      providerContent.includes("BottomNavContext.Provider"),
+    "AppProvider mounts persistent root BottomNavigation with BottomNavContext.Provider"
+  );
+
   console.log("\n================================================================================");
   console.log(`TEST SUMMARY: ${passedCount}/${totalCount} assertions PASSED (0 failures)`);
   console.log("================================================================================\n");
