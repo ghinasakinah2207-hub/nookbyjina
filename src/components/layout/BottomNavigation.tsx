@@ -34,14 +34,15 @@ export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
     return null;
   }
 
-  // Hide bottom navigation on welcome page (/), checkout, payment, success, and admin screens
+  // Hide bottom navigation on welcome page (/), checkout, payment, success, product detail, and admin screens
   if (
     !pathname ||
     pathname === "/" ||
     pathname.startsWith("/checkout") ||
     pathname.startsWith("/pembayaran") ||
     pathname.startsWith("/sukses") ||
-    pathname.startsWith("/admin")
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/produk")
   ) {
     return null;
   }
@@ -106,7 +107,7 @@ export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
       aria-label="Navigasi Utama Pelanggan"
       className="fixed left-1/2 -translate-x-1/2 z-40 bg-white/60 backdrop-blur-md border border-neutral-200/80 rounded-full px-3.5 py-1.5 floating-pill-shadow select-none print:hidden"
       style={{
-        bottom: "max(1rem, calc(env(safe-area-inset-bottom, 0px) + 0.5rem))",
+        bottom: "max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.25rem))",
       }}
     >
       <div className="relative flex items-center w-[264px] h-[50px]">

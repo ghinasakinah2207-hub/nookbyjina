@@ -159,8 +159,9 @@ function verifyCustomerBottomNavigation() {
     content.includes('pathname.startsWith("/admin")') &&
     content.includes('pathname.startsWith("/checkout")') &&
     content.includes('pathname.startsWith("/pembayaran")') &&
-    content.includes('pathname.startsWith("/sukses")'),
-    "Bottom navigation correctly hides on admin, checkout, payment, and success screens"
+    content.includes('pathname.startsWith("/sukses")') &&
+    content.includes('pathname.startsWith("/produk")'),
+    "Bottom navigation correctly hides on admin, checkout, payment, success, and product detail screens"
   );
 
   console.log("\n--- Section 5: CSS Floating Shadow Definition ---");
