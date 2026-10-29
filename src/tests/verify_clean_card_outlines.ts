@@ -57,16 +57,16 @@ function verifyCleanCardOutlines() {
     "Cart item cards have no outer border"
   );
   assert(
-    cartContent.includes("bg-white rounded-2xl p-4 space-y-2"),
-    "Cart general order note card has no outer border"
-  );
-  assert(
     cartContent.includes("border-t border-[#E5E5E5]"),
     "Cart internal dividers are preserved"
   );
   assert(
-    cartContent.includes("border border-[#E5E5E5] rounded-xl"),
-    "Cart note textarea retains input border for affordance"
+    !cartContent.includes("Catatan untuk Seluruh Pesanan"),
+    "Cart general order note card is cleanly removed"
+  );
+  assert(
+    !cartContent.includes("Ubah catatan menu"),
+    "Cart per-item note editing is cleanly removed"
   );
 
   // 3. Checkout

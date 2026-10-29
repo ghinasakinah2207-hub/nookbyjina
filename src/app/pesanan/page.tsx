@@ -15,6 +15,7 @@ import {
 import { Header } from "@/components/layout/Header";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { StatusBadge } from "@/components/ui/Badge";
+import { OrdersSkeleton } from "@/components/ui/CustomerSkeletons";
 import { useOrder } from "@/context/OrderContext";
 import { formatRupiah, STORE_SETTINGS } from "@/data/dummy-data";
 import { getOrderToken } from "@/lib/order-token-vault";
@@ -50,8 +51,8 @@ export default function OrderHistoryPage() {
 
       <main className="max-w-md mx-auto px-4 pt-4 space-y-2.5">
         {!isHydrated ? (
-          <div className="p-8 text-center bg-white rounded-2xl space-y-3 my-8">
-            <p className="text-xs text-[#737373]">Memuat riwayat pesanan...</p>
+          <div className="animate-landing-fade">
+            <OrdersSkeleton showHeader={false} />
           </div>
         ) : orders.length === 0 ? (
           /* Empty State */

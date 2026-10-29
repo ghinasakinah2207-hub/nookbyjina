@@ -9,12 +9,12 @@ import {
   Trash2,
   Plus,
   Minus,
-  Edit2,
   AlertTriangle,
   ArrowRight,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
+import { CartSkeleton } from "@/components/ui/CustomerSkeletons";
 import { useCart } from "@/context/CartContext";
 import { formatRupiah } from "@/data/dummy-data";
 
@@ -26,31 +26,16 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
   const router = useRouter();
   const {
     cart,
+    isHydrated,
     updateQuantity,
-    updateItemNote,
     removeFromCart,
     clearCart,
     subtotal,
     hasSoldOutItem,
-    orderNote,
-    setOrderNote,
   } = useCart();
 
-  // State for editing note inline
-  const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [editingNoteText, setEditingNoteText] = useState("");
   // State for clearing cart confirmation dialog
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-
-  const handleStartEditNote = (itemId: string, currentNote: string) => {
-    setEditingItemId(itemId);
-    setEditingNoteText(currentNote);
-  };
-
-  const handleSaveNote = (itemId: string) => {
-    updateItemNote(itemId, editingNoteText);
-    setEditingItemId(null);
-  };
 
   const handleProceedToCheckout = () => {
     if (!storeOpen || hasSoldOutItem) return;
@@ -63,12 +48,12 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
   };
 
   return (
-    <div className={`min-h-screen bg-[#F6F6F7] ${cart.length > 0 ? "pb-40" : "pb-24"}`}>
+    <div className={`min-h-screen bg-[#F6F6F7] ${isHydrated && cart.length > 0 ? "pb-40" : "pb-24"}`}>
       <Header
-        title={`Keranjang (${cart.length})`}
+        title={isHydrated ? `Keranjang (${cart.length})` : "Keranjang"}
         showBack={false}
         rightAction={
-          cart.length > 0 ? (
+          isHydrated && cart.length > 0 ? (
             <button
               type="button"
               onClick={() => setShowClearConfirm(true)}
@@ -142,7 +127,11 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
           </div>
         ) : null}
 
-        {cart.length === 0 ? (
+        {!isHydrated ? (
+          <div className="animate-landing-fade">
+            <CartSkeleton showHeader={false} />
+          </div>
+        ) : cart.length === 0 ? (
           /* Empty State */
           <div className="p-8 text-center bg-white rounded-2xl space-y-4 my-8">
             <div className="w-16 h-16 mx-auto rounded-full bg-neutral-100 flex items-center justify-center text-[#737373]">
@@ -249,61 +238,6 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
                     </div>
                   </div>
 
-                  {/* Note Row / Edit Note */}
-                  <div className="pt-2 border-t border-[#E5E5E5] text-xs">
-                    {editingItemId === item.id ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-[11px] text-[#737373]">
-                          <span>Ubah catatan menu (maks 200 huruf):</span>
-                          <span>{editingNoteText.length}/200</span>
-                        </div>
-                        <input
-                          type="text"
-                          value={editingNoteText}
-                          onChange={(e) =>
-                            setEditingNoteText(e.target.value.slice(0, 200))
-                          }
-                          placeholder="Tulis catatan untuk menu ini..."
-                          className="w-full h-9 px-2.5 bg-neutral-50 border border-[#E5E5E5] rounded-lg text-xs text-[#111111] focus:outline-hidden focus:border-[#F25B09]"
-                        />
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setEditingItemId(null)}
-                            className="px-2.5 py-1 text-xs text-[#737373] hover:text-[#111111]"
-                          >
-                            Batal
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleSaveNote(item.id)}
-                            className="px-3 py-1 bg-[#111111] text-white text-xs font-medium rounded-md"
-                          >
-                            Simpan
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between text-[#737373]">
-                        <span className="truncate flex-1 text-[11px]">
-                          Catatan:{" "}
-                          <span className="text-[#111111]">
-                            {item.itemNote || "—"}
-                          </span>
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleStartEditNote(item.id, item.itemNote)
-                          }
-                          className="text-[#F25B09] hover:underline text-[11px] font-medium flex items-center gap-1 ml-2 flex-shrink-0"
-                        >
-                          <Edit2 className="w-3 h-3" /> Edit
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
                   {/* Item Total & Quantity Controls */}
                   <div className="pt-2 border-t border-[#E5E5E5] flex items-center justify-between">
                     <span className="text-sm font-bold text-[#111111]">
@@ -334,29 +268,6 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
                   </div>
                 </div>
               ))}
-            </div>
-
-            {/* General Order Note */}
-            <div className="bg-white rounded-2xl p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <label
-                  htmlFor="generalOrderNote"
-                  className="text-xs font-semibold text-[#111111]"
-                >
-                  Catatan untuk Seluruh Pesanan (Opsional)
-                </label>
-                <span className="text-[11px] text-[#737373]">
-                  {orderNote.length}/200
-                </span>
-              </div>
-              <textarea
-                id="generalOrderNote"
-                value={orderNote}
-                onChange={(e) => setOrderNote(e.target.value)}
-                placeholder="Misal: Harap dikirim sendok tambahan..."
-                rows={2}
-                className="w-full p-2.5 bg-white border border-[#E5E5E5] rounded-xl text-xs text-[#111111] placeholder:text-[#737373] focus:outline-hidden focus:border-[#F25B09]"
-              />
             </div>
           </>
         )}
