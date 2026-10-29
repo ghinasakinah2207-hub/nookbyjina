@@ -1,18 +1,20 @@
 /**
- * Test Suite: Customer Frontend Floating Pill Bottom Navigation Verifications
+ * Test Suite: Customer Frontend Floating Pill Bottom Navigation Verifications (Restored Light Design)
  * File: src/tests/verify_customer_bottom_navigation.ts
  *
  * Verifies:
  * 1. Exactly 4 customer tabs: Home, Menu, Keranjang, Pesanan.
- * 2. Floating pill outer container with rounded-full, translucent glass background (bg-white/75-85), backdrop blur, and floating shadow.
- * 3. Active tab light-gray rounded pill background (#F0F0F2) with dark icon and text (#111111).
- * 4. Active tab displays icon and text label horizontally.
- * 5. Inactive tabs display icons only in muted gray (#737373) with accessible labels.
- * 6. Smooth transitions (280-350ms, cubic-bezier(0.22, 1, 0.36, 1)) with motion-reduce:transition-none.
- * 7. Safe area insets handling (env(safe-area-inset-bottom)).
- * 8. Cart badge count logic.
- * 9. Excluded routes (admin, checkout, pembayaran, sukses).
- * 10. CSS shadow utility in globals.css.
+ * 2. Floating pill outer container with rounded-full, 60% translucent white background (bg-white/60), backdrop-blur-md, and floating shadow.
+ * 3. Vertical icon-over-label layout for all tabs (all 4 labels always visible beneath icons).
+ * 4. Active tab indicator uses softly rounded light-gray background (rounded-2xl bg-[#F0F0F2]) with dark text and icon (#111111).
+ * 5. Inactive tabs display muted gray icons and labels (#737373) with accessible labels.
+ * 6. Shared sliding active indicator gliding between tabs using CSS transforms (translateX, duration-350, cubic-bezier(0.22, 1, 0.36, 1)).
+ * 7. Comfortable horizontal and vertical breathing room (px-3.5, mt-1 gap).
+ * 8. Smooth transitions with motion-reduce:transition-none.
+ * 9. Safe area insets handling (env(safe-area-inset-bottom)).
+ * 10. Cart badge count logic without overlapping icon or label.
+ * 11. Excluded routes (admin, checkout, pembayaran, sukses).
+ * 12. CSS shadow utility in globals.css.
  */
 
 import fs from "fs";
@@ -34,7 +36,7 @@ function assert(condition: boolean, message: string) {
 
 function verifyCustomerBottomNavigation() {
   console.log("================================================================================");
-  console.log("TEST SUITE: Customer Floating Pill Bottom Navigation & Invariants");
+  console.log("TEST SUITE: Customer Floating Pill Bottom Navigation (Restored Light Design)");
   console.log("================================================================================\n");
 
   const filePath = path.resolve(process.cwd(), "src/components/layout/BottomNavigation.tsx");
@@ -76,42 +78,60 @@ function verifyCustomerBottomNavigation() {
   );
   assert(content.includes("icon: ReceiptText"), "Tab 4 uses ReceiptText icon");
 
-  console.log("\n--- Section 2: Floating Pill Outer Container ---");
+  console.log("\n--- Section 2: Floating Pill Outer Container (Translucent White bg-white/60) ---");
   assert(
     content.includes("fixed left-1/2 -translate-x-1/2") && content.includes("rounded-full"),
     "Outer container is a floating centered rounded-full pill"
   );
   assert(
-    (content.includes("bg-white/70") || content.includes("bg-white/75") || content.includes("bg-white/80")) &&
-    (content.includes("backdrop-blur-md") || content.includes("backdrop-blur-lg")),
-    "Container has translucent glass background (bg-white/70) with backdrop blur"
+    content.includes("bg-white/60") && content.includes("backdrop-blur-md"),
+    "Container has 60% opacity white background (bg-white/60) with backdrop-blur-md"
   );
   assert(
     content.includes("border border-neutral-200/80") || content.includes("border border-[#E5E5E5]"),
-    "Container has a subtle border"
+    "Container has a subtle neutral border"
   );
   assert(
     content.includes("floating-pill-shadow"),
     "Container applies soft floating shadow class"
   );
   assert(
+    (content.includes("px-2.5") || content.includes("px-3")) && content.includes("py-1.5"),
+    "Outer container has comfortable horizontal padding (px-2.5 or px-3) with py-1.5"
+  );
+  assert(
     content.includes("safe-area-inset-bottom"),
     "Bottom navigation incorporates safe area inset for modern mobile viewports"
   );
 
-  console.log("\n--- Section 3: Active & Inactive Tab Behavior ---");
+  console.log("\n--- Section 3: Vertical Icon-Over-Label Layout & Light Active Pill ---");
   assert(
-    content.includes("bg-[#F0F0F2]") && content.includes("text-[#111111]"),
-    "Active tab displays light-gray rounded pill (#F0F0F2) with dark icon and text (#111111)"
+    content.includes("flex-col items-center justify-center"),
+    "Tabs use vertical icon-over-label layout for all tabs"
   );
   assert(
-    content.includes("text-[#737373]") && content.includes("bg-transparent"),
-    "Inactive tabs have muted gray icons (#737373) and transparent background"
+    content.includes("translateX") && content.includes("activeIndex"),
+    "Shared active indicator glides smoothly using CSS translateX transform"
   );
   assert(
-    (content.includes("grid-cols-[1fr]") || content.includes("max-w-")) &&
-    content.includes("opacity-100") && content.includes("opacity-0"),
-    "Active tab displays label horizontally while inactive tabs collapse label to icon-only"
+    content.includes("bg-[#F0F0F2]") && content.includes("rounded-2xl"),
+    "Active tab indicator uses softly rounded light-gray pill background (rounded-2xl bg-[#F0F0F2])"
+  );
+  assert(
+    content.includes("text-[#111111]"),
+    "Active tab uses neutral dark icon and text (#111111)"
+  );
+  assert(
+    content.includes("text-[#737373]"),
+    "Inactive tabs use muted neutral gray (#737373)"
+  );
+  assert(
+    content.includes("px-3.5") || content.includes("px-4"),
+    "Tabs use comfortable horizontal padding (px-3.5 / px-4) for breathing room"
+  );
+  assert(
+    content.includes("mt-1"),
+    "Tabs maintain a balanced 4-6px gap (mt-1) between icon and label"
   );
   assert(
     content.includes("aria-current={item.isActive ? \"page\" : undefined}"),
@@ -119,13 +139,13 @@ function verifyCustomerBottomNavigation() {
   );
   assert(
     content.includes("aria-label={item.label}") && content.includes("title={item.label}"),
-    "Inactive icon-only tabs preserve accessible labels and tooltip titles"
+    "Tabs preserve accessible labels and tooltip titles"
   );
   assert(
-    (content.includes("duration-300") || content.includes("duration-280") || content.includes("duration-350")) &&
+    content.includes("duration-350") &&
     content.includes("cubic-bezier(0.22,1,0.36,1)") &&
     content.includes("motion-reduce:transition-none"),
-    "Transitions are smooth (280-350ms, cubic-bezier(0.22,1,0.36,1)) and respect motion-reduce preferences"
+    "Indicator glides smoothly (350ms, cubic-bezier(0.22,1,0.36,1)) and respects motion-reduce preferences"
   );
 
   console.log("\n--- Section 4: Cart Badge Count & Route Exclusions ---");
