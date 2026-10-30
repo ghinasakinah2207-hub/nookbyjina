@@ -33,6 +33,12 @@ interface CartContextType {
   quickAddProduct: Product | null;
   openQuickAdd: (product: Product) => void;
   closeQuickAdd: () => void;
+  updateCartItemOptions: (
+    itemId: string,
+    newOptions: SelectedOption[],
+    newAddons: SelectedAddon[],
+    newQuantity?: number
+  ) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -329,6 +335,87 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setCart((prev) => prev.filter((item) => item.id !== itemId));
   }, []);
 
+  const updateCartItemOptions = React.useCallback(
+    (
+      itemId: string,
+      newOptions: SelectedOption[],
+      newAddons: SelectedAddon[],
+      newQuantity?: number
+    ) => {
+      setCart((prev) => {
+        const itemToEdit = prev.find((i) => i.id === itemId);
+        if (!itemToEdit) return prev;
+
+        const normalizedOptions = newOptions.map((opt) => ({
+          ...opt,
+          groupId: opt.groupId || opt.optionName || "",
+          groupName: opt.groupName || opt.optionName || "",
+          valueId: opt.valueId || opt.optionValueId || "",
+          valueName: opt.valueName || opt.optionValue || "",
+          optionValueId: opt.optionValueId || opt.valueId || "",
+          optionValue: opt.optionValue || opt.valueName || "",
+          optionName: opt.optionName || opt.groupName || "",
+          priceDelta: Number(opt.priceDelta || 0),
+        }));
+
+        const newId = createItemCompositeKey(
+          itemToEdit.productId,
+          normalizedOptions,
+          newAddons,
+          itemToEdit.itemNote || ""
+        );
+
+        const optionsDelta = normalizedOptions.reduce(
+          (sum, o) => sum + o.priceDelta,
+          0
+        );
+        const addonsDelta = newAddons.reduce((sum, a) => sum + a.price, 0);
+        const unitPrice = itemToEdit.basePrice + optionsDelta + addonsDelta;
+        const targetQty =
+          newQuantity !== undefined && newQuantity > 0
+            ? newQuantity
+            : itemToEdit.quantity;
+
+        // Check if another item in the cart has this new composite key (excluding current item)
+        const existingIdentical = prev.find(
+          (i) => i.id === newId && i.id !== itemId
+        );
+
+        if (existingIdentical) {
+          // Merge this item into existing item and remove current itemId
+          const mergedQty = existingIdentical.quantity + targetQty;
+          return prev
+            .filter((i) => i.id !== itemId)
+            .map((i) =>
+              i.id === newId
+                ? {
+                    ...i,
+                    quantity: mergedQty,
+                    itemTotal: unitPrice * mergedQty,
+                  }
+                : i
+            );
+        } else {
+          // Update item in place
+          return prev.map((i) =>
+            i.id === itemId
+              ? {
+                  ...i,
+                  id: newId,
+                  selectedOptions: normalizedOptions,
+                  selectedAddons: newAddons,
+                  quantity: targetQty,
+                  unitPrice,
+                  itemTotal: unitPrice * targetQty,
+                }
+              : i
+          );
+        }
+      });
+    },
+    [createItemCompositeKey]
+  );
+
   const clearCart = React.useCallback(() => {
     setCart([]);
     setOrderNoteState("");
@@ -375,6 +462,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       quickAddProduct,
       openQuickAdd,
       closeQuickAdd,
+      updateCartItemOptions,
     }),
     [
       cart,
@@ -397,6 +485,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       quickAddProduct,
       openQuickAdd,
       closeQuickAdd,
+      updateCartItemOptions,
     ]
   );
 

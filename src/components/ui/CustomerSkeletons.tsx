@@ -141,19 +141,37 @@ export function MenuSkeleton({ showHeader = true }: SkeletonProps) {
 export function CartSkeleton({ showHeader = true }: SkeletonProps) {
   const content = (
     <div className="space-y-2.5">
-      {/* Cart Item Cards Placeholder */}
-      {[1, 2].map((i) => (
-        <div key={i} className="bg-white rounded-2xl p-3.5 space-y-3">
-          <div className="flex items-start gap-3">
-            <div className="w-16 h-16 rounded-xl bg-neutral-200 animate-pulse motion-reduce:animate-none flex-shrink-0" />
-            <div className="flex-1 space-y-1.5 min-w-0">
-              <div className="w-36 h-4 bg-neutral-200 rounded animate-pulse motion-reduce:animate-none" />
-              <div className="w-20 h-3.5 bg-neutral-100 rounded animate-pulse motion-reduce:animate-none" />
-              <div className="w-24 h-7 rounded-lg bg-neutral-100 animate-pulse motion-reduce:animate-none mt-1" />
-            </div>
-          </div>
+      {/* Shopee-Inspired Grouped Cart Card Skeleton */}
+      <div className="bg-white rounded-2xl p-3.5 space-y-3">
+        {/* Store Header Placeholder */}
+        <div className="flex items-center gap-2 pb-2.5 border-b border-[#E5E5E5]">
+          <div className="w-10 h-4 bg-neutral-200 rounded animate-pulse motion-reduce:animate-none" />
+          <div className="w-24 h-4 bg-neutral-200 rounded animate-pulse motion-reduce:animate-none" />
         </div>
-      ))}
+
+        {/* Cart Item Rows Placeholder */}
+        <div className="space-y-2">
+          {[1, 2].map((i) => (
+            <div
+              key={i}
+              className={`flex items-start gap-3 py-2.5 ${i > 1 ? "border-t border-[#E5E5E5]" : ""}`}
+            >
+              <div className="w-20 h-20 rounded-xl bg-neutral-200 animate-pulse motion-reduce:animate-none flex-shrink-0" />
+              <div className="flex-1 space-y-2 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="w-36 h-4 bg-neutral-200 rounded animate-pulse motion-reduce:animate-none" />
+                  <div className="w-5 h-5 bg-neutral-100 rounded animate-pulse motion-reduce:animate-none" />
+                </div>
+                <div className="w-32 h-5 bg-neutral-100 rounded-md animate-pulse motion-reduce:animate-none" />
+                <div className="flex items-center justify-between pt-0.5">
+                  <div className="w-20 h-4 bg-neutral-200 rounded animate-pulse motion-reduce:animate-none" />
+                  <div className="w-20 h-7 rounded-xl bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 

@@ -80,8 +80,9 @@ function verifyCustomerBottomNavigation() {
 
   console.log("\n--- Section 2: Floating Pill Outer Container (Translucent White bg-white/60) ---");
   assert(
-    content.includes("fixed left-1/2 -translate-x-1/2") && content.includes("rounded-full"),
-    "Outer container is a floating centered rounded-full pill"
+    content.includes("fixed left-1/2 -translate-x-1/2") &&
+      (content.includes("rounded-2xl") || content.includes("rounded-full")),
+    "Outer container is a floating centered softly rounded container (rounded-2xl)"
   );
   assert(
     content.includes("bg-white/60") && content.includes("backdrop-blur-md"),

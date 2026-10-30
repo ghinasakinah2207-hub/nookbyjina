@@ -9,25 +9,32 @@ import {
   Trash2,
   Plus,
   Minus,
+  ChevronDown,
   AlertTriangle,
-  ArrowRight,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { CartSkeleton } from "@/components/ui/CustomerSkeletons";
+import { CartVariationModal } from "@/components/cart/CartVariationModal";
 import { useCart } from "@/context/CartContext";
-import { formatRupiah } from "@/data/dummy-data";
+import { formatRupiah, PRODUCTS } from "@/data/dummy-data";
+import { Product, CartItem, SelectedOption, SelectedAddon } from "@/types";
 
 interface CartClientProps {
   storeOpen?: boolean;
+  initialProducts?: Product[];
 }
 
-export default function CartClient({ storeOpen = true }: CartClientProps) {
+export default function CartClient({
+  storeOpen = true,
+  initialProducts = [],
+}: CartClientProps) {
   const router = useRouter();
   const {
     cart,
     isHydrated,
     updateQuantity,
+    updateCartItemOptions,
     removeFromCart,
     clearCart,
     subtotal,
@@ -37,6 +44,10 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
   // State for clearing cart confirmation dialog
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
+  // State for variation bottom-sheet modal
+  const [editingCartItem, setEditingCartItem] = useState<CartItem | null>(null);
+  const [isVariationModalOpen, setIsVariationModalOpen] = useState(false);
+
   const handleProceedToCheckout = () => {
     if (!storeOpen || hasSoldOutItem) return;
     router.push("/checkout");
@@ -45,6 +56,65 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
   const handleConfirmClear = () => {
     clearCart();
     setShowClearConfirm(false);
+  };
+
+  const handleOpenVariationModal = (item: CartItem) => {
+    setEditingCartItem(item);
+    setIsVariationModalOpen(true);
+  };
+
+  const handleConfirmVariation = (
+    itemId: string,
+    newOptions: SelectedOption[],
+    newAddons: SelectedAddon[],
+    newQuantity: number
+  ) => {
+    updateCartItemOptions(itemId, newOptions, newAddons, newQuantity);
+  };
+
+  const getProductForItem = (item: CartItem): Product => {
+    const found =
+      (initialProducts &&
+        initialProducts.find(
+          (p) => p.id === item.productId || p.slug === item.productId
+        )) ||
+      PRODUCTS.find(
+        (p) => p.id === item.productId || p.slug === item.productId
+      );
+
+    if (found) return found;
+
+    return {
+      id: item.productId,
+      slug: item.productId,
+      name: item.productName,
+      description: "",
+      categoryId: "",
+      categoryName: "",
+      basePrice: item.basePrice || item.unitPrice,
+      isAvailable: item.isAvailable,
+      images: [item.productImage],
+      optionGroups: [],
+      addons: [],
+    };
+  };
+
+  const getVariationSummary = (item: CartItem) => {
+    const parts: string[] = [];
+    if (item.selectedOptions && item.selectedOptions.length > 0) {
+      item.selectedOptions.forEach((opt) => {
+        const val = opt.valueName || opt.optionValue;
+        const grp = opt.groupName || opt.optionName;
+        if (val) {
+          parts.push(grp ? `${grp}: ${val}` : val);
+        }
+      });
+    }
+    if (item.selectedAddons && item.selectedAddons.length > 0) {
+      const addonNames = item.selectedAddons.map((a) => a.addonName).join(", ");
+      parts.push(`+ ${addonNames}`);
+    }
+    return parts.length > 0 ? parts.join(" · ") : "Pilih Variasi";
   };
 
   return (
@@ -170,104 +240,113 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
               </div>
             ) : null}
 
-            {/* Cart Items List */}
-            <div className="space-y-2">
-              {cart.map((item) => (
-                <div
-                  key={item.id}
-                  className={`bg-white rounded-2xl p-3.5 space-y-3 transition-colors ${
-                    !item.isAvailable
-                      ? "border border-red-300 bg-red-50/20"
-                      : ""
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-neutral-100 flex-shrink-0">
-                      <Image
-                        src={item.productImage}
-                        alt={item.productName}
-                        fill
-                        className={`object-cover ${!item.isAvailable ? "grayscale opacity-75" : ""}`}
-                        sizes="80px"
-                      />
-                      {!item.isAvailable ? (
-                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                          <span className="text-[10px] font-bold text-white bg-red-600 px-1.5 py-0.5 rounded">
-                            Habis
-                          </span>
-                        </div>
-                      ) : null}
-                    </div>
+            {/* Shopee-Inspired Grouped Cart Card */}
+            <div className="bg-white rounded-2xl p-3.5 space-y-3">
+              {/* Store Header — Displayed ONCE above product list */}
+              <div className="flex items-center gap-2 pb-2.5 border-b border-[#E5E5E5]">
+                <span className="px-1.5 py-0.5 rounded bg-[#F25B09] text-white text-[10px] font-bold tracking-wide uppercase">
+                  nook
+                </span>
+                <span className="text-xs font-bold text-[#111111]">
+                  Nook By Jina
+                </span>
+              </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="text-sm font-semibold text-[#111111] leading-snug">
-                          {item.productName}
-                        </h3>
-                        <button
-                          type="button"
-                          onClick={() => removeFromCart(item.id)}
-                          aria-label={`Hapus ${item.productName}`}
-                          className="w-7 h-7 flex items-center justify-center rounded-md text-[#737373] hover:text-[#B42318]"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+              {/* Cart Items List */}
+              <div className="space-y-2">
+                {cart.map((item, index) => {
+                  const variationSummary = getVariationSummary(item);
 
-                      {/* Selected Options & Addons */}
-                      <div className="text-[11px] text-[#737373] mt-1 space-y-0.5">
-                        {item.selectedOptions.map((opt) => (
-                          <div key={opt.groupId || opt.optionName || opt.valueId}>
-                            • {opt.groupName || opt.optionName}: <span className="text-[#111111]">{opt.valueName || opt.optionValue}</span>
-                          </div>
-                        ))}
-                        {item.selectedAddons.length > 0 ? (
-                          <div>
-                            • Tambahan:{" "}
-                            <span className="text-[#111111]">
-                              {item.selectedAddons.map((a) => a.addonName).join(", ")}
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex items-start gap-3 py-2.5 ${
+                        index > 0 ? "border-t border-[#E5E5E5]" : ""
+                      } ${!item.isAvailable ? "opacity-75" : ""}`}
+                    >
+                      {/* LEFT: Product Thumbnail */}
+                      <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-neutral-100 flex-shrink-0">
+                        <Image
+                          src={item.productImage}
+                          alt={item.productName}
+                          fill
+                          className={`object-cover ${!item.isAvailable ? "grayscale" : ""}`}
+                          sizes="80px"
+                        />
+                        {!item.isAvailable && (
+                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                            <span className="text-[10px] font-bold text-white bg-red-600 px-1.5 py-0.5 rounded">
+                              Habis
                             </span>
                           </div>
-                        ) : null}
+                        )}
                       </div>
 
-                      {/* Unit Price */}
-                      <div className="mt-2 text-xs font-semibold text-[#111111]">
-                        {formatRupiah(item.unitPrice)} / porsi
+                      {/* RIGHT: Product Details */}
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        {/* Title & Delete Action */}
+                        <div className="flex items-start justify-between gap-1.5">
+                          <h3 className="text-xs sm:text-sm font-semibold text-[#111111] leading-snug line-clamp-2">
+                            {item.productName}
+                          </h3>
+                          <button
+                            type="button"
+                            onClick={() => removeFromCart(item.id)}
+                            aria-label={`Hapus ${item.productName}`}
+                            className="w-6 h-6 -mr-1 flex items-center justify-center rounded-md text-[#737373] hover:text-[#B42318] hover:bg-neutral-50 flex-shrink-0 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Selected Product Variations Dropdown */}
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenVariationModal(item)}
+                            className="inline-flex items-center gap-1.5 px-2 py-1 bg-[#F5F5F6] hover:bg-[#EBEBEF] rounded-md text-[11px] text-[#555555] hover:text-[#111111] transition-colors max-w-full text-left"
+                            title="Ubah Variasi"
+                          >
+                            <span className="truncate max-w-[170px] sm:max-w-[210px]">
+                              {variationSummary}
+                            </span>
+                            <ChevronDown className="w-3 h-3 flex-shrink-0 text-[#737373]" />
+                          </button>
+                        </div>
+
+                        {/* Product Price & Quantity Row */}
+                        <div className="flex items-center justify-between gap-2 pt-0.5">
+                          <div className="text-xs sm:text-sm font-bold text-[#F25B09]">
+                            {formatRupiah(item.unitPrice)}
+                          </div>
+
+                          <div className="flex items-center border border-[#E5E5E5] rounded-xl p-0.5 bg-neutral-50">
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                              aria-label="Kurangi kuantitas"
+                              className="w-7 h-7 flex items-center justify-center rounded-lg text-[#111111] hover:bg-white min-h-[28px] min-w-[28px] transition-colors"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="w-7 text-center text-xs font-semibold text-[#111111]">
+                              {item.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                              aria-label="Tambah kuantitas"
+                              className="w-7 h-7 flex items-center justify-center rounded-lg text-[#111111] hover:bg-white min-h-[28px] min-w-[28px] transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Item Total & Quantity Controls */}
-                  <div className="pt-2 border-t border-[#E5E5E5] flex items-center justify-between">
-                    <span className="text-sm font-bold text-[#111111]">
-                      Subtotal: {formatRupiah(item.itemTotal)}
-                    </span>
-
-                    <div className="flex items-center border border-[#E5E5E5] rounded-xl p-0.5 bg-neutral-50">
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                        aria-label="Kurangi kuantitas"
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-[#111111] hover:bg-white min-h-[32px] min-w-[32px]"
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="w-7 text-center text-xs font-semibold text-[#111111]">
-                        {item.quantity}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                        aria-label="Tambah kuantitas"
-                        className="w-7 h-7 flex items-center justify-center rounded-lg text-[#111111] hover:bg-white min-h-[32px] min-w-[32px]"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
+              </div>
             </div>
           </>
         )}
@@ -295,18 +374,26 @@ export default function CartClient({ storeOpen = true }: CartClientProps) {
               type="button"
               disabled={hasSoldOutItem || !storeOpen}
               onClick={handleProceedToCheckout}
-              className={`min-h-[48px] px-5 py-3 rounded-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition-colors ${
+              className={`min-h-[48px] px-6 py-3 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center transition-colors ${
                 !hasSoldOutItem && storeOpen
                   ? "bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white"
                   : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
               }`}
             >
-              <span>{storeOpen ? "Lanjut ke Checkout" : "Toko Close Order"}</span>
-              {storeOpen && <ArrowRight className="w-4 h-4" />}
+              <span>{storeOpen ? "Checkout" : "Toko Close Order"}</span>
             </button>
           </div>
         </div>
       ) : null}
+
+      {/* Product Variation Bottom-Sheet Modal */}
+      <CartVariationModal
+        isOpen={isVariationModalOpen}
+        cartItem={editingCartItem}
+        product={editingCartItem ? getProductForItem(editingCartItem) : null}
+        onClose={() => setIsVariationModalOpen(false)}
+        onConfirm={handleConfirmVariation}
+      />
 
       <BottomNavigation />
     </div>

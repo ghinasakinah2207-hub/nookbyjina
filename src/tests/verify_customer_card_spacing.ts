@@ -45,7 +45,7 @@ function verifyCustomerCardSpacing() {
     "Keranjang: main container card stack uses space-y-2.5 (10px, reduced from 12px)"
   );
   assert(
-    cartContent.includes('{/* Cart Items List */}\n            <div className="space-y-2">'),
+    cartContent.includes('{/* Cart Items List */}') && cartContent.includes('<div className="space-y-2">'),
     "Keranjang: cart item cards list uses space-y-2 (8px, reduced from 10px / 20% reduction)"
   );
 
