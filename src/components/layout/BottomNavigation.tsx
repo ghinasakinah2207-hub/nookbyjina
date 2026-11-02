@@ -114,7 +114,7 @@ export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
         {/* Shared sliding active indicator with hardware-accelerated compositor transform */}
         <div
           aria-hidden="true"
-          className={`absolute top-0 bottom-0 left-0 w-1/4 rounded-2xl bg-[#F0F0F2] pointer-events-none motion-reduce:transition-none ${
+          className={`absolute top-0 bottom-0 left-0 w-1/4 rounded-2xl bg-gradient-to-r from-[#F25B09] to-[#FF8A45] shadow-xs shadow-orange-950/10 pointer-events-none overflow-hidden motion-reduce:transition-none ${
             mounted
               ? "transition-[transform,opacity] duration-400 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
               : "transition-none"
@@ -123,7 +123,10 @@ export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
             transform: `translate3d(${Math.max(0, currentIndex) * 100}%, 0, 0)`,
             willChange: "transform",
           }}
-        />
+        >
+          {/* Subtle translucent white highlight near the top to create a refined dimensional appearance */}
+          <div className="absolute inset-x-0 top-0 h-[38%] bg-gradient-to-b from-white/30 to-transparent pointer-events-none" />
+        </div>
 
         {/* 4 Interactive Tab Links with vertical icon-over-label layout */}
         {navItems.map((item, index) => {
@@ -141,7 +144,7 @@ export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
               title={item.label}
               className={`group relative z-10 w-1/4 h-full flex flex-col items-center justify-center px-3.5 py-1 rounded-2xl transition-colors duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none select-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-neutral-400 ${
                 isSelected
-                  ? "text-[#111111]"
+                  ? "text-white"
                   : "text-[#737373] hover:text-[#111111]"
               }`}
             >
@@ -153,7 +156,7 @@ export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
                 />
                 {item.badgeCount !== undefined && item.badgeCount > 0 ? (
                   <span
-                    className="absolute -top-1.5 -right-2.5 bg-[#F25B09] text-white text-[9px] font-bold h-3.5 min-w-[14px] px-1 rounded-full flex items-center justify-center border border-white z-20 pointer-events-none"
+                    className="absolute -top-1.5 -right-2.5 bg-[#F25B09] text-white text-[9px] font-bold h-3.5 min-w-[14px] px-1 rounded-full flex items-center justify-center border-2 border-white z-20 pointer-events-none shadow-xs"
                     aria-label={`${item.badgeCount} item di keranjang`}
                   >
                     {item.badgeCount > 99 ? "99+" : item.badgeCount}
@@ -164,7 +167,7 @@ export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
               <span
                 className={`text-[10px] leading-tight mt-1 whitespace-nowrap transition-colors duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
                   isSelected
-                    ? "font-semibold text-[#111111]"
+                    ? "font-semibold text-white"
                     : "font-medium text-[#737373] group-hover:text-[#111111]"
                 }`}
               >

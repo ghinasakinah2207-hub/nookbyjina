@@ -116,12 +116,18 @@ function verifyCustomerBottomNavigation() {
     "Shared active indicator glides smoothly using hardware-accelerated CSS transform"
   );
   assert(
-    content.includes("bg-[#F0F0F2]") && content.includes("rounded-2xl"),
-    "Active tab indicator uses softly rounded light-gray pill background (rounded-2xl bg-[#F0F0F2])"
+    content.includes("from-[#F25B09]") &&
+      content.includes("to-[#FF8A45]") &&
+      content.includes("rounded-2xl"),
+    "Active tab indicator uses softly rounded NOOK orange gradient pill (rounded-2xl from-[#F25B09] to-[#FF8A45])"
   );
   assert(
-    content.includes("text-[#111111]"),
-    "Active tab uses neutral dark icon and text (#111111)"
+    content.includes("from-white/") && content.includes("to-transparent"),
+    "Active pill includes subtle translucent white highlight near top for dimensional appearance"
+  );
+  assert(
+    content.includes("text-white") && content.includes("font-semibold text-white"),
+    "Active tab uses white icon and label (text-white)"
   );
   assert(
     content.includes("text-[#737373]"),

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { StatusBadge } from "@/components/ui/Badge";
+import { OrderProgressTracker } from "@/components/orders/OrderProgressTracker";
 import { useOrder } from "@/context/OrderContext";
 import { formatRupiah, STORE_SETTINGS } from "@/data/dummy-data";
 import { saveOrderToken, getOrderToken } from "@/lib/order-token-vault";
@@ -402,6 +403,11 @@ Terima kasih telah memesan di Nook by Jina!`;
                 second: "2-digit",
               })}
             </span>
+          </div>
+
+          {/* Horizontal Order Progress Tracker */}
+          <div className="pt-3 border-t border-[#E5E5E5]/70">
+            <OrderProgressTracker order={order} />
           </div>
         </section>
 

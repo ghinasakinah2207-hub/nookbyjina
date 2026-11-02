@@ -5,9 +5,14 @@ import { isPendingQrisStatus, isPendingCashStatus, isPaidStatus } from "@/lib/or
 interface StatusBadgeProps {
   status: OrderStatus | PaymentStatus | string;
   type?: "order" | "payment";
+  showDot?: boolean;
 }
 
-export function StatusBadge({ status, type = "order" }: StatusBadgeProps) {
+export function StatusBadge({
+  status,
+  type = "order",
+  showDot = false,
+}: StatusBadgeProps) {
   // Styles based on DESIGN MD section 5 (Komponen Bersama - Status)
   let styleClasses = "bg-neutral-100 text-neutral-800 border-neutral-200";
 
@@ -47,21 +52,23 @@ export function StatusBadge({ status, type = "order" }: StatusBadgeProps) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border ${styleClasses}`}
+      className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1 text-xs rounded-full border select-none ${styleClasses}`}
     >
-      <span
-        className={`w-1.5 h-1.5 rounded-full ${
-          isPaid || status === "Siap"
-            ? "bg-[#18794E]"
-            : status === "Diproses"
-            ? "bg-[#F25B09]"
-            : isPendingVerifikasi || isPendingPembayaran
-            ? "bg-[#8A4B08]"
-            : isCancelled
-            ? "bg-[#B42318]"
-            : "bg-[#737373]"
-        }`}
-      />
+      {showDot && (
+        <span
+          className={`w-1.5 h-1.5 rounded-full ${
+            isPaid || status === "Siap"
+              ? "bg-[#18794E]"
+              : status === "Diproses"
+              ? "bg-[#F25B09]"
+              : isPendingVerifikasi || isPendingPembayaran
+              ? "bg-[#8A4B08]"
+              : isCancelled
+              ? "bg-[#B42318]"
+              : "bg-[#737373]"
+          }`}
+        />
+      )}
       {type === "payment" ? `Pembayaran: ${displayStatus}` : displayStatus}
     </span>
   );

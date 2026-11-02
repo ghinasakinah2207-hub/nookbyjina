@@ -16,9 +16,11 @@ import { Header } from "@/components/layout/Header";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { StatusBadge } from "@/components/ui/Badge";
 import { OrdersSkeleton } from "@/components/ui/CustomerSkeletons";
+import { OrderProgressTracker } from "@/components/orders/OrderProgressTracker";
 import { useOrder } from "@/context/OrderContext";
 import { formatRupiah, STORE_SETTINGS } from "@/data/dummy-data";
 import { getOrderToken } from "@/lib/order-token-vault";
+import { isOrderExpired } from "@/lib/order-normalizer";
 import { Order } from "@/types";
 
 export default function OrderHistoryPage() {
@@ -118,6 +120,10 @@ export default function OrderHistoryPage() {
 
               // Resolve raw authorization token from order object or client token vault
               const resolvedToken = order.token || getOrderToken(order.id) || "";
+              const isCancelled =
+                order.orderStatus === "Dibatalkan" ||
+                order.paymentStatus === "Dibatalkan" ||
+                isOrderExpired(order);
 
               return (
                 <div
@@ -136,11 +142,16 @@ export default function OrderHistoryPage() {
                       </span>
                     </div>
 
-                    <div className="flex flex-col items-end gap-1">
-                      <StatusBadge status={order.orderStatus} />
-                      <StatusBadge status={order.paymentStatus} type="payment" />
+                    <div className="flex items-center">
+                      <StatusBadge
+                        status={isCancelled ? "Dibatalkan" : order.orderStatus}
+                        showDot={false}
+                      />
                     </div>
                   </div>
+
+                  {/* Horizontal Order Progress Tracker */}
+                  <OrderProgressTracker order={order} />
 
                   {/* Items summary */}
                   <div className="pt-2 border-t border-[#E5E5E5]/60 text-xs text-[#737373] space-y-0.5">
