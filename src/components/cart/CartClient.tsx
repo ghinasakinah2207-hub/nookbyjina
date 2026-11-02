@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -11,14 +11,15 @@ import {
   Minus,
   ChevronDown,
   AlertTriangle,
+  Check,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { CartSkeleton } from "@/components/ui/CustomerSkeletons";
-import { CartVariationModal } from "@/components/cart/CartVariationModal";
+import { QuickAddModal, QuickAddConfirmData } from "@/components/product/QuickAddModal";
 import { useCart } from "@/context/CartContext";
 import { formatRupiah, PRODUCTS } from "@/data/dummy-data";
-import { Product, CartItem, SelectedOption, SelectedAddon } from "@/types";
+import { Product, CartItem } from "@/types";
 
 interface CartClientProps {
   storeOpen?: boolean;
@@ -37,8 +38,12 @@ export default function CartClient({
     updateCartItemOptions,
     removeFromCart,
     clearCart,
-    subtotal,
-    hasSoldOutItem,
+    selectedCartItemIds,
+    selectedCartItems,
+    selectedSubtotal,
+    hasSoldOutSelected,
+    toggleCartItemSelection,
+    toggleSelectAllCartItems,
   } = useCart();
 
   // State for clearing cart confirmation dialog
@@ -48,8 +53,19 @@ export default function CartClient({
   const [editingCartItem, setEditingCartItem] = useState<CartItem | null>(null);
   const [isVariationModalOpen, setIsVariationModalOpen] = useState(false);
 
+  // Derived selection state
+  const isAllSelected = useMemo(
+    () => cart.length > 0 && cart.every((item) => selectedCartItemIds.has(item.id)),
+    [cart, selectedCartItemIds]
+  );
+  const isPartiallySelected = useMemo(
+    () => selectedCartItems.length > 0 && selectedCartItems.length < cart.length,
+    [selectedCartItems, cart]
+  );
+  const noneSelected = selectedCartItems.length === 0;
+
   const handleProceedToCheckout = () => {
-    if (!storeOpen || hasSoldOutItem) return;
+    if (!storeOpen || noneSelected || hasSoldOutSelected) return;
     router.push("/checkout");
   };
 
@@ -63,40 +79,110 @@ export default function CartClient({
     setIsVariationModalOpen(true);
   };
 
-  const handleConfirmVariation = (
-    itemId: string,
-    newOptions: SelectedOption[],
-    newAddons: SelectedAddon[],
-    newQuantity: number
-  ) => {
-    updateCartItemOptions(itemId, newOptions, newAddons, newQuantity);
-  };
-
-  const getProductForItem = (item: CartItem): Product => {
-    const found =
-      (initialProducts &&
-        initialProducts.find(
+  const getProductForItem = useCallback(
+    (item: CartItem): Product => {
+      const found =
+        (initialProducts &&
+          initialProducts.find(
+            (p) =>
+              p.id === item.productId ||
+              p.slug === item.productId ||
+              (p.dbId && p.dbId === item.productId)
+          )) ||
+        PRODUCTS.find(
           (p) => p.id === item.productId || p.slug === item.productId
-        )) ||
-      PRODUCTS.find(
-        (p) => p.id === item.productId || p.slug === item.productId
+        );
+
+      if (found) return found;
+
+      return {
+        id: item.productId,
+        slug: item.productId,
+        name: item.productName,
+        description: "",
+        categoryId: "",
+        categoryName: "",
+        basePrice: item.basePrice || item.unitPrice,
+        isAvailable: item.isAvailable,
+        images: [item.productImage],
+        optionGroups: [],
+        addons: [],
+      };
+    },
+    [initialProducts]
+  );
+
+  const editingProduct = useMemo(() => {
+    return editingCartItem ? getProductForItem(editingCartItem) : null;
+  }, [editingCartItem, getProductForItem]);
+
+  const initialOptionsForModal = useMemo(() => {
+    if (!editingCartItem) return {};
+    const product = editingProduct;
+    const groups = product?.optionGroups || [];
+    const opts: Record<string, string> = {};
+
+    if (Array.isArray(editingCartItem.selectedOptions)) {
+      editingCartItem.selectedOptions.forEach((opt) => {
+        const grpKey = opt.groupId || opt.optionName;
+        const valKey = opt.valueId || opt.optionValueId;
+        const matchingGroup = groups.find(
+          (g) =>
+            g.id === grpKey ||
+            g.name === grpKey ||
+            (opt.groupName && g.name === opt.groupName)
+        );
+        if (matchingGroup) {
+          const matchingVal = matchingGroup.values.find(
+            (v) =>
+              v.id === valKey ||
+              v.name === valKey ||
+              (opt.valueName && v.name === opt.valueName) ||
+              (opt.optionValue && v.name === opt.optionValue)
+          );
+          if (matchingVal) {
+            opts[matchingGroup.id] = matchingVal.id;
+          } else if (valKey) {
+            opts[matchingGroup.id] = valKey;
+          }
+        } else if (grpKey && valKey) {
+          opts[grpKey] = valKey;
+        }
+      });
+    }
+    return opts;
+  }, [editingCartItem, editingProduct]);
+
+  const initialAddonIdsForModal = useMemo(() => {
+    if (!editingCartItem || !editingCartItem.selectedAddons) return new Set<string>();
+    const product = editingProduct;
+    const addons = product?.addons || [];
+    const ids = new Set<string>();
+
+    editingCartItem.selectedAddons.forEach((itemAddon) => {
+      const matching = addons.find(
+        (a) => a.id === itemAddon.addonId || a.name === itemAddon.addonName
       );
+      if (matching) {
+        ids.add(matching.id);
+      } else if (itemAddon.addonId) {
+        ids.add(itemAddon.addonId);
+      }
+    });
 
-    if (found) return found;
+    return ids;
+  }, [editingCartItem, editingProduct]);
 
-    return {
-      id: item.productId,
-      slug: item.productId,
-      name: item.productName,
-      description: "",
-      categoryId: "",
-      categoryName: "",
-      basePrice: item.basePrice || item.unitPrice,
-      isAvailable: item.isAvailable,
-      images: [item.productImage],
-      optionGroups: [],
-      addons: [],
-    };
+  const handleConfirmVariation = (data: QuickAddConfirmData) => {
+    if (!editingCartItem) return;
+    updateCartItemOptions(
+      editingCartItem.id,
+      data.selectedOptions,
+      data.selectedAddons,
+      data.quantity,
+      data.itemNote
+    );
+    setIsVariationModalOpen(false);
   };
 
   const getVariationSummary = (item: CartItem) => {
@@ -224,9 +310,8 @@ export default function CartClient({
           </div>
         ) : (
           <>
-
-            {/* Warning if there are sold-out items */}
-            {hasSoldOutItem ? (
+            {/* Warning if there are sold-out items in selection */}
+            {hasSoldOutSelected ? (
               <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-[#B42318] flex-shrink-0 mt-0.5" />
                 <div className="text-xs text-[#B42318] space-y-1">
@@ -242,13 +327,36 @@ export default function CartClient({
 
             {/* Shopee-Inspired Grouped Cart Card */}
             <div className="bg-white rounded-2xl p-3.5 space-y-3">
-              {/* Store Header — Displayed ONCE above product list */}
+              {/* Store Header with Select All — Displayed ONCE above product list */}
               <div className="flex items-center gap-2 pb-2.5 border-b border-[#E5E5E5]">
+                {/* Select All Checkbox */}
+                <button
+                  type="button"
+                  onClick={toggleSelectAllCartItems}
+                  aria-label={isAllSelected ? "Hapus semua pilihan" : "Pilih semua menu"}
+                  className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+                    isAllSelected
+                      ? "bg-[#F25B09] border-[#F25B09] text-white"
+                      : isPartiallySelected
+                      ? "bg-orange-100 border-[#F25B09] text-[#F25B09]"
+                      : "bg-white border-[#D4D4D4] hover:border-neutral-400"
+                  }`}
+                >
+                  {isAllSelected ? (
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  ) : isPartiallySelected ? (
+                    <Minus className="w-3.5 h-3.5 stroke-[3]" />
+                  ) : null}
+                </button>
+
                 <span className="px-1.5 py-0.5 rounded bg-[#F25B09] text-white text-[10px] font-bold tracking-wide uppercase">
                   nook
                 </span>
-                <span className="text-xs font-bold text-[#111111]">
+                <span className="text-xs font-bold text-[#111111] flex-1">
                   Nook By Jina
+                </span>
+                <span className="text-[10px] text-[#737373]">
+                  {selectedCartItems.length}/{cart.length} dipilih
                 </span>
               </div>
 
@@ -256,15 +364,30 @@ export default function CartClient({
               <div className="space-y-2">
                 {cart.map((item, index) => {
                   const variationSummary = getVariationSummary(item);
+                  const isSelected = selectedCartItemIds.has(item.id);
 
                   return (
                     <div
                       key={item.id}
-                      className={`flex items-start gap-3 py-2.5 ${
+                      className={`flex items-start gap-2.5 py-2.5 ${
                         index > 0 ? "border-t border-[#E5E5E5]" : ""
                       } ${!item.isAvailable ? "opacity-75" : ""}`}
                     >
-                      {/* LEFT: Product Thumbnail */}
+                      {/* Selection Checkbox */}
+                      <button
+                        type="button"
+                        onClick={() => toggleCartItemSelection(item.id)}
+                        aria-label={isSelected ? `Batal pilih ${item.productName}` : `Pilih ${item.productName}`}
+                        className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer shrink-0 mt-7 ${
+                          isSelected
+                            ? "bg-[#F25B09] border-[#F25B09] text-white"
+                            : "bg-white border-[#D4D4D4] hover:border-neutral-400"
+                        }`}
+                      >
+                        {isSelected ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : null}
+                      </button>
+
+                      {/* Product Thumbnail */}
                       <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-neutral-100 flex-shrink-0">
                         <Image
                           src={item.productImage}
@@ -307,7 +430,7 @@ export default function CartClient({
                             className="inline-flex items-center gap-1.5 px-2 py-1 bg-[#F5F5F6] hover:bg-[#EBEBEF] rounded-md text-[11px] text-[#555555] hover:text-[#111111] transition-colors max-w-full text-left"
                             title="Ubah Variasi"
                           >
-                            <span className="truncate max-w-[170px] sm:max-w-[210px]">
+                            <span className="truncate max-w-[150px] sm:max-w-[190px]">
                               {variationSummary}
                             </span>
                             <ChevronDown className="w-3 h-3 flex-shrink-0 text-[#737373]" />
@@ -352,8 +475,8 @@ export default function CartClient({
         )}
       </main>
 
-      {/* Sticky Bottom Bar for Checkout — Positioned close to bottom matching approved reference */}
-      {cart.length > 0 ? (
+      {/* Sticky Bottom Bar for Checkout */}
+      {isHydrated && cart.length > 0 ? (
         <div
           className="fixed left-0 right-0 z-30 bg-white border-t border-[#E5E5E5] shadow-[0_-4px_16px_rgba(0,0,0,0.04)]"
           style={{
@@ -366,31 +489,45 @@ export default function CartClient({
                 Total Pembayaran
               </span>
               <span className="text-base font-bold text-[#111111] leading-tight">
-                {formatRupiah(subtotal)}
+                {noneSelected ? formatRupiah(0) : formatRupiah(selectedSubtotal)}
               </span>
             </div>
 
             <button
               type="button"
-              disabled={hasSoldOutItem || !storeOpen}
+              disabled={noneSelected || hasSoldOutSelected || !storeOpen}
               onClick={handleProceedToCheckout}
               className={`min-h-[48px] px-6 py-3 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center transition-colors ${
-                !hasSoldOutItem && storeOpen
+                !noneSelected && !hasSoldOutSelected && storeOpen
                   ? "bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white"
                   : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
               }`}
             >
-              <span>{storeOpen ? "Checkout" : "Toko Close Order"}</span>
+              <span>
+                {!storeOpen
+                  ? "Toko Close Order"
+                  : noneSelected
+                  ? "Pilih menu dulu"
+                  : selectedCartItems.length > 0
+                  ? `Checkout (${selectedCartItems.length})`
+                  : "Checkout"}
+              </span>
             </button>
           </div>
         </div>
       ) : null}
 
-      {/* Product Variation Bottom-Sheet Modal */}
-      <CartVariationModal
+      {/* Product Variation Bottom-Sheet Modal (Unified QuickAddModal) */}
+      <QuickAddModal
+        key={editingCartItem ? `${editingCartItem.id}-${editingCartItem.quantity}` : "cart-edit-modal"}
+        product={editingProduct}
         isOpen={isVariationModalOpen}
-        cartItem={editingCartItem}
-        product={editingCartItem ? getProductForItem(editingCartItem) : null}
+        intent="configure"
+        modalKey={editingCartItem?.id}
+        initialOptions={initialOptionsForModal}
+        initialAddonIds={initialAddonIdsForModal}
+        initialQuantity={editingCartItem?.quantity}
+        initialItemNote={editingCartItem?.itemNote}
         onClose={() => setIsVariationModalOpen(false)}
         onConfirm={handleConfirmVariation}
       />
@@ -399,4 +536,3 @@ export default function CartClient({
     </div>
   );
 }
-

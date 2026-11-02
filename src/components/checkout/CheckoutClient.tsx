@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ShoppingBag,
   Store,
@@ -17,7 +18,7 @@ import { Header } from "@/components/layout/Header";
 import { useCart } from "@/context/CartContext";
 import { useOrder } from "@/context/OrderContext";
 import { STORE_SETTINGS, formatRupiah, generateOrderToken } from "@/data/dummy-data";
-import { FulfillmentType, StoreSettings, PaymentMethod } from "@/types";
+import { CartItem, FulfillmentType, StoreSettings, PaymentMethod } from "@/types";
 import { calculateDeliveryFee } from "@/lib/delivery-fee";
 import { validateIndonesianPhone } from "@/lib/phone";
 import { saveOrderToken } from "@/lib/order-token-vault";
@@ -28,8 +29,40 @@ interface CheckoutClientProps {
 
 export default function CheckoutClient({ initialStoreSettings }: CheckoutClientProps) {
   const router = useRouter();
-  const { cart, subtotal, orderNote, clearCart, hasSoldOutItem } = useCart();
+  const searchParams = useSearchParams();
+  const isBuyNowParam = searchParams.get("buyNow") === "1";
+
+  const {
+    buyNowItem,
+    clearBuyNowItem,
+    removeFromCart,
+    orderNote,
+    selectedCartItems,
+  } = useCart();
   const { addOrder } = useOrder();
+
+  // Buy Now mode is active when query param is present AND buyNowItem exists
+  const isBuyNow = isBuyNowParam && Boolean(buyNowItem);
+
+  // Authoritative checkout items — Buy Now uses isolated item, cart uses pre-selected items from cart page
+  const checkoutItems: CartItem[] = useMemo(() => {
+    if (isBuyNow && buyNowItem) {
+      return [buyNowItem];
+    }
+    return selectedCartItems;
+  }, [isBuyNow, buyNowItem, selectedCartItems]);
+
+  // For checkout, all items shown ARE the selected items (no local selection)
+  const selectedItems = checkoutItems;
+
+  // Dynamic subtotal
+  const selectedSubtotal = useMemo(() => {
+    return selectedItems.reduce((sum, item) => sum + item.itemTotal, 0);
+  }, [selectedItems]);
+
+  const hasSoldOutSelected = useMemo(() => {
+    return selectedItems.some((item) => !item.isAvailable);
+  }, [selectedItems]);
 
   const [customerName, setCustomerName] = useState("");
   const [customerWhatsapp, setCustomerWhatsapp] = useState("");
@@ -103,26 +136,26 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
     };
   }, [initialStoreSettings]);
 
-  // Authoritative delivery fee calculation using persisted settings as single source of truth
+  // Authoritative delivery fee calculation using persisted settings & selected items subtotal
   const deliveryCalc = useMemo(() => {
     if (!storeSettings?.deliveryConfig) return null;
     return calculateDeliveryFee({
       fulfillmentType,
       deliveryArea,
-      subtotal,
+      subtotal: selectedSubtotal,
       deliveryConfig: storeSettings.deliveryConfig,
     });
-  }, [storeSettings, fulfillmentType, deliveryArea, subtotal]);
+  }, [storeSettings, fulfillmentType, deliveryArea, selectedSubtotal]);
 
   const configuredAreaName = storeSettings?.deliveryConfig.configuredArea || "Lhoksukon";
   const isOutsideConfiguredArea =
     fulfillmentType === "delivery" && Boolean(deliveryCalc?.isOutsideArea);
   const shippingFee =
     fulfillmentType === "pickup" ? 0 : deliveryCalc ? deliveryCalc.shippingFee : 0;
-  const grandTotal = subtotal + (isOutsideConfiguredArea ? 0 : shippingFee);
+  const grandTotal = selectedSubtotal + (isOutsideConfiguredArea ? 0 : shippingFee);
 
   const isFreeDeliveryQualified =
-    subtotal >= (storeSettings?.deliveryConfig.freeShippingThreshold ?? 50000);
+    selectedSubtotal >= (storeSettings?.deliveryConfig.freeShippingThreshold ?? 50000);
   const standardDeliveryFee = storeSettings?.deliveryConfig.standardFee ?? 4000;
   const deliveryRowFeeDisplay =
     fulfillmentType === "delivery" && deliveryArea !== configuredAreaName
@@ -142,31 +175,35 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
       ? `Halo admin Nook by Jina, saya ${trimmedName}.`
       : "Halo admin Nook by Jina,";
 
-    const itemsSummary = cart
+    const itemsSummary = selectedItems
       .map((item) => `- ${item.quantity}x ${item.productName}`)
       .join("\n");
 
     const message = `${intro}\n\nSaya ingin memesan menu berikut:\n${itemsSummary}\nTotal Menu: ${formatRupiah(
-      subtotal
+      selectedSubtotal
     )}\n\nPengantaran ke: Area Lainnya (di luar ${configuredAreaName}).\nMohon info apakah area saya terjangkau dan berapa estimasi ongkos kirimnya? Terima kasih.`;
 
     return `https://wa.me/${storePhone}?text=${encodeURIComponent(message)}`;
   }, [
     storeSettings?.adminWhatsapp,
     customerName,
-    cart,
-    subtotal,
+    selectedItems,
+    selectedSubtotal,
     configuredAreaName,
   ]);
 
-  // If cart is empty, render redirect prompt
-  if (cart.length === 0) {
+  // If no items are in checkout, render redirect prompt
+  if (checkoutItems.length === 0) {
     return (
       <div className="min-h-screen bg-[#F6F6F7] flex flex-col items-center justify-center p-6 text-center">
         <ShoppingBag className="w-12 h-12 text-[#737373] mb-3 stroke-[1.5]" />
-        <h1 className="text-base font-bold text-[#111111]">Keranjang Kosong</h1>
+        <h1 className="text-base font-bold text-[#111111]">
+          {isBuyNowParam ? "Menu Tidak Ditemukan" : "Keranjang Kosong"}
+        </h1>
         <p className="text-xs text-[#737373] mt-1 mb-6">
-          Tidak ada item untuk di-checkout. Silakan pilih menu terlebih dahulu.
+          {isBuyNowParam
+            ? "Sesi pembelian langsung telah selesai atau tidak ditemukan. Silakan pilih menu kembali."
+            : "Tidak ada item untuk di-checkout. Silakan pilih menu terlebih dahulu."}
         </p>
         <Link
           href="/menu"
@@ -181,7 +218,16 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmittingRef.current || isSubmitting) return;
-    if (hasSoldOutItem) return;
+
+    if (selectedItems.length === 0) {
+      setSubmitError("Tidak ada menu yang dipilih untuk dipesan.");
+      return;
+    }
+
+    if (hasSoldOutSelected) {
+      setSubmitError("Terdapat menu yang stoknya habis. Silakan kembali ke keranjang untuk menyesuaikan pesanan.");
+      return;
+    }
 
     if (!storeSettings) {
       setSubmitError(
@@ -224,6 +270,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
 
     try {
       // Independent server-side order validation & creation with idempotency token
+      // Only send authoritatively selected items
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -236,7 +283,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
             fulfillmentType === "pickup"
               ? `Pickup Toko (${configuredAreaName})`
               : deliveryArea,
-          items: cart,
+          items: selectedItems,
           orderNote,
           clientShippingFee: shippingFee,
           clientTotal: grandTotal,
@@ -257,8 +304,12 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
       // Store server-validated order into client OrderContext for tracking & payments
       addOrder(data.order);
 
-      // Clear shopping cart
-      clearCart();
+      // Clean up purchased items: if Buy Now session, clear isolated item; if cart checkout, remove only checked items
+      if (isBuyNow) {
+        clearBuyNowItem();
+      } else {
+        selectedItems.forEach((item) => removeFromCart(item.id));
+      }
 
       // Navigate appropriately based on selected payment method
       if (selectedPaymentMethod === "Cash") {
@@ -285,14 +336,14 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
       }}
     >
       <Header
-        title="Checkout Pesanan"
+        title={isBuyNow ? "Beli Sekarang" : "Checkout Pesanan"}
         showBack={true}
-        backHref="/keranjang"
+        backHref={isBuyNow ? "/menu" : "/keranjang"}
         showCart={false}
       />
 
       <main className="max-w-md mx-auto px-4 pt-3 space-y-2.5">
-        {/* Explicit Error Display if Settings Loading Failed (Never Silent Fallback) */}
+        {/* Explicit Error Display if Settings Loading Failed */}
         {settingsError ? (
           <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-[#B42318] space-y-1">
             <div className="flex items-center gap-2 font-bold">
@@ -312,7 +363,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
         ) : null}
 
         <form id="checkout-form" onSubmit={handleCreateOrder} className="space-y-2.5">
-          {/* Card 1: Customer Contact Info (Without "Data Pemesan (Tanpa Login)" heading) */}
+          {/* Card 1: Customer Contact Info */}
           <div className="bg-white rounded-2xl p-4 space-y-3.5">
             {/* Customer Name */}
             <div className="space-y-1">
@@ -385,36 +436,76 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
             </div>
           </div>
 
-          {/* Card 2: Ringkasan Menu */}
+          {/* Card 2: Read-Only Order Summary */}
           <div className="bg-white rounded-2xl p-4 space-y-3">
-            <h2 className="text-sm font-bold text-[#111111] flex items-center justify-between">
-              <span>Ringkasan Menu</span>
-              <span className="text-xs font-normal text-[#737373]">
-                {cart.length} item
-              </span>
-            </h2>
+            <div className="flex items-center justify-between pb-2 border-b border-[#E5E5E5]">
+              <h2 className="text-sm font-bold text-[#111111]">
+                {isBuyNow ? "Beli Langsung" : "Ringkasan Pesanan"}
+              </h2>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-normal text-[#737373]">
+                  {checkoutItems.length} menu
+                </span>
+                {isBuyNow && (
+                  <span className="text-[10px] font-bold text-[#F25B09] bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-full">
+                    Beli Sekarang
+                  </span>
+                )}
+              </div>
+            </div>
 
-            <div className="space-y-2 text-xs divide-y divide-[#E5E5E5]/60">
-              {cart.map((item) => (
-                <div key={item.id} className="pt-2 first:pt-0 flex justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-medium text-[#111111] truncate">
-                      {item.quantity}x {item.productName}
-                    </p>
-                    {item.selectedOptions.length > 0 ? (
-                      <p className="text-[11px] text-[#737373] truncate">
-                        {item.selectedOptions.map((o) => o.valueName || o.optionValue).join(", ")}
+            {/* Product Items List (Read-Only) */}
+            <div className="space-y-3 pt-1 divide-y divide-[#E5E5E5]/60">
+              {checkoutItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="pt-2.5 first:pt-0 flex items-start gap-3"
+                >
+                  {/* Product Thumbnail */}
+                  <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-neutral-100 border border-[#E5E5E5] shrink-0 mt-0.5">
+                    <Image
+                      src={item.productImage || "/images/hero-food.webp"}
+                      alt={item.productName}
+                      fill
+                      className={`object-cover ${!item.isAvailable ? "grayscale" : ""}`}
+                      sizes="48px"
+                    />
+                  </div>
+
+                  {/* Product Information */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-xs text-[#111111] leading-snug">
+                        {item.quantity}x {item.productName}
                       </p>
-                    ) : null}
-                    {item.itemNote ? (
-                      <p className="text-[10px] text-[#737373] italic truncate">
+                      <span className="font-bold text-xs text-[#111111] shrink-0">
+                        {formatRupiah(item.itemTotal)}
+                      </span>
+                    </div>
+                    {item.selectedOptions && item.selectedOptions.length > 0 && (
+                      <p className="text-[10.5px] text-[#737373] truncate mt-0.5">
+                        {item.selectedOptions
+                          .map((o) => o.valueName || o.optionValue)
+                          .filter(Boolean)
+                          .join(", ")}
+                      </p>
+                    )}
+                    {item.selectedAddons && item.selectedAddons.length > 0 && (
+                      <p className="text-[10.5px] text-[#737373] truncate">
+                        + {item.selectedAddons.map((a) => a.addonName).join(", ")}
+                      </p>
+                    )}
+                    {item.itemNote && (
+                      <p className="text-[10px] text-[#737373] italic truncate mt-0.5">
                         Catatan: {item.itemNote}
                       </p>
-                    ) : null}
+                    )}
+                    {!item.isAvailable && (
+                      <span className="inline-block text-[9.5px] font-bold text-[#B42318] bg-red-50 border border-red-200 px-1.5 py-0.2 rounded mt-1">
+                        Stok Habis
+                      </span>
+                    )}
                   </div>
-                  <span className="font-semibold text-[#111111] shrink-0">
-                    {formatRupiah(item.itemTotal)}
-                  </span>
                 </div>
               ))}
             </div>
@@ -440,7 +531,6 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                     : "border-[#E5E5E5] bg-white hover:border-neutral-300"
                 }`}
               >
-                {/* Left side: Icon container and title + description */}
                 <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                   <div
                     className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
@@ -461,7 +551,6 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                   </div>
                 </div>
 
-                {/* Right side: Shipping cost & selection indicator */}
                 <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 text-right">
                   <span
                     className={`text-xs sm:text-sm whitespace-nowrap font-bold ${
@@ -504,7 +593,6 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                     : "border-[#E5E5E5] bg-white hover:border-neutral-300"
                 }`}
               >
-                {/* Left side: Icon container and title + description */}
                 <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                   <div
                     className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
@@ -525,7 +613,6 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                   </div>
                 </div>
 
-                {/* Right side: Shipping cost & selection indicator */}
                 <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 text-right">
                   <span
                     className={`text-xs sm:text-sm whitespace-nowrap font-bold ${
@@ -561,12 +648,12 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
             {fulfillmentType === "pickup" && (
               <div className="pt-3.5 border-t border-[#E5E5E5]">
                 <div className="p-3 bg-neutral-50 border border-neutral-200/80 rounded-xl text-xs text-[#737373]">
-                  <p>Gratis ongkir — Ambil sendiri.</p>
+                  <p>Gratis ongkir — Ambil sendiri di toko.</p>
                 </div>
               </div>
             )}
 
-            {/* Conditional Delivery Area Selection - Shown ONLY when Delivery is selected */}
+            {/* Conditional Delivery Area Selection */}
             {fulfillmentType === "delivery" && (
               <div className="pt-3.5 border-t border-[#E5E5E5] space-y-3">
                 <label className="text-xs font-bold text-[#111111] block">
@@ -574,7 +661,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                 </label>
 
                 <div className="space-y-2">
-                  {/* Choice 1: Lhoksukon (Kota & Sekitarnya) */}
+                  {/* Choice 1: Configured Area */}
                   <button
                     type="button"
                     role="radio"
@@ -731,7 +818,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
             )}
           </div>
 
-          {/* Card 4: Metode Pembayaran (Dinamis Sesuai Pengaturan Toko) */}
+          {/* Card 4: Metode Pembayaran */}
           <div className="bg-white rounded-2xl p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-[#111111] flex items-center gap-2">
@@ -834,9 +921,9 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
             <div className="space-y-2 text-xs">
               {/* Row 1: Subtotal Pesanan */}
               <div className="flex justify-between items-center text-[#737373]">
-                <span>Subtotal Pesanan</span>
+                <span>Subtotal ({selectedItems.length} menu)</span>
                 <span className="font-medium text-[#111111]">
-                  {formatRupiah(subtotal)}
+                  {formatRupiah(selectedSubtotal)}
                 </span>
               </div>
 
@@ -892,7 +979,9 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
             >
               {/* Left: Order Total */}
               <div className="flex flex-col min-w-0">
-                <span className="text-[11px] font-medium text-[#737373]">Total</span>
+                <span className="text-[11px] font-medium text-[#737373]">
+                  Total ({selectedItems.length} menu)
+                </span>
                 <span className="text-base sm:text-lg font-extrabold text-[#F25B09] leading-tight truncate">
                   {formatRupiah(grandTotal)}
                 </span>
@@ -906,13 +995,17 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                   isOutsideConfiguredArea ||
                   !storeSettings ||
                   Boolean(settingsError) ||
-                  !selectedPaymentMethod
+                  !selectedPaymentMethod ||
+                  selectedItems.length === 0 ||
+                  hasSoldOutSelected
                 }
                 className={`min-h-[44px] px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors shrink-0 ${
                   !isOutsideConfiguredArea &&
                   storeSettings &&
                   !settingsError &&
                   Boolean(selectedPaymentMethod) &&
+                  selectedItems.length > 0 &&
+                  !hasSoldOutSelected &&
                   !isSubmitting
                     ? "bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white cursor-pointer"
                     : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
@@ -925,6 +1018,8 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                   </>
                 ) : isOutsideConfiguredArea ? (
                   <span>Perlu Konfirmasi Area</span>
+                ) : selectedItems.length === 0 ? (
+                  <span>Pilih Menu</span>
                 ) : (
                   <span>Buat Pesanan</span>
                 )}

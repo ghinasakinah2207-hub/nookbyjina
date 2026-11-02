@@ -37,8 +37,19 @@ interface CartContextType {
     itemId: string,
     newOptions: SelectedOption[],
     newAddons: SelectedAddon[],
-    newQuantity?: number
+    newQuantity?: number,
+    newItemNote?: string
   ) => void;
+  buyNowItem: CartItem | null;
+  setBuyNowItem: (item: CartItem | null) => void;
+  clearBuyNowItem: () => void;
+  selectedCartItemIds: Set<string>;
+  selectedCartItems: CartItem[];
+  selectedSubtotal: number;
+  hasSoldOutSelected: boolean;
+  toggleCartItemSelection: (itemId: string) => void;
+  toggleSelectAllCartItems: () => void;
+  setSelectedCartItemIds: React.Dispatch<React.SetStateAction<Set<string>>>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -46,10 +57,14 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 const CART_STORAGE_KEY = "temu_cart_items_v1";
 const ORDER_NOTE_KEY = "temu_order_note_v1";
 const FAVORITES_KEY = "temu_favorites_v1";
+const BUY_NOW_STORAGE_KEY = "temu_buy_now_item_v1";
+const SELECTED_CART_STORAGE_KEY = "temu_selected_cart_ids_v1";
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   // Initialize with hydration-safe defaults so SSR and initial client render produce identical markup
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [selectedCartItemIds, setSelectedCartItemIds] = useState<Set<string>>(() => new Set());
+  const [buyNowItem, setBuyNowItemState] = useState<CartItem | null>(null);
   const [orderNote, setOrderNoteState] = useState<string>("");
   const [favorites, setFavorites] = useState<string[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -59,34 +74,62 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     queueMicrotask(() => {
       try {
+        let parsedCart: CartItem[] = [];
         const storedCart = localStorage.getItem(CART_STORAGE_KEY);
         if (storedCart) {
-          const parsed: CartItem[] = JSON.parse(storedCart);
-          setCart(
-            parsed.map((item) => {
-              const prod = PRODUCTS.find(
-                (p) => p.id === item.productId || p.slug === item.productId
+          const rawParsed: CartItem[] = JSON.parse(storedCart);
+          parsedCart = rawParsed.map((item) => {
+            const prod = PRODUCTS.find(
+              (p) => p.id === item.productId || p.slug === item.productId
+            );
+            const normalizedOptions = Array.isArray(item.selectedOptions)
+              ? item.selectedOptions.map((opt) => ({
+                  ...opt,
+                  groupId: opt.groupId || opt.optionName || "",
+                  groupName: opt.groupName || opt.optionName || "",
+                  valueId: opt.valueId || opt.optionValueId || "",
+                  valueName: opt.valueName || opt.optionValue || "",
+                  optionValueId: opt.optionValueId || opt.valueId || "",
+                  optionValue: opt.optionValue || opt.valueName || "",
+                  optionName: opt.optionName || opt.groupName || "",
+                  priceDelta: Number(opt.priceDelta || 0),
+                }))
+              : [];
+            return {
+              ...item,
+              selectedOptions: normalizedOptions,
+              isAvailable: prod ? prod.isAvailable : (item.isAvailable ?? true),
+            };
+          });
+          setCart(parsedCart);
+        }
+
+        const storedSelection = localStorage.getItem(SELECTED_CART_STORAGE_KEY);
+        if (storedSelection) {
+          try {
+            const parsedSelection = JSON.parse(storedSelection);
+            if (Array.isArray(parsedSelection)) {
+              const validIds = new Set<string>(
+                parsedSelection.filter((id: string) =>
+                  parsedCart.some((item) => item.id === id)
+                )
               );
-              const normalizedOptions = Array.isArray(item.selectedOptions)
-                ? item.selectedOptions.map((opt) => ({
-                    ...opt,
-                    groupId: opt.groupId || opt.optionName || "",
-                    groupName: opt.groupName || opt.optionName || "",
-                    valueId: opt.valueId || opt.optionValueId || "",
-                    valueName: opt.valueName || opt.optionValue || "",
-                    optionValueId: opt.optionValueId || opt.valueId || "",
-                    optionValue: opt.optionValue || opt.valueName || "",
-                    optionName: opt.optionName || opt.groupName || "",
-                    priceDelta: Number(opt.priceDelta || 0),
-                  }))
-                : [];
-              return {
-                ...item,
-                selectedOptions: normalizedOptions,
-                isAvailable: prod ? prod.isAvailable : (item.isAvailable ?? true),
-              };
-            })
-          );
+              setSelectedCartItemIds(validIds);
+            }
+          } catch {
+            setSelectedCartItemIds(new Set(parsedCart.map((i) => i.id)));
+          }
+        } else {
+          setSelectedCartItemIds(new Set(parsedCart.map((i) => i.id)));
+        }
+
+        const storedBuyNow = sessionStorage.getItem(BUY_NOW_STORAGE_KEY);
+        if (storedBuyNow) {
+          try {
+            setBuyNowItemState(JSON.parse(storedBuyNow));
+          } catch {
+            // Ignore
+          }
         }
 
         const storedNote = localStorage.getItem(ORDER_NOTE_KEY);
@@ -254,6 +297,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
+      // Ensure newly added item is selected by default
+      setSelectedCartItemIds((prev) => {
+        const next = new Set(prev);
+        next.add(itemId);
+        try {
+          localStorage.setItem(
+            SELECTED_CART_STORAGE_KEY,
+            JSON.stringify(Array.from(next))
+          );
+        } catch {
+          // Ignore
+        }
+        return next;
+      });
+
       // Trigger cart success Lottie animation
       setCartSuccessEvent({ id: Date.now() });
     },
@@ -264,6 +322,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     (itemId: string, newQuantity: number) => {
       if (newQuantity <= 0) {
         setCart((prev) => prev.filter((item) => item.id !== itemId));
+        setSelectedCartItemIds((prev) => {
+          if (!prev.has(itemId)) return prev;
+          const next = new Set(prev);
+          next.delete(itemId);
+          try {
+            localStorage.setItem(
+              SELECTED_CART_STORAGE_KEY,
+              JSON.stringify(Array.from(next))
+            );
+          } catch {
+            // Ignore
+          }
+          return next;
+        });
         return;
       }
       setCart((prev) =>
@@ -333,6 +405,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const removeFromCart = React.useCallback((itemId: string) => {
     setCart((prev) => prev.filter((item) => item.id !== itemId));
+    setSelectedCartItemIds((prev) => {
+      if (!prev.has(itemId)) return prev;
+      const next = new Set(prev);
+      next.delete(itemId);
+      try {
+        localStorage.setItem(
+          SELECTED_CART_STORAGE_KEY,
+          JSON.stringify(Array.from(next))
+        );
+      } catch {
+        // Ignore
+      }
+      return next;
+    });
   }, []);
 
   const updateCartItemOptions = React.useCallback(
@@ -340,11 +426,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       itemId: string,
       newOptions: SelectedOption[],
       newAddons: SelectedAddon[],
-      newQuantity?: number
+      newQuantity?: number,
+      newItemNote?: string
     ) => {
       setCart((prev) => {
         const itemToEdit = prev.find((i) => i.id === itemId);
         if (!itemToEdit) return prev;
+
+        const resolvedNote =
+          newItemNote !== undefined
+            ? newItemNote.slice(0, 200).trim()
+            : (itemToEdit.itemNote || "");
 
         const normalizedOptions = newOptions.map((opt) => ({
           ...opt,
@@ -362,7 +454,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           itemToEdit.productId,
           normalizedOptions,
           newAddons,
-          itemToEdit.itemNote || ""
+          resolvedNote
         );
 
         const optionsDelta = normalizedOptions.reduce(
@@ -381,6 +473,25 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           (i) => i.id === newId && i.id !== itemId
         );
 
+        // Keep selection state synchronized with new item ID
+        if (newId !== itemId) {
+          setSelectedCartItemIds((prevSelection) => {
+            if (!prevSelection.has(itemId)) return prevSelection;
+            const next = new Set(prevSelection);
+            next.delete(itemId);
+            next.add(newId);
+            try {
+              localStorage.setItem(
+                SELECTED_CART_STORAGE_KEY,
+                JSON.stringify(Array.from(next))
+              );
+            } catch {
+              // Ignore
+            }
+            return next;
+          });
+        }
+
         if (existingIdentical) {
           // Merge this item into existing item and remove current itemId
           const mergedQty = existingIdentical.quantity + targetQty;
@@ -390,6 +501,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
               i.id === newId
                 ? {
                     ...i,
+                    itemNote: resolvedNote,
                     quantity: mergedQty,
                     itemTotal: unitPrice * mergedQty,
                   }
@@ -404,6 +516,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                   id: newId,
                   selectedOptions: normalizedOptions,
                   selectedAddons: newAddons,
+                  itemNote: resolvedNote,
                   quantity: targetQty,
                   unitPrice,
                   itemTotal: unitPrice * targetQty,
@@ -418,14 +531,74 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clearCart = React.useCallback(() => {
     setCart([]);
+    setSelectedCartItemIds(new Set());
     setOrderNoteState("");
     try {
       localStorage.removeItem(CART_STORAGE_KEY);
       localStorage.removeItem(ORDER_NOTE_KEY);
+      localStorage.removeItem(SELECTED_CART_STORAGE_KEY);
     } catch {
       // Ignore
     }
   }, []);
+
+  const setBuyNowItem = React.useCallback((item: CartItem | null) => {
+    setBuyNowItemState(item);
+    try {
+      if (item) {
+        sessionStorage.setItem(BUY_NOW_STORAGE_KEY, JSON.stringify(item));
+      } else {
+        sessionStorage.removeItem(BUY_NOW_STORAGE_KEY);
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const clearBuyNowItem = React.useCallback(() => {
+    setBuyNowItemState(null);
+    try {
+      sessionStorage.removeItem(BUY_NOW_STORAGE_KEY);
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const toggleCartItemSelection = React.useCallback((itemId: string) => {
+    setSelectedCartItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      try {
+        localStorage.setItem(
+          SELECTED_CART_STORAGE_KEY,
+          JSON.stringify(Array.from(next))
+        );
+      } catch {
+        // Ignore
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAllCartItems = React.useCallback(() => {
+    setSelectedCartItemIds((prev) => {
+      const isAllSelected = cart.length > 0 && cart.every((item) => prev.has(item.id));
+      const next = isAllSelected ? new Set<string>() : new Set<string>(cart.map((item) => item.id));
+      try {
+        localStorage.setItem(
+          SELECTED_CART_STORAGE_KEY,
+          JSON.stringify(Array.from(next))
+        );
+      } catch {
+        // Ignore
+      }
+      return next;
+    });
+  }, [cart]);
 
   const subtotal = React.useMemo(
     () => cart.reduce((sum, item) => sum + item.itemTotal, 0),
@@ -438,6 +611,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const hasSoldOutItem = React.useMemo(
     () => cart.some((item) => !item.isAvailable),
     [cart]
+  );
+
+  const selectedCartItems = React.useMemo(
+    () => cart.filter((item) => selectedCartItemIds.has(item.id)),
+    [cart, selectedCartItemIds]
+  );
+
+  const selectedSubtotal = React.useMemo(
+    () => selectedCartItems.reduce((sum, item) => sum + item.itemTotal, 0),
+    [selectedCartItems]
+  );
+
+  const hasSoldOutSelected = React.useMemo(
+    () => selectedCartItems.some((item) => !item.isAvailable),
+    [selectedCartItems]
   );
 
   const contextValue = React.useMemo(
@@ -463,6 +651,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       openQuickAdd,
       closeQuickAdd,
       updateCartItemOptions,
+      buyNowItem,
+      setBuyNowItem,
+      clearBuyNowItem,
+      selectedCartItemIds,
+      selectedCartItems,
+      selectedSubtotal,
+      hasSoldOutSelected,
+      toggleCartItemSelection,
+      toggleSelectAllCartItems,
+      setSelectedCartItemIds,
     }),
     [
       cart,
@@ -486,6 +684,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       openQuickAdd,
       closeQuickAdd,
       updateCartItemOptions,
+      buyNowItem,
+      setBuyNowItem,
+      clearBuyNowItem,
+      selectedCartItemIds,
+      selectedCartItems,
+      selectedSubtotal,
+      hasSoldOutSelected,
+      toggleCartItemSelection,
+      toggleSelectAllCartItems,
+      setSelectedCartItemIds,
     ]
   );
 
@@ -500,6 +708,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       <CartSuccessOverlay />
     </CartContext.Provider>
   );
+}
+
+export function useCartSafe() {
+  return useContext(CartContext);
 }
 
 export function useCart() {

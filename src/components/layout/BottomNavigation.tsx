@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, UtensilsCrossed, ShoppingBag, ReceiptText } from "lucide-react";
+import { Home, UtensilsCrossed, ShoppingCart, ReceiptText } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 
 export const BottomNavContext = React.createContext<boolean>(false);
@@ -79,7 +79,7 @@ export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
     {
       label: "Keranjang",
       href: "/keranjang",
-      icon: ShoppingBag,
+      icon: ShoppingCart,
       isActive: isCartActive,
       badgeCount: isHydrated ? itemCount : 0,
     },

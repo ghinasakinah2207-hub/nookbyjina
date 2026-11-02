@@ -6,24 +6,57 @@ import { X, Plus, Minus, Check, AlertCircle, Loader2 } from "lucide-react";
 import { Product, SelectedOption, SelectedAddon } from "@/types";
 import { formatRupiah } from "@/data/dummy-data";
 import { parseOptionLabel } from "@/lib/option-utils";
-import { useCart } from "@/context/CartContext";
+import { useCartSafe } from "@/context/CartContext";
+
+export type QuickAddIntent = "cart" | "buynow" | "configure";
+
+export interface QuickAddConfirmData {
+  product: Product;
+  selectedOptions: SelectedOption[];
+  selectedAddons: SelectedAddon[];
+  itemNote: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  intent: QuickAddIntent;
+}
 
 interface QuickAddFormProps {
   product: Product;
   isLoadingOptions?: boolean;
-  onClose: () => void;
+  intent?: QuickAddIntent;
+  initialOptions?: Record<string, string>;
+  initialAddonIds?: Set<string>;
+  initialQuantity?: number;
+  initialItemNote?: string;
+  onClose: (skipHistoryBack?: boolean) => void;
+  onConfirm?: (data: QuickAddConfirmData) => void;
 }
 
-function QuickAddForm({ product, isLoadingOptions = false, onClose }: QuickAddFormProps) {
-  const { addToCart } = useCart();
+function QuickAddForm({
+  product,
+  isLoadingOptions = false,
+  intent = "cart",
+  initialOptions,
+  initialAddonIds,
+  initialQuantity,
+  initialItemNote,
+  onClose,
+  onConfirm,
+}: QuickAddFormProps) {
+  const cart = useCartSafe();
   const optionGroups = useMemo(() => product.optionGroups || [], [product.optionGroups]);
   const addons = useMemo(() => product.addons || [], [product.addons]);
 
   // Selections initialized per product instance
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {
-    const initialOpts: Record<string, string> = {};
+    const initialOpts: Record<string, string> = { ...(initialOptions || {}) };
     optionGroups.forEach((group) => {
-      if (group.required && group.values.length > 0) {
+      const existingVal = initialOpts[group.id] || initialOpts[group.name];
+      if (existingVal) {
+        const matchingVal = group.values.find((v) => v.id === existingVal || v.name === existingVal);
+        initialOpts[group.id] = matchingVal ? matchingVal.id : existingVal;
+      } else if (group.required && group.values.length > 0) {
         initialOpts[group.id] = group.values[0].id;
       }
     });
@@ -37,7 +70,14 @@ function QuickAddForm({ product, isLoadingOptions = false, onClose }: QuickAddFo
     const updated = { ...selectedOptions };
     let changed = false;
     optionGroups.forEach((group) => {
-      if (group.required && group.values.length > 0 && !updated[group.id]) {
+      const existingVal = updated[group.id] || updated[group.name];
+      if (existingVal) {
+        const matchingVal = group.values.find((v) => v.id === existingVal || v.name === existingVal);
+        if (matchingVal && matchingVal.id !== updated[group.id]) {
+          updated[group.id] = matchingVal.id;
+          changed = true;
+        }
+      } else if (group.required && group.values.length > 0 && !updated[group.id]) {
         updated[group.id] = group.values[0].id;
         changed = true;
       }
@@ -47,10 +87,15 @@ function QuickAddForm({ product, isLoadingOptions = false, onClose }: QuickAddFo
     }
   }
 
-  const [selectedAddonIds, setSelectedAddonIds] = useState<Set<string>>(() => new Set());
-  const [quantity, setQuantity] = useState(1);
-  const [itemNote, setItemNote] = useState("");
+  const [selectedAddonIds, setSelectedAddonIds] = useState<Set<string>>(
+    () => new Set(initialAddonIds ? Array.from(initialAddonIds) : [])
+  );
+  const [quantity, setQuantity] = useState(
+    initialQuantity !== undefined && initialQuantity > 0 ? initialQuantity : 1
+  );
+  const [itemNote, setItemNote] = useState(initialItemNote || "");
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Option selection handler
   const handleSelectOption = (groupId: string, valueId: string) => {
@@ -121,9 +166,17 @@ function QuickAddForm({ product, isLoadingOptions = false, onClose }: QuickAddFo
     };
   }, [product.basePrice, optionGroups, addons, selectedOptions, selectedAddonIds, quantity]);
 
-  // Confirm and add to cart
-  const handleConfirmAddToCart = () => {
-    if (!product.isAvailable || isLoadingOptions) return;
+  // Dynamic button label based on intent
+  const confirmButtonLabel = useMemo(() => {
+    if (!product.isAvailable) return "Menu Habis";
+    if (intent === "buynow") return "Beli Sekarang";
+    if (intent === "configure") return "Konfirmasi Pilihan";
+    return "Tambah ke Keranjang";
+  }, [product.isAvailable, intent]);
+
+  // Confirm and execute action (Add to Cart or Buy Now)
+  const handleConfirmAction = () => {
+    if (!product.isAvailable || isLoadingOptions || isSubmitting) return;
 
     // 1. Validate all required option groups
     for (const group of optionGroups) {
@@ -133,17 +186,41 @@ function QuickAddForm({ product, isLoadingOptions = false, onClose }: QuickAddFo
       }
     }
 
-    // 2. Add to cart (triggers the Lottie success animation in CartContext)
-    addToCart(
-      product,
-      resolvedOptions,
-      resolvedAddons,
-      itemNote,
-      quantity
-    );
+    setIsSubmitting(true);
 
-    // 3. Initiate smooth modal exit transition
-    onClose();
+    try {
+      if (onConfirm) {
+        onConfirm({
+          product,
+          selectedOptions: resolvedOptions,
+          selectedAddons: resolvedAddons,
+          itemNote,
+          quantity,
+          unitPrice: totalPrice / quantity,
+          totalPrice,
+          intent: intent || "cart",
+        });
+        // When intent is "buynow", we skip history.back() because we are navigating forward
+        onClose(intent === "buynow");
+      } else {
+        // 2. Add to cart (triggers the Lottie success animation in CartContext)
+        if (cart?.addToCart) {
+          cart.addToCart(
+            product,
+            resolvedOptions,
+            resolvedAddons,
+            itemNote,
+            quantity
+          );
+        }
+
+        // 3. Initiate smooth modal exit transition
+        onClose(false);
+      }
+    } catch (err) {
+      console.error("Gagal memproses aksi variasi:", err);
+      setIsSubmitting(false);
+    }
   };
 
   const imageSrc = product.images?.[0] || "/images/hero-food.webp";
@@ -184,7 +261,7 @@ function QuickAddForm({ product, isLoadingOptions = false, onClose }: QuickAddFo
 
         <button
           type="button"
-          onClick={onClose}
+          onClick={() => onClose()}
           aria-label="Tutup modal"
           className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center text-[#111111] transition-colors flex-shrink-0 cursor-pointer"
         >
@@ -423,28 +500,30 @@ function QuickAddForm({ product, isLoadingOptions = false, onClose }: QuickAddFo
           </button>
         </div>
 
-        {/* Add to Cart Button */}
+        {/* Action Button */}
         <button
           type="button"
-          disabled={isLoadingOptions || !product.isAvailable}
-          onClick={handleConfirmAddToCart}
+          disabled={isLoadingOptions || !product.isAvailable || isSubmitting}
+          onClick={handleConfirmAction}
           aria-busy={isLoadingOptions}
           className={`flex-1 min-h-[42px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-between transition-colors shadow-sm ${
-            isLoadingOptions
+            isLoadingOptions || isSubmitting
               ? "bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-not-allowed justify-center"
               : product.isAvailable
               ? "bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white cursor-pointer"
               : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
           }`}
         >
-          {isLoadingOptions ? (
+          {isLoadingOptions || isSubmitting ? (
             <div className="flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin text-[#F25B09]" />
-              <span className="text-neutral-500 font-medium">Memuat Pilihan...</span>
+              <span className="text-neutral-500 font-medium">
+                {isSubmitting ? "Memproses..." : "Memuat Pilihan..."}
+              </span>
             </div>
           ) : (
             <>
-              <span>{product.isAvailable ? "Tambah ke Keranjang" : "Menu Habis"}</span>
+              <span>{confirmButtonLabel}</span>
               <span>{formatRupiah(totalPrice)}</span>
             </>
           )}
@@ -454,15 +533,33 @@ function QuickAddForm({ product, isLoadingOptions = false, onClose }: QuickAddFo
   );
 }
 
-interface QuickAddModalProps {
+export interface QuickAddModalProps {
   product: Product | null;
   isOpen: boolean;
   onClose: () => void;
+  intent?: QuickAddIntent;
+  modalKey?: string;
+  initialOptions?: Record<string, string>;
+  initialAddonIds?: Set<string>;
+  initialQuantity?: number;
+  initialItemNote?: string;
+  onConfirm?: (data: QuickAddConfirmData) => void;
 }
 
 type ModalStatus = "closed" | "opening" | "open" | "closing";
 
-export function QuickAddModal({ product, isOpen, onClose }: QuickAddModalProps) {
+export function QuickAddModal({
+  product,
+  isOpen,
+  onClose,
+  intent = "cart",
+  modalKey,
+  initialOptions,
+  initialAddonIds,
+  initialQuantity,
+  initialItemNote,
+  onConfirm,
+}: QuickAddModalProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const [asyncProduct, setAsyncProduct] = useState<Product | null>(null);
 
@@ -478,6 +575,7 @@ export function QuickAddModal({ product, isOpen, onClose }: QuickAddModalProps) 
 
   const closeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const historyPushedRef = useRef(false);
+  const skipHistoryBackRef = useRef(false);
 
   // Check if reduced motion is requested
   const isReducedMotion = useCallback(() => {
@@ -491,6 +589,7 @@ export function QuickAddModal({ product, isOpen, onClose }: QuickAddModalProps) 
       clearTimeout(closeTimerRef.current);
       closeTimerRef.current = null;
     }
+    skipHistoryBackRef.current = false;
     setStatus("closed");
     setRenderedProduct(null);
     setPrevProduct(null);
@@ -500,14 +599,16 @@ export function QuickAddModal({ product, isOpen, onClose }: QuickAddModalProps) 
 
   // Centralized close function shared across X button, backdrop, Escape key, and Back button
   const requestClose = useCallback(
-    (isBackAction: boolean = false) => {
+    (isBackAction: boolean = false, skipHistoryBack: boolean = false) => {
       // Prevent duplicate close requests while closing or closed
       if (statusRef.current === "closing" || statusRef.current === "closed") {
         return;
       }
 
-      // Revert history entry only if initiated from UI (not from browser popstate)
-      if (!isBackAction && historyPushedRef.current) {
+      const shouldSkipHistoryBack = skipHistoryBack || skipHistoryBackRef.current;
+
+      // Revert history entry only if initiated from UI (not from browser popstate and not when navigating away)
+      if (!isBackAction && !shouldSkipHistoryBack && historyPushedRef.current) {
         historyPushedRef.current = false;
         try {
           window.history.back();
@@ -549,7 +650,7 @@ export function QuickAddModal({ product, isOpen, onClose }: QuickAddModalProps) 
   // Handle external close when parent sets isOpen to false
   useEffect(() => {
     if (!isOpen && statusRef.current === "open") {
-      requestClose(false);
+      requestClose(false, skipHistoryBackRef.current);
     }
   }, [isOpen, requestClose]);
 
@@ -762,10 +863,21 @@ export function QuickAddModal({ product, isOpen, onClose }: QuickAddModalProps) 
         } motion-reduce:transition-none motion-reduce:transform-none`}
       >
         <QuickAddForm
-          key={activeProduct.dbId || activeProduct.id}
+          key={`${activeProduct.dbId || activeProduct.id}-${intent}-${modalKey || ""}`}
           product={activeProduct}
           isLoadingOptions={!isOptionsLoaded}
-          onClose={() => requestClose(false)}
+          intent={intent}
+          initialOptions={initialOptions}
+          initialAddonIds={initialAddonIds}
+          initialQuantity={initialQuantity}
+          initialItemNote={initialItemNote}
+          onClose={(skipHistoryBack?: boolean) => {
+            if (skipHistoryBack) {
+              skipHistoryBackRef.current = true;
+            }
+            requestClose(false, skipHistoryBack);
+          }}
+          onConfirm={onConfirm}
         />
       </div>
     </div>

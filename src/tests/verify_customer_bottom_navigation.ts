@@ -69,7 +69,7 @@ function verifyCustomerBottomNavigation() {
     content.includes('href: "/keranjang"') && content.includes('label: "Keranjang"'),
     "Tab 3 (Keranjang) points to /keranjang"
   );
-  assert(content.includes("icon: ShoppingBag"), "Tab 3 uses ShoppingBag icon");
+  assert(content.includes("icon: ShoppingCart"), "Tab 3 uses ShoppingCart icon");
 
   // Tab 4: Pesanan
   assert(

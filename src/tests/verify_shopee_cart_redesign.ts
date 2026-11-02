@@ -71,8 +71,8 @@ function testCartClientLayout() {
 
   // 5. Variation Modal integration
   assert(
-    cartSrc.includes("CartVariationModal"),
-    "Cart must render CartVariationModal"
+    cartSrc.includes("QuickAddModal") || cartSrc.includes("CartVariationModal"),
+    "Cart must render variation modal"
   );
 
   // 6. Checkout summary preserved & simplified
