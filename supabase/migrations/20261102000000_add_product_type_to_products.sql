@@ -20,5 +20,8 @@ WHERE product_type IS NULL;
 -- 3. Create index for fast filtering by product type
 CREATE INDEX IF NOT EXISTS idx_products_product_type ON public.products (product_type);
 
+-- 4. Grant SELECT on product_type to storefront customer roles (anon & authenticated)
+GRANT SELECT (product_type) ON TABLE public.products TO anon, authenticated;
+
 COMMIT;
 

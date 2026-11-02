@@ -17,9 +17,18 @@ export default async function ShoppingHomePage() {
     await Promise.all([
       getStoreSettings(),
       getPublicHomeBanners(),
-      getAdminHomepageSections().catch(() => []),
-      getVisibleProducts().catch(() => []),
-      getActiveCategories().catch(() => []),
+      getAdminHomepageSections().catch((err) => {
+        console.error("[ShoppingHomePage] Failed to fetch homepage sections:", err);
+        return [];
+      }),
+      getVisibleProducts().catch((err) => {
+        console.error("[ShoppingHomePage] Failed to fetch visible products:", err);
+        return [];
+      }),
+      getActiveCategories().catch((err) => {
+        console.error("[ShoppingHomePage] Failed to fetch active categories:", err);
+        return [];
+      }),
     ]);
 
   // If the store is marked as closed, render the dedicated StoreClosedView immediately

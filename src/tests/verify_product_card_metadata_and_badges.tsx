@@ -64,18 +64,18 @@ const htmlLongTitle = renderCard(longTitleProduct);
 
 // --- Metadata Row Checks ---
 assert(
-  htmlSingle.includes("text-[9px] sm:text-[9.5px]"),
-  "Metadata text size is reduced to compact 9-9.5px range"
+  htmlSingle.includes("text-[8px] sm:text-[8.5px]"),
+  "Metadata text size is reduced by 1px to compact 8-8.5px range"
 );
 
 assert(
-  htmlSingle.includes("w-[9.5px] h-[9.5px] text-[#737373]"),
-  "Clock icon is scaled proportionally to 9.5px with muted #737373 color"
+  htmlSingle.includes("w-[8.5px] h-[8.5px] text-[#737373]"),
+  "Clock icon is scaled proportionally to 8.5px with muted #737373 color"
 );
 
 assert(
-  htmlSingle.includes("w-[9.5px] h-[9.5px] text-[#29AC9A]"),
-  "Delivery truck icon is scaled proportionally to 9.5px with teal #29AC9A color"
+  htmlSingle.includes("w-[8.5px] h-[8.5px] text-[#29AC9A]"),
+  "Delivery truck icon is scaled proportionally to 8.5px with teal #29AC9A color"
 );
 
 assert(
@@ -84,8 +84,13 @@ assert(
 );
 
 assert(
-  htmlSingle.includes("1 day") && htmlSingle.includes("Free delivery"),
-  "Preparation-time ('1 day') and delivery text ('Free delivery') are preserved"
+  htmlSingle.includes("1 day") && htmlSingle.includes("Gratis ongkir"),
+  "Preparation-time ('1 day') and delivery text ('Gratis ongkir') are preserved"
+);
+
+assert(
+  htmlSingle.includes("flex-nowrap") && htmlSingle.includes("whitespace-nowrap"),
+  "Metadata row prevents unwanted text wrapping with flex-nowrap and whitespace-nowrap"
 );
 
 assert(

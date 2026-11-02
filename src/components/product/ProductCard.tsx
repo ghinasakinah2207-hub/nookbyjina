@@ -163,21 +163,21 @@ export function ProductCard({
             )}
           </div>
 
-          {/* 6. Compact Delivery Metadata Row - Inline Preparation time & Free delivery */}
-          <div className="flex items-center gap-1.5 text-[9px] sm:text-[9.5px] text-[#737373] mt-1 flex-wrap leading-tight">
+          {/* 6. Compact Delivery Metadata Row - Inline Preparation time & Gratis ongkir */}
+          <div className="flex items-center gap-1 sm:gap-1.5 text-[8px] sm:text-[8.5px] text-[#737373] mt-1 flex-nowrap whitespace-nowrap overflow-hidden leading-tight">
             <span className="inline-flex items-center gap-[2px] flex-shrink-0">
-              <Clock className="w-[9.5px] h-[9.5px] text-[#737373] flex-shrink-0" />
+              <Clock className="w-[8.5px] h-[8.5px] text-[#737373] flex-shrink-0" />
               <span>{typeConfig.estimate}</span>
             </span>
 
-            <span className="text-[#D4D4D4] text-[8px] leading-none select-none">•</span>
+            <span className="text-[#D4D4D4] text-[7.5px] sm:text-[8px] leading-none select-none flex-shrink-0">•</span>
 
             <span
               title="Gratis ongkir untuk pesanan min. Rp 50.000 di Lhoksukon"
               className="inline-flex items-center gap-[2px] flex-shrink-0 text-[#29AC9A]"
             >
-              <Truck className="w-[9.5px] h-[9.5px] text-[#29AC9A] flex-shrink-0" />
-              <span>Free delivery</span>
+              <Truck className="w-[8.5px] h-[8.5px] text-[#29AC9A] flex-shrink-0" />
+              <span>Gratis ongkir</span>
             </span>
           </div>
         </div>

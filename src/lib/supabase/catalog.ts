@@ -329,6 +329,7 @@ export async function getVisibleProducts(bypassCache = false): Promise<Product[]
       is_available,
       is_archived,
       is_highlight,
+      product_type,
       sort_order,
       category_id,
       tags,
@@ -373,6 +374,68 @@ export async function getVisibleProducts(bypassCache = false): Promise<Product[]
 
   if (error) {
     if (visibleProductsCache) return visibleProductsCache.data;
+    // Graceful degradation: If column permission is missing or column does not exist on product_type
+    if (error.code === "42501" || error.code === "42703") {
+      console.warn("[catalog] product_type column unreadable due to DB permission, falling back to basic projection:", error.message);
+      const fallbackQuery = await supabase
+        .from("products")
+        .select(`
+          id,
+          name,
+          slug,
+          description,
+          price,
+          is_available,
+          is_archived,
+          is_highlight,
+          sort_order,
+          category_id,
+          tags,
+          categories (
+            id,
+            name,
+            slug
+          ),
+          product_images (
+            id,
+            image_url,
+            sort_order
+          ),
+          product_option_groups (
+            id,
+            product_id,
+            name,
+            is_required,
+            min_select,
+            max_select,
+            sort_order,
+            product_option_values (
+              id,
+              group_id,
+              name,
+              price_delta,
+              is_active,
+              sort_order
+            )
+          ),
+          product_addons (
+            id,
+            product_id,
+            name,
+            price,
+            is_active,
+            sort_order
+          )
+        `)
+        .eq("is_archived", false)
+        .order("sort_order", { ascending: true });
+
+      if (!fallbackQuery.error && fallbackQuery.data) {
+        const fallbackResult = fallbackQuery.data.map((row) => mapDbProductToUiProduct(row as unknown as DbProductRow));
+        visibleProductsCache = { data: fallbackResult, timestamp: now };
+        return fallbackResult;
+      }
+    }
     throw new Error(`Gagal memuat produk: ${error.message}`);
   }
 
@@ -399,6 +462,7 @@ export async function getAdminCatalogProducts(client: SupabaseClient): Promise<P
       is_available,
       is_archived,
       is_highlight,
+      product_type,
       sort_order,
       category_id,
       tags,
@@ -465,6 +529,7 @@ export async function getRecommendedProducts(
       is_available,
       is_archived,
       is_highlight,
+      product_type,
       sort_order,
       category_id,
       tags,
@@ -557,6 +622,7 @@ export async function getProductBySlugOrId(
       is_available,
       is_archived,
       is_highlight,
+      product_type,
       sort_order,
       category_id,
       tags,
@@ -578,7 +644,46 @@ export async function getProductBySlugOrId(
     query = query.eq("slug", identifier);
   }
 
-  const { data: productRow, error: prodErr } = await query.maybeSingle();
+  let { data: productRow, error: prodErr } = await query.maybeSingle();
+
+  if (prodErr && (prodErr.code === "42501" || prodErr.code === "42703")) {
+    console.warn("[catalog] Retrying getProductBySlugOrId without product_type due to column permission/schema:", prodErr.message);
+    let fallbackQuery = dbClient
+      .from("products")
+      .select(`
+        id,
+        name,
+        slug,
+        description,
+        price,
+        is_available,
+        is_archived,
+        is_highlight,
+        sort_order,
+        category_id,
+        tags,
+        categories (
+          id,
+          name,
+          slug
+        ),
+        product_images (
+          id,
+          image_url,
+          sort_order
+        )
+      `);
+    if (isUuid) {
+      fallbackQuery = fallbackQuery.or(`id.eq.${identifier},slug.eq.${identifier}`);
+    } else {
+      fallbackQuery = fallbackQuery.eq("slug", identifier);
+    }
+    const fallbackRes = await fallbackQuery.maybeSingle();
+    if (!fallbackRes.error) {
+      productRow = fallbackRes.data as typeof productRow;
+      prodErr = null;
+    }
+  }
 
   if (prodErr) {
     throw new Error(`Gagal memuat produk: ${prodErr.message}`);
