@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Star,
   Truck,
+  Clock,
 } from "lucide-react";
 import { STORE_SETTINGS } from "@/data/dummy-data";
 import { useCart } from "@/context/CartContext";
@@ -22,6 +23,7 @@ import { CartItem, SelectedOption, SelectedAddon, Product } from "@/types";
 import { ProductCard } from "@/components/product/ProductCard";
 import { getProductBySlugOrId, getRecommendedProducts } from "@/lib/supabase/catalog";
 import { QuickAddModal, QuickAddConfirmData } from "@/components/product/QuickAddModal";
+import { getProductType, getProductTypeConfig } from "@/lib/product-type";
 
 interface ProductDetailClientProps {
   productId: string;
@@ -459,6 +461,7 @@ export default function ProductDetailClient({
           unitPrice: data.unitPrice,
           itemTotal: data.totalPrice,
           isAvailable: data.product.isAvailable,
+          productType: getProductType(data.product),
         };
         setBuyNowItem(buyNowItemData);
         setIsVariationModalOpen(false);
@@ -752,10 +755,18 @@ export default function ProductDetailClient({
             </div>
 
             {/* Title & Rating */}
-            <div className="space-y-1 pt-0.5">
+            <div className="space-y-1.5 pt-0.5">
               <div className="flex items-start justify-between gap-2">
                 <h1 className="text-base sm:text-lg font-bold text-[#111111] leading-snug">
-                  <span className="inline-flex items-center justify-center bg-[#F25B09] text-white text-[9.5px] sm:text-[10.5px] font-bold px-1.5 py-0.5 rounded-[3.5px] align-middle -translate-y-[1px] mr-1.5 leading-none tracking-wide select-none">NOOK</span>
+                  <span
+                    className={`inline-flex items-center justify-center text-white text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-[3.5px] align-middle -translate-y-[1px] mr-1.5 leading-none tracking-wide select-none ${
+                      getProductType(product) === "ready"
+                        ? "bg-[#18794E]"
+                        : "bg-[#F25B09]"
+                    }`}
+                  >
+                    {getProductTypeConfig(product.productType).label}
+                  </span>
                   {product.name}
                 </h1>
                 {!product.isAvailable && (
@@ -765,11 +776,22 @@ export default function ProductDetailClient({
                 )}
               </div>
 
-              {/* Rating */}
-              <div className="flex items-center gap-1 text-[11px] font-semibold text-[#111111]">
-                <Star className="w-3.5 h-3.5 text-[#FFC83D] fill-[#FFC83D]" />
-                <span>4.9</span>
-                <span className="text-[#737373] font-normal">(120+ ulasan)</span>
+              {/* Rating & Preparation Estimate */}
+              <div className="flex items-center gap-2 text-[11px] font-semibold text-[#111111] flex-wrap">
+                <div className="flex items-center gap-1">
+                  <Star className="w-3.5 h-3.5 text-[#FFC83D] fill-[#FFC83D]" />
+                  <span>4.9</span>
+                  <span className="text-[#737373] font-normal">(120+ ulasan)</span>
+                </div>
+
+                <span className="text-[#D4D4D4] text-[8px] leading-none select-none">•</span>
+
+                <div className="flex items-center gap-1 text-[#737373] font-normal">
+                  <Clock className="w-3 h-3 text-[#737373] flex-shrink-0" />
+                  <span>
+                    Estimasi persiapan: <strong className="font-semibold text-[#111111]">{getProductTypeConfig(product.productType).estimate}</strong>
+                  </span>
+                </div>
               </div>
             </div>
           </section>

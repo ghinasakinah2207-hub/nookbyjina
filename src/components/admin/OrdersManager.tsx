@@ -27,6 +27,7 @@ import {
   isPendingCashStatus,
   isOrderExpired,
 } from "@/lib/order-normalizer";
+import { getCartProductType } from "@/lib/product-type";
 
 type FilterTab = "semua" | "verifikasi" | "kas" | "berjalan" | "selesai" | "dibatalkan";
 
@@ -469,6 +470,15 @@ export function OrdersManager({ initialOrders }: OrdersManagerProps = {}) {
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-wrap">
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        getCartProductType(order.items) === "ready"
+                          ? "bg-emerald-50 text-[#18794E] border-emerald-200"
+                          : "bg-orange-50 text-[#F25B09] border-orange-200"
+                      }`}
+                    >
+                      {getCartProductType(order.items) === "ready" ? "READY" : "PRE-ORDER"}
+                    </span>
                     <StatusBadge status={isExpired ? "Dibatalkan" : order.paymentStatus} type="payment" />
                     <StatusBadge status={isExpired ? "Dibatalkan" : order.orderStatus} type="order" />
                     {isExpired && (
@@ -513,8 +523,17 @@ export function OrdersManager({ initialOrders }: OrdersManagerProps = {}) {
                     <div className="space-y-0.5">
                       {order.items.map((item, idx) => (
                         <div key={idx} className="flex items-center justify-between text-[11px]">
-                          <span className="text-[#111111]">
-                            <span className="font-semibold">{item.quantity}x</span> {item.productName}
+                          <span className="text-[#111111] flex items-center gap-1.5 flex-wrap">
+                            <span><span className="font-semibold">{item.quantity}x</span> {item.productName}</span>
+                            <span
+                              className={`text-[8.5px] font-bold px-1 py-0.2 rounded border ${
+                                item.productType === "ready"
+                                  ? "bg-emerald-50 text-[#18794E] border-emerald-200"
+                                  : "bg-orange-50 text-[#F25B09] border-orange-200"
+                              }`}
+                            >
+                              {item.productType === "ready" ? "READY" : "PRE-ORDER"}
+                            </span>
                           </span>
                           <span className="text-[#737373]">{formatRupiah(item.itemTotal)}</span>
                         </div>
@@ -922,11 +941,20 @@ export function OrdersManager({ initialOrders }: OrdersManagerProps = {}) {
                 <div className="border border-[#E5E5E5] rounded-xl divide-y divide-[#E5E5E5] text-xs">
                   {selectedOrder.items.map((item, idx) => (
                     <div key={idx} className="p-3 space-y-1">
-                      <div className="flex justify-between font-semibold text-[#111111]">
-                        <span>
-                          {item.quantity}x {item.productName}
+                      <div className="flex justify-between font-semibold text-[#111111] items-center gap-2">
+                        <span className="flex items-center gap-1.5 flex-wrap">
+                          <span>{item.quantity}x {item.productName}</span>
+                          <span
+                            className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded border ${
+                              item.productType === "ready"
+                                ? "bg-emerald-50 text-[#18794E] border-emerald-200"
+                                : "bg-orange-50 text-[#F25B09] border-orange-200"
+                            }`}
+                          >
+                            {item.productType === "ready" ? "READY" : "PRE-ORDER"}
+                          </span>
                         </span>
-                        <span>{formatRupiah(item.itemTotal)}</span>
+                        <span className="shrink-0">{formatRupiah(item.itemTotal)}</span>
                       </div>
                       {item.selectedOptions.length > 0 && (
                         <p className="text-[11px] text-[#737373]">

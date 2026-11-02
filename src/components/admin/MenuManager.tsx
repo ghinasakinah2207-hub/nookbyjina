@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Product, Category } from "@/types";
 import { formatRupiah } from "@/data/dummy-data";
+import { getProductType } from "@/lib/product-type";
 import { AddProductModal } from "./AddProductModal";
 import { CategoryManagerModal } from "./CategoryManagerModal";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
@@ -420,6 +421,15 @@ export function MenuManager({
                       )}
                       <span className="text-[10px] text-[#737373] bg-neutral-100 px-1.5 py-0.5 rounded">
                         {product.categoryName || "Umum"}
+                      </span>
+                      <span
+                        className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded border select-none ${
+                          getProductType(product) === "ready"
+                            ? "bg-emerald-50 text-[#18794E] border-emerald-200"
+                            : "bg-orange-50 text-[#F25B09] border-orange-200"
+                        }`}
+                      >
+                        {getProductType(product) === "ready" ? "READY" : "PRE-ORDER"}
                       </span>
                     </div>
                   </div>

@@ -1,6 +1,7 @@
 import { Order, OrderStatus, PaymentStatus } from "@/types";
 import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
 import { hashOrderToken, isValidTokenFormat } from "@/lib/token-security";
+import { normalizeProductType } from "@/lib/product-type";
 import {
   isOrderExpired,
   normalizeOrder,
@@ -88,6 +89,7 @@ function mapDatabaseRowToOrder(row: Record<string, unknown>, rawToken?: string):
     items: Array.isArray(row.items_snapshot)
       ? (row.items_snapshot as Order["items"]).map((item) => ({
           ...item,
+          productType: normalizeProductType(item.productType),
           selectedOptions: Array.isArray(item.selectedOptions)
             ? item.selectedOptions.map((opt) => ({
                 ...opt,
@@ -196,6 +198,7 @@ export async function saveOrder(order: Order): Promise<Order> {
     const normalizedItems = Array.isArray(rawOrder.items)
       ? rawOrder.items.map((item) => ({
           ...item,
+          productType: normalizeProductType(item.productType),
           selectedOptions: Array.isArray(item.selectedOptions)
             ? item.selectedOptions.map((opt) => ({
                 ...opt,

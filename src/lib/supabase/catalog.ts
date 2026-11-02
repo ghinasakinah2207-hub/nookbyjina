@@ -2,6 +2,7 @@ import { supabase } from "./client";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Category, Product, OptionGroup, OptionValue, Addon } from "@/types";
 import { getDefaultIconForSlug } from "@/lib/category-icons";
+import { normalizeProductType } from "@/lib/product-type";
 
 export interface DbCategory {
   id: string;
@@ -27,6 +28,7 @@ export interface DbProductRow {
   is_available: boolean;
   is_archived: boolean;
   is_highlight?: boolean;
+  product_type?: string | null;
   sort_order: number;
   category_id: string;
   tags?: string[] | null;
@@ -230,6 +232,7 @@ export function mapDbProductToUiProduct(row: DbProductRow): Product & { category
     isHighlight: Boolean(row.is_highlight),
     hpp: row.hpp !== undefined && row.hpp !== null ? Number(row.hpp) : undefined,
     isOptionsLoaded,
+    productType: normalizeProductType(row.product_type),
   };
 }
 

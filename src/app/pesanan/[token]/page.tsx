@@ -19,6 +19,7 @@ import { useOrder } from "@/context/OrderContext";
 import { formatRupiah, STORE_SETTINGS } from "@/data/dummy-data";
 import { saveOrderToken, getOrderToken } from "@/lib/order-token-vault";
 import { isPendingQrisStatus, isPendingCashStatus, isOrderExpired } from "@/lib/order-normalizer";
+import { getCartProductType } from "@/lib/product-type";
 import { Order } from "@/types";
 import { Suspense } from "react";
 
@@ -389,6 +390,15 @@ Terima kasih telah memesan di Nook by Jina!`;
 
           {/* Status Indicators */}
           <div className="pt-3 border-t border-[#E5E5E5] flex flex-wrap items-center gap-2">
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border select-none ${
+                getCartProductType(order.items) === "ready"
+                  ? "bg-emerald-50 text-[#18794E] border-emerald-200"
+                  : "bg-orange-50 text-[#F25B09] border-orange-200"
+              }`}
+            >
+              {getCartProductType(order.items) === "ready" ? "READY" : "PRE-ORDER"}
+            </span>
             <StatusBadge status={isOrderExpired(order) ? "Dibatalkan" : order.orderStatus} type="order" />
             <StatusBadge status={isOrderExpired(order) ? "Dibatalkan" : order.paymentStatus} type="payment" />
           </div>
@@ -477,10 +487,19 @@ Terima kasih telah memesan di Nook by Jina!`;
             {order.items.map((item) => (
               <div key={item.id} className="py-2.5 first:pt-0 last:pb-0 space-y-1">
                 <div className="flex justify-between items-start gap-2">
-                  <span className="font-semibold text-[#111111]">
-                    {item.quantity}x {item.productName}
+                  <span className="font-semibold text-[#111111] flex items-center gap-1.5 flex-wrap">
+                    <span>{item.quantity}x {item.productName}</span>
+                    <span
+                      className={`text-[8.5px] font-bold px-1.5 py-0.2 rounded border select-none ${
+                        item.productType === "ready"
+                          ? "bg-emerald-50 text-[#18794E] border-emerald-200"
+                          : "bg-orange-50 text-[#F25B09] border-orange-200"
+                      }`}
+                    >
+                      {item.productType === "ready" ? "READY" : "PRE-ORDER"}
+                    </span>
                   </span>
-                  <span className="font-bold text-[#111111]">
+                  <span className="font-bold text-[#111111] shrink-0">
                     {formatRupiah(item.itemTotal)}
                   </span>
                 </div>

@@ -10,6 +10,7 @@ import { PRODUCTS } from "@/data/dummy-data";
 import { Product } from "@/types";
 import { generateSlug, resolveUniqueSlug } from "@/lib/slug";
 import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
+import { normalizeProductType, ProductType } from "@/lib/product-type";
 import {
   extractStoragePathFromUrl,
   normalizeStoragePath,
@@ -39,6 +40,7 @@ export interface CreateProductInput {
   hpp?: number | null;
   isAvailable?: boolean;
   isHighlight?: boolean;
+  productType?: ProductType;
   images: string[];
   optionGroups?: {
     name: string;
@@ -71,6 +73,7 @@ export interface UpdateProductInput {
   hpp?: number | null;
   isAvailable?: boolean;
   isHighlight?: boolean;
+  productType?: ProductType;
   images: string[];
   optionGroups?: {
     name: string;
@@ -310,13 +313,14 @@ export async function createProductAction(
 
     const nextSortOrder = (maxSortData?.sort_order ?? 0) + 1;
     const productId = crypto.randomUUID();
+    const finalProductType = normalizeProductType(input.productType);
 
     // 5. Insert main product row into public.products with concurrency protection
     let insertSuccess = false;
     let insertAttempts = 0;
 
     while (!insertSuccess && insertAttempts < 3) {
-      const { error: insertProdErr } = await client
+      let { error: insertProdErr } = await client
         .from("products")
         .insert({
           id: productId,
@@ -330,7 +334,28 @@ export async function createProductAction(
           is_archived: false,
           is_highlight: input.isHighlight !== undefined ? Boolean(input.isHighlight) : false,
           sort_order: nextSortOrder,
+          product_type: finalProductType,
         });
+
+      if (insertProdErr && insertProdErr.message && insertProdErr.message.includes("product_type")) {
+        // Fallback if remote DB has not yet applied product_type migration
+        const fallbackRes = await client
+          .from("products")
+          .insert({
+            id: productId,
+            category_id: input.categoryId,
+            name: trimmedName,
+            slug: finalSlug,
+            description: input.description?.trim() || null,
+            price: priceNum,
+            hpp: hppNum,
+            is_available: input.isAvailable !== undefined ? Boolean(input.isAvailable) : true,
+            is_archived: false,
+            is_highlight: input.isHighlight !== undefined ? Boolean(input.isHighlight) : false,
+            sort_order: nextSortOrder,
+          });
+        insertProdErr = fallbackRes.error;
+      }
 
       if (!insertProdErr) {
         insertSuccess = true;
@@ -598,8 +623,13 @@ export async function updateProductAction(
           ? (input.description?.trim() || null)
           : (existingProd.description ?? null);
 
+      const finalProductType =
+        input.productType !== undefined
+          ? normalizeProductType(input.productType)
+          : "preorder";
+
       // Update public.products
-      const { error: updateErr } = await client
+      let { error: updateErr } = await client
         .from("products")
         .update({
           category_id: input.categoryId,
@@ -610,9 +640,28 @@ export async function updateProductAction(
           hpp: finalHpp,
           is_available: finalIsAvailable,
           is_highlight: finalIsHighlight,
+          product_type: finalProductType,
           updated_at: new Date().toISOString(),
         })
         .eq("id", resolvedProductId);
+
+      if (updateErr && updateErr.message && updateErr.message.includes("product_type")) {
+        const fallbackRes = await client
+          .from("products")
+          .update({
+            category_id: input.categoryId,
+            name: trimmedName,
+            slug: targetSlug,
+            description: finalDescription,
+            price: priceNum,
+            hpp: finalHpp,
+            is_available: finalIsAvailable,
+            is_highlight: finalIsHighlight,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", resolvedProductId);
+        updateErr = fallbackRes.error;
+      }
 
       if (updateErr) {
         return {
@@ -636,8 +685,9 @@ export async function updateProductAction(
         .maybeSingle();
 
       const nextSortOrder = (maxSortData?.sort_order ?? 0) + 1;
+      const finalProductType = normalizeProductType(input.productType);
 
-      const { error: insertErr } = await client.from("products").insert({
+      let { error: insertErr } = await client.from("products").insert({
         id: resolvedProductId,
         category_id: input.categoryId,
         name: trimmedName,
@@ -648,8 +698,26 @@ export async function updateProductAction(
         is_available: input.isAvailable !== undefined ? Boolean(input.isAvailable) : true,
         is_archived: false,
         is_highlight: input.isHighlight !== undefined ? Boolean(input.isHighlight) : false,
+        product_type: finalProductType,
         sort_order: nextSortOrder,
       });
+
+      if (insertErr && insertErr.message && insertErr.message.includes("product_type")) {
+        const fallbackRes = await client.from("products").insert({
+          id: resolvedProductId,
+          category_id: input.categoryId,
+          name: trimmedName,
+          slug: targetSlug,
+          description: input.description !== undefined ? (input.description?.trim() || null) : null,
+          price: priceNum,
+          hpp: input.hpp !== undefined ? hppNum : null,
+          is_available: input.isAvailable !== undefined ? Boolean(input.isAvailable) : true,
+          is_archived: false,
+          is_highlight: input.isHighlight !== undefined ? Boolean(input.isHighlight) : false,
+          sort_order: nextSortOrder,
+        });
+        insertErr = fallbackRes.error;
+      }
 
       if (insertErr) {
         return {

@@ -42,10 +42,10 @@ assert(
 assert(html.includes("line-clamp-2"), "Product title preserves line-clamp-2");
 assert(html.includes("leading-snug"), "Product title preserves leading-snug");
 
-// Verify nook badge exists and contains exact lowercase text 'nook'
+// Verify product type badge exists (replaces legacy nook badge)
 assert(
-  html.includes(">nook</span>"),
-  "Product card renders compact badge with lowercase text 'nook'"
+  html.includes(">PRE-ORDER</span>") || html.includes(">READY</span>"),
+  "Product card renders compact product type badge"
 );
 
 // Verify badge styling: brand orange, white text, compact shape
@@ -67,10 +67,14 @@ assert(Boolean(h3Match), "h3 title element exists in rendered markup");
 if (h3Match) {
   const h3Content = h3Match[1];
   assert(
-    h3Content.includes(">nook</span>") && h3Content.includes("Nasi Bakar Cakalang Asap"),
+    (h3Content.includes(">PRE-ORDER</span>") || h3Content.includes(">READY</span>")) &&
+      h3Content.includes("Nasi Bakar Cakalang Asap"),
     "Badge and product title are enclosed together in the h3 element"
   );
-  const badgeIndex = h3Content.indexOf(">nook</span>");
+  const badgeIndex = Math.max(
+    h3Content.indexOf(">PRE-ORDER</span>"),
+    h3Content.indexOf(">READY</span>")
+  );
   const nameIndex = h3Content.indexOf("Nasi Bakar Cakalang Asap");
   assert(badgeIndex < nameIndex, "Badge appears before the product title text on line 1");
 }
@@ -84,9 +88,9 @@ assert(
 console.log("\n=== 2. Verifying Long Title Product Card ===");
 const longHtml = renderCard(longTitleProduct);
 assert(
-  longHtml.includes(">nook</span>") &&
+  (longHtml.includes(">PRE-ORDER</span>") || longHtml.includes(">READY</span>")) &&
     longHtml.includes("Nasi Bakar Cakalang Asap Super Pedas"),
-  "Long title product card renders nook badge and title correctly"
+  "Long title product card renders product-type badge and title correctly"
 );
 
 console.log("\nAll ProductCard Title & Nook Badge tests passed successfully! 🎉\n");

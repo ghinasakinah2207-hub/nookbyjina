@@ -58,9 +58,12 @@ console.log("  [PASS] Price hierarchy separates smaller 'Rp' from prominent nume
 // 7. Category label removed, title with NOOK badge & rating preserved
 assert(!productDetailSrc.includes("product.categoryName || \"Menu Pilihan\""), "Category label 'PAKET'/'Menu Pilihan' removed from product header");
 assert(productDetailSrc.includes("<h1") && productDetailSrc.includes("{product.name}"), "Product title prominently placed below price");
-assert(productDetailSrc.includes(">NOOK</span>"), "NOOK brand badge rendered immediately before product title");
+assert(
+  productDetailSrc.includes("getProductTypeConfig") && productDetailSrc.includes("{product.name}"),
+  "Product-type badge rendered immediately before product title"
+);
 assert(productDetailSrc.includes("Star") && productDetailSrc.includes("4.9"), "Star rating pill preserved");
-console.log("  [PASS] Category badge removed, NOOK brand badge, product title and rating preserved");
+console.log("  [PASS] Category badge removed, product-type badge, product title and rating preserved");
 
 console.log("\n--- Section 3: Free Delivery & Variation Card ---");
 

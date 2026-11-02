@@ -1,4 +1,5 @@
 import { Order, OrderStatus, PaymentMethod, PaymentStatus } from "@/types";
+import { normalizeProductType } from "@/lib/product-type";
 
 /**
  * Normalizes payment status from raw database representations, RPC responses,
@@ -168,6 +169,7 @@ export function normalizeOrder(order: unknown): Order {
       const rawOptions = Array.isArray(it.selectedOptions) ? it.selectedOptions : [];
       return {
         ...(it as unknown as Order["items"][number]),
+        productType: normalizeProductType(it.productType),
         selectedOptions: rawOptions.map((opt: unknown) => {
           const op = (opt || {}) as Record<string, unknown>;
           return {

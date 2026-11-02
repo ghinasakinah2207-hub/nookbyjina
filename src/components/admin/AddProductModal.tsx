@@ -16,9 +16,12 @@ import {
   UploadCloud,
   Pencil,
   Loader2,
+  Clock,
+  Check,
 } from "lucide-react";
 import { Category, Addon, Product } from "@/types";
 import { formatRupiah } from "@/data/dummy-data";
+import { normalizeProductType, ProductType } from "@/lib/product-type";
 import {
   createProductAction,
   updateProductAction,
@@ -87,6 +90,9 @@ function ProductFormModalContent({
     initialProduct?.categoryId || categories[0]?.id || ""
   );
   const [description, setDescription] = useState(initialProduct?.description || "");
+  const [productType, setProductType] = useState<ProductType>(() =>
+    normalizeProductType(initialProduct?.productType)
+  );
   const [productAddons, setProductAddons] = useState<
     { id?: string; name: string; price: string }[]
   >(() => {
@@ -160,6 +166,9 @@ function ProductFormModalContent({
         setPrice(String(full.basePrice));
         if (full.hpp !== undefined && full.hpp !== null) {
           setHpp(String(full.hpp));
+        }
+        if (full.productType) {
+          setProductType(normalizeProductType(full.productType));
         }
         if (full.images && full.images.length > 0) {
           setImages(full.images);
@@ -437,6 +446,7 @@ function ProductFormModalContent({
           description: description.trim(),
           price: numPrice,
           hpp: numHpp,
+          productType,
           images,
           optionGroups: optionGroups.map((g) => ({
             name: g.name.trim(),
@@ -478,6 +488,7 @@ function ProductFormModalContent({
           isAvailable: initialProduct.isAvailable ?? true,
           isArchived: false,
           isHighlight: initialProduct.isHighlight ?? false,
+          productType,
           images,
           hpp: numHpp,
           optionGroups: optionGroups.map((g, idx) => ({
@@ -507,6 +518,7 @@ function ProductFormModalContent({
           hpp: numHpp,
           isAvailable: true,
           isHighlight: false,
+          productType,
           images,
           optionGroups: optionGroups.map((g) => ({
             name: g.name.trim(),
@@ -548,6 +560,7 @@ function ProductFormModalContent({
           isAvailable: true,
           isArchived: false,
           isHighlight: false,
+          productType,
           images,
           hpp: numHpp,
           optionGroups: optionGroups.map((g, idx) => ({
@@ -699,6 +712,84 @@ function ProductFormModalContent({
                 placeholder="cth: Nasi bakar gurih beraroma daun pisang dengan isian suwiran ikan cakalang asap bumbu pedas khas Manado."
                 className="w-full px-3 py-2 bg-white border border-[#E5E5E5] rounded-xl text-xs text-[#111111] placeholder:text-[#737373] focus:border-[#111111] outline-none transition-colors resize-y leading-relaxed"
               />
+            </div>
+          </div>
+
+          {/* ===================================================================
+              BAGIAN: TIPE PRODUK
+              =================================================================== */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-1.5 pb-1 border-b border-neutral-100 font-bold text-[#111111]">
+              <Clock className="w-3.5 h-3.5 text-[#F25B09]" />
+              <span>Tipe Produk</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* READY Option */}
+              <button
+                type="button"
+                onClick={() => setProductType("ready")}
+                className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
+                  productType === "ready"
+                    ? "border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-500/20"
+                    : "border-[#E5E5E5] bg-white hover:border-neutral-300"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-[#18794E] border border-emerald-300">
+                    READY
+                  </span>
+                  <div
+                    className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                      productType === "ready"
+                        ? "border-emerald-600 bg-emerald-600 text-white"
+                        : "border-neutral-300 bg-white"
+                    }`}
+                  >
+                    {productType === "ready" && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-[#111111]">Produk siap diproses</p>
+                  <p className="text-[11px] text-[#737373] mt-0.5 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-[#737373]" />
+                    <span>Estimasi persiapan: 15–20 menit</span>
+                  </p>
+                </div>
+              </button>
+
+              {/* PRE-ORDER Option */}
+              <button
+                type="button"
+                onClick={() => setProductType("preorder")}
+                className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
+                  productType === "preorder"
+                    ? "border-[#F25B09] bg-orange-50/60 ring-2 ring-[#F25B09]/20"
+                    : "border-[#E5E5E5] bg-white hover:border-neutral-300"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-[#F25B09] border border-orange-300">
+                    PRE-ORDER
+                  </span>
+                  <div
+                    className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                      productType === "preorder"
+                        ? "border-[#F25B09] bg-[#F25B09] text-white"
+                        : "border-neutral-300 bg-white"
+                    }`}
+                  >
+                    {productType === "preorder" && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-[#111111]">Pesanan dipersiapkan dalam 1 hari</p>
+                  <p className="text-[11px] text-[#737373] mt-0.5 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-[#737373]" />
+                    <span>Estimasi persiapan: 1 day</span>
+                  </p>
+                </div>
+              </button>
             </div>
           </div>
 

@@ -7,6 +7,7 @@ import { Heart, Plus, Star, Clock, Truck } from "lucide-react";
 import { Product } from "@/types";
 import { formatRupiah } from "@/data/dummy-data";
 import { useCart } from "@/context/CartContext";
+import { getProductTypeConfig } from "@/lib/product-type";
 
 interface ProductCardProps {
   product: Product;
@@ -64,6 +65,8 @@ export function ProductCard({
 
   const imageSrc = product.images[0] || "/images/hero-food.webp";
   const shouldPrioritize = Boolean(preload || priority);
+  const typeConfig = getProductTypeConfig(product.productType);
+  const isReady = typeConfig.type === "ready";
 
   return (
     <Link
@@ -125,15 +128,19 @@ export function ProductCard({
           {/* Top row: Name & Price on the left, circular Orange Plus button on the right */}
           <div className="flex items-start justify-between gap-1.5">
             <div className="min-w-0 flex-1">
-              {/* 4. Product Name - Font weight 400 (normal/regular) with compact nook badge */}
+              {/* 4. Product Name - with compact product-type badge (READY / PRE-ORDER) */}
               <h3 className="text-[10.26px] sm:text-[11.97px] font-normal text-[#111111] line-clamp-2 leading-snug">
-                <span className="inline-flex items-center justify-center bg-[#F25B09] text-white text-[7.5px] sm:text-[8.5px] font-medium px-1 py-[0.5px] rounded-[2.5px] align-middle -translate-y-[0.5px] mr-1 leading-none select-none">
-                  nook
+                <span
+                  className={`inline-flex items-center justify-center text-white text-[7px] sm:text-[8px] font-bold px-1 py-[0.5px] rounded-[2.5px] align-middle -translate-y-[0.5px] mr-1 leading-none select-none tracking-tight ${
+                    isReady ? "bg-[#18794E]" : "bg-[#F25B09]"
+                  }`}
+                >
+                  {typeConfig.label}
                 </span>
                 {product.name}
               </h3>
 
-              {/* 5. Product Price directly below the product name (reduced by 5%: 12px -> 11.4px, 13px -> 12.35px) */}
+              {/* 5. Product Price directly below the product name */}
               <p className="mt-0.5 text-[11.4px] sm:text-[12.35px] font-bold text-[#111111]">
                 {formatRupiah(product.basePrice)}
               </p>
@@ -156,11 +163,11 @@ export function ProductCard({
             )}
           </div>
 
-          {/* 6. Compact Delivery Metadata Row - Inline 1 day and Free delivery (~9-10px) */}
+          {/* 6. Compact Delivery Metadata Row - Inline Preparation time & Free delivery */}
           <div className="flex items-center gap-1.5 text-[9px] sm:text-[9.5px] text-[#737373] mt-1 flex-wrap leading-tight">
             <span className="inline-flex items-center gap-[2px] flex-shrink-0">
               <Clock className="w-[9.5px] h-[9.5px] text-[#737373] flex-shrink-0" />
-              <span>1 day</span>
+              <span>{typeConfig.estimate}</span>
             </span>
 
             <span className="text-[#D4D4D4] text-[8px] leading-none select-none">•</span>

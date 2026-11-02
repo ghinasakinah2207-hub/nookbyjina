@@ -1,13 +1,20 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { CartItem, Product, SelectedOption, SelectedAddon } from "@/types";
+import { AlertCircle, X } from "lucide-react";
+import { CartItem, Product, SelectedOption, SelectedAddon, ProductType } from "@/types";
 import { PRODUCTS } from "@/data/dummy-data";
 import { CartSuccessOverlay } from "@/components/cart/CartSuccessOverlay";
 import { QuickAddModal } from "@/components/product/QuickAddModal";
+import {
+  getProductType,
+  getCartProductType,
+  normalizeProductType,
+} from "@/lib/product-type";
 
 interface CartContextType {
   cart: CartItem[];
+  cartProductType: ProductType | null;
   isHydrated: boolean;
   addToCart: (
     product: Product,
@@ -70,6 +77,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [isHydrated, setIsHydrated] = useState(false);
   const isHydratedRef = React.useRef(false);
 
+  // Single-type cart conflict dialog state
+  const [pendingConflict, setPendingConflict] = useState<{
+    product: Product;
+    options: SelectedOption[];
+    addons: SelectedAddon[];
+    itemNote: string;
+    quantity: number;
+    currentType: ProductType;
+    incomingType: ProductType;
+  } | null>(null);
+
   // Restore persisted browser state after mounting
   useEffect(() => {
     queueMicrotask(() => {
@@ -99,6 +117,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
               ...item,
               selectedOptions: normalizedOptions,
               isAvailable: prod ? prod.isAvailable : (item.isAvailable ?? true),
+              productType: item.productType
+                ? normalizeProductType(item.productType)
+                : prod
+                ? getProductType(prod)
+                : "preorder",
             };
           });
           setCart(parsedCart);
@@ -126,7 +149,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         const storedBuyNow = sessionStorage.getItem(BUY_NOW_STORAGE_KEY);
         if (storedBuyNow) {
           try {
-            setBuyNowItemState(JSON.parse(storedBuyNow));
+            const rawBuyNow = JSON.parse(storedBuyNow);
+            if (rawBuyNow) {
+              setBuyNowItemState({
+                ...rawBuyNow,
+                productType: normalizeProductType(rawBuyNow.productType),
+              });
+            }
           } catch {
             // Ignore
           }
@@ -230,16 +259,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  const addToCart = React.useCallback(
+  const executeAddToCart = React.useCallback(
     (
       product: Product,
       options: SelectedOption[],
       addons: SelectedAddon[],
       itemNote: string,
-      quantity: number
+      quantity: number,
+      replaceCart: boolean = false
     ) => {
       if (quantity <= 0 || !product.isAvailable) return;
 
+      const incomingType = getProductType(product);
       const trimmedNote = itemNote.slice(0, 200).trim();
       const normalizedOptions = options.map((opt) => ({
         ...opt,
@@ -264,7 +295,27 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const addonsDelta = addons.reduce((sum, a) => sum + a.price, 0);
       const unitPrice = product.basePrice + optionsDelta + addonsDelta;
 
+      const newItem: CartItem = {
+        id: itemId,
+        productId: product.id,
+        productName: product.name,
+        productImage: product.images[0] || "/images/hero-food.webp",
+        basePrice: product.basePrice,
+        selectedOptions: normalizedOptions,
+        selectedAddons: addons,
+        itemNote: trimmedNote,
+        quantity,
+        unitPrice,
+        itemTotal: unitPrice * quantity,
+        isAvailable: product.isAvailable,
+        productType: incomingType,
+      };
+
       setCart((prev) => {
+        if (replaceCart) {
+          return [newItem];
+        }
+
         const existingIndex = prev.findIndex((item) => item.id === itemId);
         if (existingIndex > -1) {
           // Merge identical item
@@ -275,32 +326,19 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             ...existing,
             quantity: newQty,
             itemTotal: unitPrice * newQty,
+            productType: incomingType,
           };
           return updated;
         } else {
           // Add as separate line item at index 0 (newest items appear first)
-          const newItem: CartItem = {
-            id: itemId,
-            productId: product.id,
-            productName: product.name,
-            productImage: product.images[0] || "/images/hero-food.webp",
-            basePrice: product.basePrice,
-            selectedOptions: normalizedOptions,
-            selectedAddons: addons,
-            itemNote: trimmedNote,
-            quantity,
-            unitPrice,
-            itemTotal: unitPrice * quantity,
-            isAvailable: product.isAvailable,
-          };
           return [newItem, ...prev];
         }
       });
 
       // Ensure newly added item is selected by default
       setSelectedCartItemIds((prev) => {
-        const next = new Set(prev);
-        next.add(itemId);
+        const next = replaceCart ? new Set<string>([itemId]) : new Set(prev);
+        if (!replaceCart) next.add(itemId);
         try {
           localStorage.setItem(
             SELECTED_CART_STORAGE_KEY,
@@ -316,6 +354,38 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setCartSuccessEvent({ id: Date.now() });
     },
     [createItemCompositeKey]
+  );
+
+  const addToCart = React.useCallback(
+    (
+      product: Product,
+      options: SelectedOption[],
+      addons: SelectedAddon[],
+      itemNote: string,
+      quantity: number
+    ) => {
+      if (quantity <= 0 || !product.isAvailable) return;
+
+      const incomingType = getProductType(product);
+      const currentCartType = getCartProductType(cart);
+
+      // Check single-type conflict if cart already contains items
+      if (cart.length > 0 && currentCartType && currentCartType !== incomingType) {
+        setPendingConflict({
+          product,
+          options,
+          addons,
+          itemNote,
+          quantity,
+          currentType: currentCartType,
+          incomingType,
+        });
+        return;
+      }
+
+      executeAddToCart(product, options, addons, itemNote, quantity, false);
+    },
+    [cart, executeAddToCart]
   );
 
   const updateQuantity = React.useCallback(
@@ -504,6 +574,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                     itemNote: resolvedNote,
                     quantity: mergedQty,
                     itemTotal: unitPrice * mergedQty,
+                    productType: itemToEdit.productType || "preorder",
                   }
                 : i
             );
@@ -520,6 +591,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                   quantity: targetQty,
                   unitPrice,
                   itemTotal: unitPrice * targetQty,
+                  productType: itemToEdit.productType || "preorder",
                 }
               : i
           );
@@ -543,10 +615,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setBuyNowItem = React.useCallback((item: CartItem | null) => {
-    setBuyNowItemState(item);
+    const normalizedItem = item
+      ? {
+          ...item,
+          productType: normalizeProductType(item.productType),
+        }
+      : null;
+    setBuyNowItemState(normalizedItem);
     try {
-      if (item) {
-        sessionStorage.setItem(BUY_NOW_STORAGE_KEY, JSON.stringify(item));
+      if (normalizedItem) {
+        sessionStorage.setItem(BUY_NOW_STORAGE_KEY, JSON.stringify(normalizedItem));
       } else {
         sessionStorage.removeItem(BUY_NOW_STORAGE_KEY);
       }
@@ -600,6 +678,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     });
   }, [cart]);
 
+  const cartProductType = React.useMemo(
+    () => getCartProductType(cart),
+    [cart]
+  );
+
   const subtotal = React.useMemo(
     () => cart.reduce((sum, item) => sum + item.itemTotal, 0),
     [cart]
@@ -631,6 +714,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const contextValue = React.useMemo(
     () => ({
       cart,
+      cartProductType,
       isHydrated,
       addToCart,
       updateQuantity,
@@ -664,6 +748,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       cart,
+      cartProductType,
       isHydrated,
       addToCart,
       updateQuantity,
@@ -706,6 +791,77 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         onClose={closeQuickAdd}
       />
       <CartSuccessOverlay />
+
+      {/* Confirmation Dialog: Replace Cart upon Different Product Type */}
+      {pendingConflict && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cart-conflict-title"
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+        >
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#F25B09] flex items-center justify-center shrink-0">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingConflict(null)}
+                aria-label="Tutup dialog"
+                className="p-1 rounded-lg hover:bg-neutral-100 text-[#737373] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 id="cart-conflict-title" className="text-sm font-bold text-[#111111]">
+                Ganti Jenis Pesanan?
+              </h3>
+              <p className="text-xs text-[#737373] leading-relaxed">
+                Keranjang kamu berisi produk{" "}
+                <strong className="text-[#111111]">
+                  {pendingConflict.currentType === "ready" ? "READY" : "PRE-ORDER"}
+                </strong>
+                . Untuk menambahkan produk{" "}
+                <strong className="text-[#111111]">
+                  {pendingConflict.incomingType === "ready" ? "READY" : "PRE-ORDER"}
+                </strong>
+                , keranjang saat ini harus diganti. Lanjutkan?
+              </p>
+            </div>
+
+            <div className="pt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingConflict(null)}
+                className="flex-1 min-h-[40px] px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#111111] text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const conflict = pendingConflict;
+                  setPendingConflict(null);
+                  executeAddToCart(
+                    conflict.product,
+                    conflict.options,
+                    conflict.addons,
+                    conflict.itemNote,
+                    conflict.quantity,
+                    true
+                  );
+                }}
+                className="flex-1 min-h-[40px] px-4 py-2 bg-[#F25B09] hover:bg-[#D94D06] text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Ganti Keranjang
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </CartContext.Provider>
   );
 }

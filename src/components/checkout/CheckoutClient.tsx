@@ -13,6 +13,7 @@ import {
   QrCode,
   CreditCard,
   Banknote,
+  Clock,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { useCart } from "@/context/CartContext";
@@ -22,6 +23,7 @@ import { CartItem, FulfillmentType, StoreSettings, PaymentMethod } from "@/types
 import { calculateDeliveryFee } from "@/lib/delivery-fee";
 import { validateIndonesianPhone } from "@/lib/phone";
 import { saveOrderToken } from "@/lib/order-token-vault";
+import { getCartProductType, getProductTypeConfig } from "@/lib/product-type";
 
 interface CheckoutClientProps {
   initialStoreSettings?: StoreSettings;
@@ -51,6 +53,14 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
     }
     return selectedCartItems;
   }, [isBuyNow, buyNowItem, selectedCartItems]);
+
+  const checkoutProductType = useMemo(() => {
+    return getCartProductType(checkoutItems);
+  }, [checkoutItems]);
+
+  const checkoutTypeConfig = useMemo(() => {
+    return getProductTypeConfig(checkoutProductType);
+  }, [checkoutProductType]);
 
   // For checkout, all items shown ARE the selected items (no local selection)
   const selectedItems = checkoutItems;
@@ -453,6 +463,22 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                 )}
               </div>
             </div>
+
+            {/* Compact Preparation-Type Indicator */}
+            {checkoutItems.length > 0 && (
+              <div
+                className={`px-3 py-2 rounded-xl flex items-center gap-2 text-xs border ${
+                  checkoutTypeConfig.type === "ready"
+                    ? "bg-emerald-50/70 border-emerald-200/80 text-[#18794E]"
+                    : "bg-orange-50/70 border-orange-200/80 text-[#F25B09]"
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                <span className="font-semibold text-[11px] leading-tight">
+                  {checkoutTypeConfig.checkoutIndicator}
+                </span>
+              </div>
+            )}
 
             {/* Product Items List (Read-Only) */}
             <div className="space-y-3 pt-1 divide-y divide-[#E5E5E5]/60">

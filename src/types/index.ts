@@ -26,6 +26,8 @@ export interface Addon {
   price: number;
 }
 
+export type ProductType = "ready" | "preorder";
+
 export interface ProductCategoryRef {
   id?: string;
   name: string;
@@ -53,6 +55,7 @@ export interface Product {
   isHighlight?: boolean;
   hpp?: number | null;
   isOptionsLoaded?: boolean;
+  productType?: ProductType;
 }
 
 export interface SelectedOption {
@@ -85,6 +88,7 @@ export interface CartItem {
   unitPrice: number;
   itemTotal: number;
   isAvailable: boolean;
+  productType?: ProductType;
 }
 
 export type FulfillmentType = "pickup" | "delivery";

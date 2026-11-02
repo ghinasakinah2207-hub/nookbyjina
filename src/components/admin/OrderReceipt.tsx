@@ -153,7 +153,10 @@ export function OrderReceipt({
             {/* Primary line: Quantity x Name and Total */}
             <div className="flex justify-between items-start gap-1">
               <div className="flex-1 min-w-0 font-bold break-words">
-                {item.quantity}x {item.productName}
+                {item.quantity}x {item.productName}{" "}
+                <span className="text-[8.5px] font-semibold text-neutral-600">
+                  [{item.productType === "ready" ? "READY" : "PRE-ORDER"}]
+                </span>
               </div>
               <div className="flex-shrink-0 text-right font-bold whitespace-nowrap pl-1">
                 {formatRupiah(item.itemTotal)}
