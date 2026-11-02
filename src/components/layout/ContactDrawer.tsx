@@ -2,16 +2,17 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import {
   X,
   MapPin,
   Clock,
   Truck,
   ArrowUpRight,
-  UtensilsCrossed,
-  Heart,
-  ReceiptText,
+  ChevronDown,
+  ShoppingBag,
+  CreditCard,
+  RotateCcw,
+  HelpCircle,
 } from "lucide-react";
 import { BRAND } from "@/lib/branding";
 import { StoreSettings } from "@/types";
@@ -79,7 +80,13 @@ export function ContactDrawer({
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [fetchedSettings, setFetchedSettings] = useState<StoreSettings | null>(null);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const settings = fetchedSettings ?? initialSettings ?? null;
+
+  // Toggle single expanded accordion item
+  const toggleCategory = (id: string) => {
+    setExpandedCategory((prev) => (prev === id ? null : id));
+  };
 
   // Fetch freshest store settings whenever drawer opens
   useEffect(() => {
@@ -139,6 +146,12 @@ export function ContactDrawer({
       )}`
     : "";
 
+  const faqWaUrl = cleanWhatsapp
+    ? `https://wa.me/${cleanWhatsapp}?text=${encodeURIComponent(
+        "Halo Admin Nook by Jina, saya butuh bantuan mengenai pemesanan / FAQ."
+      )}`
+    : "";
+
   // Determine Instagram configuration (store settings priority, fallback to brand defaults)
   const rawInstagram =
     settings?.instagramUrl?.trim() || BRAND.social.instagramUrl?.trim() || "";
@@ -154,7 +167,7 @@ export function ContactDrawer({
       role="dialog"
       id="contact-menu-popup"
       aria-modal="true"
-      aria-label="Menu Kontak dan Media Sosial Nook by Jina"
+      aria-label="Menu Kontak dan Bantuan Nook by Jina"
       className={`fixed inset-0 z-50 transition-opacity duration-300 ${
         isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
       }`}
@@ -169,7 +182,7 @@ export function ContactDrawer({
       {/* Drawer Container */}
       <div
         ref={drawerRef}
-        className={`fixed top-0 left-0 bottom-0 w-[86%] max-w-[340px] bg-white shadow-2xl z-50 flex flex-col overflow-hidden transform transition-transform duration-300 ease-out will-change-transform ${
+        className={`fixed top-0 left-0 bottom-0 w-[88%] max-w-[360px] bg-white shadow-2xl z-50 flex flex-col overflow-hidden transform transition-transform duration-300 ease-out will-change-transform ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -209,8 +222,8 @@ export function ContactDrawer({
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
-          {/* Section 1: Contact Admin (WhatsApp) */}
-          <section aria-labelledby="contact-heading" className="space-y-2">
+          {/* Section 1: Hubungi Kami (Side-by-side WhatsApp and Instagram) */}
+          <section aria-labelledby="contact-heading" className="space-y-1.5">
             <span
               id="contact-heading"
               className="text-[11px] font-bold text-[#737373] uppercase tracking-wider px-1"
@@ -218,106 +231,103 @@ export function ContactDrawer({
               Hubungi Kami
             </span>
 
-            {waUrl ? (
-              <a
-                href={waUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={onClose}
-                className="group flex items-start gap-3 p-3.5 bg-emerald-50/60 hover:bg-emerald-50 border border-emerald-200/70 hover:border-emerald-300 rounded-2xl transition-all"
-              >
-                <div className="w-10 h-10 rounded-xl bg-[#25D366] text-white flex items-center justify-center flex-shrink-0 shadow-xs group-hover:scale-105 transition-transform">
-                  <WhatsAppIcon className="w-5.5 h-5.5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <h3 className="text-xs font-bold text-neutral-900 group-hover:text-emerald-950">
-                      Chat WhatsApp Admin
+            <div className="grid grid-cols-2 gap-2 items-stretch">
+              {/* Left card — WhatsApp */}
+              {waUrl ? (
+                <a
+                  href={waUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={onClose}
+                  className="group flex flex-col justify-between p-2.5 bg-emerald-50/60 hover:bg-emerald-50 border border-emerald-200/70 hover:border-emerald-300 rounded-xl transition-all h-full"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="w-7 h-7 rounded-lg bg-[#25D366] text-white flex items-center justify-center flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                        <WhatsAppIcon className="w-3.5 h-3.5" />
+                      </div>
+                      <ArrowUpRight className="w-3 h-3 text-emerald-700 opacity-80" />
+                    </div>
+                    <h3 className="text-[11.5px] font-bold text-neutral-900 group-hover:text-emerald-950 leading-tight">
+                      Chat WhatsApp
                     </h3>
-                    <ArrowUpRight className="w-3.5 h-3.5 text-emerald-700 opacity-80" />
+                    <p className="text-[10px] sm:text-[10.5px] font-semibold text-emerald-800 mt-0.5 tracking-tight break-all leading-tight">
+                      {formattedWhatsapp}
+                    </p>
                   </div>
-                  <p className="text-xs font-semibold text-emerald-800 mt-0.5 tracking-wide">
-                    {formattedWhatsapp}
-                  </p>
-                  <p className="text-[11px] text-neutral-500 mt-1 leading-snug">
+                  <p className="text-[9.5px] text-neutral-500 mt-1.5 leading-tight">
                     Tanya menu, katering, atau konfirmasi pesanan
                   </p>
-                </div>
-              </a>
-            ) : (
-              <div className="flex items-start gap-3 p-3.5 bg-neutral-50 border border-dashed border-[#E5E5E5] rounded-2xl select-none">
-                <div className="w-10 h-10 rounded-xl bg-neutral-200 text-neutral-500 flex items-center justify-center flex-shrink-0">
-                  <WhatsAppIcon className="w-5.5 h-5.5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xs font-bold text-neutral-700">
+                </a>
+              ) : (
+                <div className="flex flex-col justify-between p-2.5 bg-neutral-50 border border-dashed border-[#E5E5E5] rounded-xl select-none h-full">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="w-7 h-7 rounded-lg bg-neutral-200 text-neutral-500 flex items-center justify-center flex-shrink-0">
+                        <WhatsAppIcon className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="text-[8.5px] font-medium bg-neutral-200/80 text-neutral-600 px-1.5 py-0.5 rounded-full">
+                        Belum Diatur
+                      </span>
+                    </div>
+                    <h3 className="text-[11.5px] font-bold text-neutral-700 leading-tight">
                       WhatsApp Toko
                     </h3>
-                    <span className="text-[9.5px] font-medium bg-neutral-200/80 text-neutral-600 px-1.5 py-0.5 rounded-full">
-                      Belum Diatur
-                    </span>
                   </div>
-                  <p className="text-[11px] text-neutral-500 mt-0.5 leading-snug">
+                  <p className="text-[9.5px] text-neutral-500 mt-1.5 leading-tight">
                     Nomor WhatsApp toko belum dikonfigurasi di Pengaturan.
                   </p>
                 </div>
-              </div>
-            )}
-          </section>
+              )}
 
-          {/* Section 2: Social Media (Instagram) */}
-          <section aria-labelledby="social-heading" className="space-y-2">
-            <span
-              id="social-heading"
-              className="text-[11px] font-bold text-[#737373] uppercase tracking-wider px-1"
-            >
-              Media Sosial
-            </span>
-
-            {isInstagramConfigured && igValidation ? (
-              <a
-                href={igValidation.normalized}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={onClose}
-                className="group flex items-center justify-between p-3 bg-white hover:bg-neutral-50 border border-[#E5E5E5] hover:border-neutral-300 rounded-xl transition-all"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF] text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
-                    <InstagramIcon className="w-4.5 h-4.5" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-xs font-semibold text-[#111111]">
-                      Instagram Resmi
-                    </h3>
-                    <p className="text-[11px] text-[#737373] truncate">
-                      {igValidation.handle || BRAND.social.instagramHandle || "Kunjungi Profil Instagram"}
-                    </p>
-                  </div>
-                </div>
-                <ArrowUpRight className="w-4 h-4 text-neutral-400 group-hover:text-black transition-colors" />
-              </a>
-            ) : (
-              <div className="flex items-start gap-3 p-3 bg-neutral-50 border border-dashed border-[#E5E5E5] rounded-xl select-none">
-                <div className="w-9 h-9 rounded-lg bg-neutral-200 text-neutral-500 flex items-center justify-center flex-shrink-0">
-                  <InstagramIcon className="w-4.5 h-4.5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xs font-semibold text-neutral-800">
+              {/* Right card — Instagram */}
+              {isInstagramConfigured && igValidation ? (
+                <a
+                  href={igValidation.normalized}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={onClose}
+                  className="group flex flex-col justify-between p-2.5 bg-white hover:bg-neutral-50 border border-[#E5E5E5] hover:border-neutral-300 rounded-xl transition-all h-full"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF] text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
+                        <InstagramIcon className="w-3.5 h-3.5" />
+                      </div>
+                      <ArrowUpRight className="w-3 h-3 text-neutral-400 group-hover:text-black transition-colors" />
+                    </div>
+                    <h3 className="text-[11.5px] font-semibold text-[#111111] leading-tight">
                       Instagram
                     </h3>
-                    <span className="text-[9.5px] font-medium bg-neutral-200/80 text-neutral-600 px-1.5 py-0.5 rounded-full">
-                      Belum Diatur
-                    </span>
+                    <p className="text-[10px] sm:text-[10.5px] text-[#737373] mt-0.5 truncate leading-tight">
+                      {igValidation.handle || BRAND.social.instagramHandle || "Profil"}
+                    </p>
                   </div>
-                  <p className="text-[10.5px] text-neutral-500 mt-0.5 leading-snug">
+                  <p className="text-[9.5px] text-neutral-500 mt-1.5 leading-tight">
+                    Kunjungi akun Instagram resmi Nook by Jina
+                  </p>
+                </a>
+              ) : (
+                <div className="flex flex-col justify-between p-2.5 bg-neutral-50 border border-dashed border-[#E5E5E5] rounded-xl select-none h-full">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="w-7 h-7 rounded-lg bg-neutral-200 text-neutral-500 flex items-center justify-center flex-shrink-0">
+                        <InstagramIcon className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="text-[8.5px] font-medium bg-neutral-200/80 text-neutral-600 px-1.5 py-0.5 rounded-full">
+                        Belum Diatur
+                      </span>
+                    </div>
+                    <h3 className="text-[11.5px] font-semibold text-neutral-800 leading-tight">
+                      Instagram
+                    </h3>
+                  </div>
+                  <p className="text-[9.5px] text-neutral-500 mt-1.5 leading-tight">
                     Akun media sosial Instagram toko belum ditautkan.
                   </p>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </section>
 
           {/* Section 3: Store Information */}
@@ -362,41 +372,282 @@ export function ContactDrawer({
             </div>
           </section>
 
-          {/* Section 4: Quick Navigation */}
-          <section aria-labelledby="nav-heading" className="space-y-1.5 pt-1">
+          {/* Section 4: Bantuan & Informasi (FAQ Accordion) */}
+          <section aria-labelledby="help-heading" className="space-y-2 pt-1">
             <span
-              id="nav-heading"
+              id="help-heading"
               className="text-[11px] font-bold text-[#737373] uppercase tracking-wider px-1"
             >
-              Navigasi Cepat
+              Bantuan & Informasi
             </span>
 
-            <div className="grid grid-cols-1 gap-1">
-              <Link
-                href="/menu"
-                onClick={onClose}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-neutral-800 hover:bg-neutral-100 hover:text-black transition-colors"
-              >
-                <UtensilsCrossed className="w-4 h-4 text-neutral-500" />
-                <span>Jelajahi Semua Menu</span>
-              </Link>
-              <Link
-                href="/favorit"
-                onClick={onClose}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-neutral-800 hover:bg-neutral-100 hover:text-black transition-colors"
-              >
-                <Heart className="w-4 h-4 text-neutral-500" />
-                <span>Menu Favorit</span>
-              </Link>
-              <Link
-                href="/pesanan"
-                onClick={onClose}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-neutral-800 hover:bg-neutral-100 hover:text-black transition-colors"
-              >
-                <ReceiptText className="w-4 h-4 text-neutral-500" />
-                <span>Lacak Status Pesanan</span>
-              </Link>
+            <div className="space-y-2">
+              {/* Category A: Cara Pemesanan */}
+              <div className="border border-[#E5E5E5] rounded-xl overflow-hidden bg-white">
+                <button
+                  type="button"
+                  onClick={() => toggleCategory("cara-pemesanan")}
+                  aria-expanded={expandedCategory === "cara-pemesanan"}
+                  aria-controls="faq-content-cara-pemesanan"
+                  id="faq-header-cara-pemesanan"
+                  className="w-full flex items-center justify-between p-3 text-left hover:bg-neutral-50 transition-colors cursor-pointer select-none"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                    <ShoppingBag className="w-4 h-4 text-[#F25B09] flex-shrink-0" />
+                    <span className="text-xs font-semibold text-neutral-900 truncate">
+                      Cara Pemesanan
+                    </span>
+                  </div>
+                  <ChevronDown
+                    className={`w-4 h-4 text-neutral-400 flex-shrink-0 transition-transform duration-200 ${
+                      expandedCategory === "cara-pemesanan" ? "rotate-180 text-neutral-700" : ""
+                    }`}
+                  />
+                </button>
+                <div
+                  id="faq-content-cara-pemesanan"
+                  role="region"
+                  aria-labelledby="faq-header-cara-pemesanan"
+                  className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                    expandedCategory === "cara-pemesanan" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="p-3 pt-0 text-[11px] leading-relaxed text-neutral-600 border-t border-neutral-100 bg-neutral-50/50 space-y-1.5">
+                      <ol className="list-decimal list-outside pl-4 space-y-1">
+                        <li>Pilih produk dari menu yang tersedia.</li>
+                        <li>Tentukan variasi pilihan dan jumlah pesanan.</li>
+                        <li>Tambahkan ke keranjang atau gunakan tombol <strong>Beli Sekarang</strong>.</li>
+                        <li>Periksa pesanan di keranjang dan pastikan produk yang ingin dipesan tercentang.</li>
+                        <li>Isi nama, nomor WhatsApp aktif, serta pilih metode pickup atau delivery.</li>
+                        <li>Periksa rincian total pembayaran dan selesaikan transaksi.</li>
+                        <li>Pesanan akan diproses oleh dapur setelah status pembayaran terverifikasi.</li>
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Category B: Pembayaran */}
+              <div className="border border-[#E5E5E5] rounded-xl overflow-hidden bg-white">
+                <button
+                  type="button"
+                  onClick={() => toggleCategory("pembayaran")}
+                  aria-expanded={expandedCategory === "pembayaran"}
+                  aria-controls="faq-content-pembayaran"
+                  id="faq-header-pembayaran"
+                  className="w-full flex items-center justify-between p-3 text-left hover:bg-neutral-50 transition-colors cursor-pointer select-none"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                    <CreditCard className="w-4 h-4 text-[#F25B09] flex-shrink-0" />
+                    <span className="text-xs font-semibold text-neutral-900 truncate">
+                      Pembayaran
+                    </span>
+                  </div>
+                  <ChevronDown
+                    className={`w-4 h-4 text-neutral-400 flex-shrink-0 transition-transform duration-200 ${
+                      expandedCategory === "pembayaran" ? "rotate-180 text-neutral-700" : ""
+                    }`}
+                  />
+                </button>
+                <div
+                  id="faq-content-pembayaran"
+                  role="region"
+                  aria-labelledby="faq-header-pembayaran"
+                  className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                    expandedCategory === "pembayaran" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="p-3 pt-0 text-[11px] leading-relaxed text-neutral-600 border-t border-neutral-100 bg-neutral-50/50 space-y-1.5">
+                      <ul className="list-disc list-outside pl-4 space-y-1">
+                        <li>Metode pembayaran mengikuti opsi yang aktif saat Anda menyelesaikan pesanan pada halaman checkout.</li>
+                        <li>Harap selalu memeriksa nominal tagihan dan ringkasan pesanan sebelum melakukan transfer atau pembayaran.</li>
+                        <li>Jika pembayaran sudah berhasil tetapi pesanan belum terkonfirmasi, <strong>jangan langsung membayar ulang</strong>.</li>
+                        <li>Segera hubungi admin melalui WhatsApp dengan melampirkan bukti pembayaran yang sah.</li>
+                        <li>Jika terjadi pembayaran ganda, silakan konfirmasi ke admin untuk dilakukan pengecekan dan verifikasi.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Category C: Pembatalan & Refund */}
+              <div className="border border-[#E5E5E5] rounded-xl overflow-hidden bg-white">
+                <button
+                  type="button"
+                  onClick={() => toggleCategory("pembatalan-refund")}
+                  aria-expanded={expandedCategory === "pembatalan-refund"}
+                  aria-controls="faq-content-pembatalan-refund"
+                  id="faq-header-pembatalan-refund"
+                  className="w-full flex items-center justify-between p-3 text-left hover:bg-neutral-50 transition-colors cursor-pointer select-none"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                    <RotateCcw className="w-4 h-4 text-[#F25B09] flex-shrink-0" />
+                    <span className="text-xs font-semibold text-neutral-900 truncate">
+                      Pembatalan & Refund
+                    </span>
+                  </div>
+                  <ChevronDown
+                    className={`w-4 h-4 text-neutral-400 flex-shrink-0 transition-transform duration-200 ${
+                      expandedCategory === "pembatalan-refund" ? "rotate-180 text-neutral-700" : ""
+                    }`}
+                  />
+                </button>
+                <div
+                  id="faq-content-pembatalan-refund"
+                  role="region"
+                  aria-labelledby="faq-header-pembatalan-refund"
+                  className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                    expandedCategory === "pembatalan-refund" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="p-3 pt-0 text-[11px] leading-relaxed text-neutral-600 border-t border-neutral-100 bg-neutral-50/50 space-y-2">
+                      <div>
+                        <p className="font-semibold text-neutral-800 mb-0.5">Kebijakan Pembatalan:</p>
+                        <ul className="list-disc list-outside pl-4 space-y-0.5">
+                          <li>Pembatalan dapat diajukan sebelum pesanan mulai diproses atau disiapkan oleh dapur.</li>
+                          <li>Setelah pesanan mulai diproses, pembatalan tidak dapat dijamin karena bahan makanan telah disiapkan.</li>
+                          <li>Pelanggan harus menghubungi admin melalui WhatsApp sesegera mungkin jika ada perubahan.</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-neutral-800 mb-0.5">Kebijakan Refund (Pengembalian Dana):</p>
+                        <ul className="list-disc list-outside pl-4 space-y-0.5">
+                          <li>Pengembalian dana ditangani secara manual oleh admin setelah verifikasi.</li>
+                          <li>Setiap permohonan diperiksa secara cermat berdasarkan status pesanan dan alasan pengajuan.</li>
+                          <li>Jika pesanan tidak dapat dipenuhi karena kendala dari pihak toko, pelanggan dapat menghubungi admin untuk penyelesaian dan pengembalian dana apabila pembayaran sudah diterima.</li>
+                          <li>Waktu penyelesaian akan diinformasikan secara jelas oleh admin setelah pemeriksaan dilakukan.</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Category D: Pengiriman & Pre-Order */}
+              <div className="border border-[#E5E5E5] rounded-xl overflow-hidden bg-white">
+                <button
+                  type="button"
+                  onClick={() => toggleCategory("pengiriman-preorder")}
+                  aria-expanded={expandedCategory === "pengiriman-preorder"}
+                  aria-controls="faq-content-pengiriman-preorder"
+                  id="faq-header-pengiriman-preorder"
+                  className="w-full flex items-center justify-between p-3 text-left hover:bg-neutral-50 transition-colors cursor-pointer select-none"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                    <Truck className="w-4 h-4 text-[#F25B09] flex-shrink-0" />
+                    <span className="text-xs font-semibold text-neutral-900 truncate">
+                      Pengiriman & Pre-Order
+                    </span>
+                  </div>
+                  <ChevronDown
+                    className={`w-4 h-4 text-neutral-400 flex-shrink-0 transition-transform duration-200 ${
+                      expandedCategory === "pengiriman-preorder" ? "rotate-180 text-neutral-700" : ""
+                    }`}
+                  />
+                </button>
+                <div
+                  id="faq-content-pengiriman-preorder"
+                  role="region"
+                  aria-labelledby="faq-header-pengiriman-preorder"
+                  className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                    expandedCategory === "pengiriman-preorder" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="p-3 pt-0 text-[11px] leading-relaxed text-neutral-600 border-t border-neutral-100 bg-neutral-50/50 space-y-1.5">
+                      <ul className="list-disc list-outside pl-4 space-y-1">
+                        <li>Nook by Jina menggunakan sistem pre-order sesuai informasi ketersediaan pada masing-masing produk.</li>
+                        <li>Pesanan disiapkan mengikuti jadwal operasional dan slot pengantaran yang berlaku.</li>
+                        <li>Area pengiriman mencakup wilayah Lhoksukon dan sekitarnya sesuai konfigurasi layanan toko.</li>
+                        <li>Biaya pengiriman dihitung dan ditampilkan secara otomatis pada halaman checkout.</li>
+                        <li>Gratis ongkir berlaku mengikuti ketentuan minimum nilai pembelian yang sedang aktif.</li>
+                        <li>Bagi pelanggan di luar jangkauan area pengiriman reguler, silakan hubungi admin melalui WhatsApp untuk konfirmasi opsi pengantaran khusus.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Category E: Pertanyaan Lainnya */}
+              <div className="border border-[#E5E5E5] rounded-xl overflow-hidden bg-white">
+                <button
+                  type="button"
+                  onClick={() => toggleCategory("pertanyaan-lainnya")}
+                  aria-expanded={expandedCategory === "pertanyaan-lainnya"}
+                  aria-controls="faq-content-pertanyaan-lainnya"
+                  id="faq-header-pertanyaan-lainnya"
+                  className="w-full flex items-center justify-between p-3 text-left hover:bg-neutral-50 transition-colors cursor-pointer select-none"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                    <HelpCircle className="w-4 h-4 text-[#F25B09] flex-shrink-0" />
+                    <span className="text-xs font-semibold text-neutral-900 truncate">
+                      Pertanyaan Lainnya
+                    </span>
+                  </div>
+                  <ChevronDown
+                    className={`w-4 h-4 text-neutral-400 flex-shrink-0 transition-transform duration-200 ${
+                      expandedCategory === "pertanyaan-lainnya" ? "rotate-180 text-neutral-700" : ""
+                    }`}
+                  />
+                </button>
+                <div
+                  id="faq-content-pertanyaan-lainnya"
+                  role="region"
+                  aria-labelledby="faq-header-pertanyaan-lainnya"
+                  className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                    expandedCategory === "pertanyaan-lainnya" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="p-3 pt-0 text-[11px] leading-relaxed text-neutral-600 border-t border-neutral-100 bg-neutral-50/50 space-y-2.5">
+                      <div>
+                        <p className="font-semibold text-neutral-800">Bagaimana jika produk habis setelah dipesan?</p>
+                        <p className="mt-0.5 text-neutral-600">
+                          Admin akan segera menghubungi nomor WhatsApp Anda untuk konfirmasi menu pengganti atau pembatalan beserta pengembalian dana penuh.
+                        </p>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-neutral-800">Bagaimana jika pesanan yang diterima tidak sesuai?</p>
+                        <p className="mt-0.5 text-neutral-600">
+                          Harap segera mengambil foto produk yang diterima dan kirimkan ke WhatsApp Admin kami beserta nomor pesanan untuk tindak lanjut cepat.
+                        </p>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-neutral-800">Bagaimana jika salah mengisi nomor WhatsApp saat checkout?</p>
+                        <p className="mt-0.5 text-neutral-600">
+                          Segera hubungi admin dengan menyebutkan nama pemesan dan perkiraan waktu transaksi agar admin dapat memperbarui kontak konfirmasi Anda.
+                        </p>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-neutral-800">Bagaimana cara menghubungi admin?</p>
+                        <p className="mt-0.5 text-neutral-600">
+                          Anda dapat menggunakan tombol WhatsApp di bawah atau bagian Hubungi Kami pada menu ini untuk terhubung langsung dengan admin kami.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
+
+            {/* Contextual WhatsApp Support Action */}
+            {faqWaUrl && (
+              <div className="pt-1.5">
+                <a
+                  href={faqWaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={onClose}
+                  className="flex items-center justify-center gap-2 p-2.5 bg-neutral-50 hover:bg-neutral-100 border border-[#E5E5E5] rounded-xl text-xs font-semibold text-[#111111] transition-colors"
+                >
+                  <WhatsAppIcon className="w-4 h-4 text-[#25D366]" />
+                  <span>Masih butuh bantuan? Chat WhatsApp Admin</span>
+                </a>
+              </div>
+            )}
           </section>
         </div>
 
