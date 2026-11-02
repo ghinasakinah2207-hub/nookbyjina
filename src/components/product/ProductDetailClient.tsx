@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -49,9 +49,14 @@ export default function ProductDetailClient({
 
   const { addToCart, itemCount, setBuyNowItem } = useCart();
 
-  // Photo gallery state & touch swipe
+  // Photo gallery state & carousel gesture tracking
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const isSwipingHorizontalRef = useRef(false);
+  const isDirectionLockedRef = useRef(false);
 
   // Selections state (groupId -> valueId) initialized from initialProduct
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {
@@ -199,25 +204,110 @@ export default function ProductDetailClient({
     }
   };
 
-  // Touch gesture handling for hero image swipe
+  // Touch gesture handling for hero image swipe with directional locking
   const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStartX(e.touches[0].clientX);
+    if (!product || product.images.length <= 1) return;
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+    isSwipingHorizontalRef.current = false;
+    isDirectionLockedRef.current = false;
+    setDragOffset(0);
   };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX === null || !product || product.images.length <= 1) return;
-    const touchEndX = e.changedTouches[0].clientX;
-    const diff = touchStartX - touchEndX;
-    if (diff > 40) {
-      setCurrentImageIndex((prev) =>
-        prev < product.images.length - 1 ? prev + 1 : 0
-      );
-    } else if (diff < -40) {
-      setCurrentImageIndex((prev) =>
-        prev > 0 ? prev - 1 : product.images.length - 1
-      );
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (
+      touchStartXRef.current === null ||
+      touchStartYRef.current === null ||
+      !product ||
+      product.images.length <= 1
+    ) {
+      return;
     }
-    setTouchStartX(null);
+    const dx = e.touches[0].clientX - touchStartXRef.current;
+    const dy = e.touches[0].clientY - touchStartYRef.current;
+
+    if (!isDirectionLockedRef.current) {
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+        isDirectionLockedRef.current = true;
+        if (Math.abs(dx) > Math.abs(dy)) {
+          isSwipingHorizontalRef.current = true;
+          setIsDragging(true);
+        } else {
+          isSwipingHorizontalRef.current = false;
+        }
+      }
+    }
+
+    if (isSwipingHorizontalRef.current) {
+      // Elastic resistance at carousel bounds
+      let appliedDx = dx;
+      if (
+        (currentImageIndex === 0 && dx > 0) ||
+        (currentImageIndex === product.images.length - 1 && dx < 0)
+      ) {
+        appliedDx = dx * 0.3;
+      }
+      setDragOffset(appliedDx);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (isSwipingHorizontalRef.current && product && product.images.length > 1) {
+      const threshold = 40;
+      if (dragOffset < -threshold && currentImageIndex < product.images.length - 1) {
+        setCurrentImageIndex((prev) => prev + 1);
+      } else if (dragOffset > threshold && currentImageIndex > 0) {
+        setCurrentImageIndex((prev) => prev - 1);
+      }
+    }
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    isSwipingHorizontalRef.current = false;
+    isDirectionLockedRef.current = false;
+    setIsDragging(false);
+    setDragOffset(0);
+  };
+
+  // Desktop mouse dragging support
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!product || product.images.length <= 1) return;
+    touchStartXRef.current = e.clientX;
+    isSwipingHorizontalRef.current = true;
+    setIsDragging(true);
+    setDragOffset(0);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (touchStartXRef.current === null || !isDragging || !product) return;
+    const dx = e.clientX - touchStartXRef.current;
+    let appliedDx = dx;
+    if (
+      (currentImageIndex === 0 && dx > 0) ||
+      (currentImageIndex === product.images.length - 1 && dx < 0)
+    ) {
+      appliedDx = dx * 0.3;
+    }
+    setDragOffset(appliedDx);
+  };
+
+  const handleMouseUp = () => {
+    if (isDragging) {
+      handleTouchEnd();
+    }
+  };
+
+  const handlePrevImage = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!product || product.images.length <= 1) return;
+    setCurrentImageIndex((prev) => (prev > 0 ? prev - 1 : prev));
+  };
+
+  const handleNextImage = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!product || product.images.length <= 1) return;
+    setCurrentImageIndex((prev) =>
+      prev < product.images.length - 1 ? prev + 1 : prev
+    );
   };
 
   // Calculate dynamic unit price
@@ -414,34 +504,36 @@ export default function ProductDetailClient({
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F6F6F7] pb-28">
-        <main className="max-w-md mx-auto px-3.5 pt-3 space-y-2.5">
-          {/* Skeleton Hero Image */}
-          <div className="relative aspect-[4/3] w-full bg-neutral-200 rounded-2xl overflow-hidden animate-pulse border border-[#E5E5E5]">
-            <div className="absolute top-2.5 left-2.5 w-8 h-8 rounded-full bg-white/70" />
-            <div className="absolute top-2.5 right-2.5 flex gap-2">
+        <main className="max-w-md mx-auto">
+          {/* Skeleton Hero Image (Full-bleed) */}
+          <div className="relative aspect-[4/3] w-full bg-neutral-200 overflow-hidden animate-pulse">
+            <div className="absolute top-3 left-3 w-8 h-8 rounded-full bg-white/70" />
+            <div className="absolute top-3 right-3 flex gap-2">
               <div className="w-8 h-8 rounded-full bg-white/70" />
               <div className="w-8 h-8 rounded-full bg-white/70" />
             </div>
           </div>
 
-          {/* Skeleton Info */}
-          <div className="px-0.5 pt-0.5 space-y-2">
-            <div className="h-6 bg-neutral-200 rounded w-1/3 animate-pulse" />
-            <div className="h-5 bg-neutral-200 rounded w-3/4 animate-pulse" />
-            <div className="h-4 bg-neutral-100 rounded w-1/2 animate-pulse mt-1" />
-          </div>
+          <div className="px-3.5 pt-3 space-y-2.5">
+            {/* Skeleton Info */}
+            <div className="px-0.5 pt-0.5 space-y-2">
+              <div className="h-6 bg-neutral-200 rounded w-1/3 animate-pulse" />
+              <div className="h-5 bg-neutral-200 rounded w-3/4 animate-pulse" />
+              <div className="h-4 bg-neutral-100 rounded w-1/2 animate-pulse mt-1" />
+            </div>
 
-          {/* Skeleton Variation Card */}
-          <div className="bg-white rounded-2xl p-4 space-y-2 border border-[#E5E5E5]">
-            <div className="h-4 bg-neutral-200 rounded w-1/4 animate-pulse" />
-            <div className="h-3 bg-neutral-100 rounded w-1/2 animate-pulse" />
-          </div>
+            {/* Skeleton Variation Card */}
+            <div className="bg-white rounded-2xl p-4 space-y-2 border border-[#E5E5E5]">
+              <div className="h-4 bg-neutral-200 rounded w-1/4 animate-pulse" />
+              <div className="h-3 bg-neutral-100 rounded w-1/2 animate-pulse" />
+            </div>
 
-          {/* Skeleton Description */}
-          <div className="bg-white rounded-2xl p-4 space-y-2 border border-[#E5E5E5]">
-            <div className="h-4 bg-neutral-200 rounded w-1/3 animate-pulse" />
-            <div className="h-3 bg-neutral-100 rounded w-full animate-pulse" />
-            <div className="h-3 bg-neutral-100 rounded w-4/5 animate-pulse" />
+            {/* Skeleton Description */}
+            <div className="bg-white rounded-2xl p-4 space-y-2 border border-[#E5E5E5]">
+              <div className="h-4 bg-neutral-200 rounded w-1/3 animate-pulse" />
+              <div className="h-3 bg-neutral-100 rounded w-full animate-pulse" />
+              <div className="h-3 bg-neutral-100 rounded w-4/5 animate-pulse" />
+            </div>
           </div>
         </main>
       </div>
@@ -505,90 +597,152 @@ export default function ProductDetailClient({
         </div>
       )}
 
-      <main className="max-w-md mx-auto px-3.5 pt-3 space-y-2.5">
-        {/* Store Closed Warning Banner */}
-        {!storeOpen && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2.5 text-xs text-[#B42318] animate-landing-fade">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span className="font-medium">
-              Toko sedang close order. Pemesanan menu belum dapat dilakukan saat ini.
-            </span>
-          </div>
-        )}
-
+      <main className="max-w-md mx-auto">
         {/* 1. Full-bleed Hero Product Photography Section */}
-        <section className="space-y-2.5">
+        <section
+          className="relative aspect-[4/3] w-full bg-neutral-100 overflow-hidden select-none group"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
+          {/* Sliding Track containing all product images */}
           <div
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-            className="relative aspect-[4/3] w-full bg-neutral-100 rounded-2xl overflow-hidden border border-[#E5E5E5] select-none"
+            className="flex w-full h-full will-change-transform"
+            style={{
+              transform: `translate3d(calc(-${currentImageIndex * 100}% + ${dragOffset}px), 0, 0)`,
+              transition: isDragging
+                ? "none"
+                : "transform 400ms cubic-bezier(0.25, 1, 0.5, 1)",
+            }}
           >
-            <Image
-              src={images[currentImageIndex]}
-              alt={product.name}
-              fill
-              priority
-              quality={85}
-              className={`object-cover ${!product.isAvailable ? "grayscale opacity-75" : ""}`}
-              sizes="(max-width: 640px) 100vw, 420px"
-            />
+            {images.map((imgSrc, idx) => {
+              const isInitial = idx === 0;
+              const isAdjacent = Math.abs(idx - currentImageIndex) <= 1;
+              const shouldRender = Math.abs(idx - currentImageIndex) <= 2;
 
-            {/* Top-Left: Back Button */}
+              return (
+                <div
+                  key={`${imgSrc}-${idx}`}
+                  className="relative w-full h-full shrink-0 flex-none bg-neutral-100"
+                >
+                  {shouldRender ? (
+                    <Image
+                      src={imgSrc}
+                      alt={`${product.name} - foto ${idx + 1}`}
+                      fill
+                      priority={isInitial}
+                      loading={isInitial ? undefined : isAdjacent ? "eager" : "lazy"}
+                      quality={85}
+                      className={`object-cover select-none pointer-events-none ${
+                        !product.isAvailable ? "grayscale opacity-75" : ""
+                      }`}
+                      sizes="(max-width: 640px) 100vw, 448px"
+                      draggable={false}
+                    />
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Top-Left: Back Button */}
+          <button
+            type="button"
+            onClick={() => router.back()}
+            aria-label="Kembali"
+            className="absolute top-3 left-3 z-20 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-[#111111] backdrop-blur-xs flex items-center justify-center transition-colors min-h-[34px] min-w-[34px] shadow-xs cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          {/* Top-Right: Share and Shopping Cart Buttons */}
+          <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
+            {/* Share Button */}
             <button
               type="button"
-              onClick={() => router.back()}
-              aria-label="Kembali"
-              className="absolute top-2.5 left-2.5 z-20 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-[#111111] backdrop-blur-xs flex items-center justify-center transition-colors min-h-[34px] min-w-[34px] shadow-xs"
+              onClick={handleShare}
+              aria-label="Bagikan Menu"
+              className="w-8 h-8 rounded-full bg-white/80 hover:bg-white text-[#111111] backdrop-blur-xs flex items-center justify-center transition-colors min-h-[34px] min-w-[34px] shadow-xs cursor-pointer"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <Share2 className="w-4 h-4" />
             </button>
 
-            {/* Top-Right: Share and Shopping Cart Buttons */}
-            <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5">
-              {/* Share Button */}
-              <button
-                type="button"
-                onClick={handleShare}
-                aria-label="Bagikan Menu"
-                className="w-8 h-8 rounded-full bg-white/80 hover:bg-white text-[#111111] backdrop-blur-xs flex items-center justify-center transition-colors min-h-[34px] min-w-[34px] shadow-xs"
-              >
-                <Share2 className="w-4 h-4" />
-              </button>
-
-              {/* Shopping Cart Button with Badge */}
-              <Link
-                href="/keranjang"
-                aria-label="Lihat Keranjang Belanja"
-                className="relative w-8 h-8 rounded-full bg-white/80 hover:bg-white text-[#111111] backdrop-blur-xs flex items-center justify-center transition-colors min-h-[34px] min-w-[34px] shadow-xs"
-              >
-                <ShoppingCart className="w-4 h-4" />
-                {itemCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-[#F25B09] text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center border-2 border-white leading-none">
-                    {itemCount > 99 ? "99+" : itemCount}
-                  </span>
-                )}
-              </Link>
-            </div>
-
-            {/* Multiple Photos Indicator Pill */}
-            {images.length > 1 && (
-              <div className="absolute bottom-2.5 right-2.5 z-20 bg-black/60 backdrop-blur-xs text-white text-[10px] font-medium px-2 py-0.5 rounded-full">
-                {currentImageIndex + 1}/{images.length}
-              </div>
-            )}
-
-            {/* Sold-out Overlay */}
-            {!product.isAvailable ? (
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
-                <span className="text-xs font-bold text-white bg-[#111111] px-3 py-1 rounded-full border border-white/20">
-                  Stok Menu Habis
+            {/* Shopping Cart Button with Badge */}
+            <Link
+              href="/keranjang"
+              aria-label="Lihat Keranjang Belanja"
+              className="relative w-8 h-8 rounded-full bg-white/80 hover:bg-white text-[#111111] backdrop-blur-xs flex items-center justify-center transition-colors min-h-[34px] min-w-[34px] shadow-xs cursor-pointer"
+            >
+              <ShoppingCart className="w-4 h-4" />
+              {itemCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-[#F25B09] text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center border-2 border-white leading-none">
+                  {itemCount > 99 ? "99+" : itemCount}
                 </span>
-              </div>
-            ) : null}
+              )}
+            </Link>
           </div>
 
+          {/* Desktop Left/Right Navigation Arrows */}
+          {images.length > 1 && (
+            <>
+              {currentImageIndex > 0 && (
+                <button
+                  type="button"
+                  onClick={handlePrevImage}
+                  aria-label="Foto sebelumnya"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-xs hidden sm:flex cursor-pointer"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              )}
+              {currentImageIndex < images.length - 1 && (
+                <button
+                  type="button"
+                  onClick={handleNextImage}
+                  aria-label="Foto berikutnya"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-xs hidden sm:flex cursor-pointer"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Multiple Photos Indicator Pill */}
+          {images.length > 1 && (
+            <div className="absolute bottom-3 right-3 z-20 bg-black/60 backdrop-blur-xs text-white text-[10px] font-medium px-2 py-0.5 rounded-full select-none pointer-events-none">
+              {currentImageIndex + 1}/{images.length}
+            </div>
+          )}
+
+          {/* Sold-out Overlay */}
+          {!product.isAvailable ? (
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10 pointer-events-none">
+              <span className="text-xs font-bold text-white bg-[#111111] px-3 py-1 rounded-full border border-white/20">
+                Stok Menu Habis
+              </span>
+            </div>
+          ) : null}
+        </section>
+
+        <div className="px-3.5 pt-3 space-y-2.5">
+          {/* Store Closed Warning Banner */}
+          {!storeOpen && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2.5 text-xs text-[#B42318] animate-landing-fade">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span className="font-medium">
+                Toko sedang close order. Pemesanan menu belum dapat dilakukan saat ini.
+              </span>
+            </div>
+          )}
+
           {/* 2. Product Price and Title Hierarchy */}
-          <div className="px-0.5 space-y-1">
+          <section className="px-0.5 space-y-1">
             {/* Price Row: Smaller 'Rp' + Prominent Large Numeric Amount */}
             <div className="flex items-baseline gap-1">
               <span className="text-xs sm:text-sm font-semibold text-[#F25B09]">Rp</span>
@@ -601,6 +755,7 @@ export default function ProductDetailClient({
             <div className="space-y-1 pt-0.5">
               <div className="flex items-start justify-between gap-2">
                 <h1 className="text-base sm:text-lg font-bold text-[#111111] leading-snug">
+                  <span className="inline-flex items-center justify-center bg-[#F25B09] text-white text-[9.5px] sm:text-[10.5px] font-bold px-1.5 py-0.5 rounded-[3.5px] align-middle -translate-y-[1px] mr-1.5 leading-none tracking-wide select-none">NOOK</span>
                   {product.name}
                 </h1>
                 {!product.isAvailable && (
@@ -617,8 +772,7 @@ export default function ProductDetailClient({
                 <span className="text-[#737373] font-normal">(120+ ulasan)</span>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
 
         {/* 3. Compact Free-delivery Information */}
         <section className="flex items-center gap-2 p-2.5 bg-emerald-50/70 border border-emerald-100 rounded-xl text-xs text-emerald-800">
@@ -705,6 +859,7 @@ export default function ProductDetailClient({
             </div>
           </section>
         ) : null}
+        </div>
       </main>
 
       {/* 8. Sticky Bottom Purchase Action Bar */}

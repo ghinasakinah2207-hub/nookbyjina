@@ -41,7 +41,7 @@ assert(productDetailSrc.includes("ChevronLeft") && productDetailSrc.includes("ro
 console.log("  [PASS] Back button preserved over hero image");
 
 // 5. Full-bleed product photography
-assert(productDetailSrc.includes("aspect-[4/3]") && productDetailSrc.includes("rounded-2xl"), "Product image uses 4:3 container with rounded-2xl");
+assert(productDetailSrc.includes("aspect-[4/3]"), "Product image uses 4:3 full-bleed container");
 assert(productDetailSrc.includes("object-cover"), "Image uses object-cover without stretching or unwanted distortion");
 console.log("  [PASS] Full-bleed product photography layout confirmed");
 
@@ -55,11 +55,12 @@ assert(
 );
 console.log("  [PASS] Price hierarchy separates smaller 'Rp' from prominent numeric price");
 
-// 7. Category label removed, title & rating preserved
+// 7. Category label removed, title with NOOK badge & rating preserved
 assert(!productDetailSrc.includes("product.categoryName || \"Menu Pilihan\""), "Category label 'PAKET'/'Menu Pilihan' removed from product header");
 assert(productDetailSrc.includes("<h1") && productDetailSrc.includes("{product.name}"), "Product title prominently placed below price");
+assert(productDetailSrc.includes(">NOOK</span>"), "NOOK brand badge rendered immediately before product title");
 assert(productDetailSrc.includes("Star") && productDetailSrc.includes("4.9"), "Star rating pill preserved");
-console.log("  [PASS] Category badge removed, product title and rating preserved");
+console.log("  [PASS] Category badge removed, NOOK brand badge, product title and rating preserved");
 
 console.log("\n--- Section 3: Free Delivery & Variation Card ---");
 
