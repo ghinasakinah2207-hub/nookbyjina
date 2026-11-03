@@ -164,7 +164,15 @@ export function normalizeOrder(order: unknown): Order {
   const rawMethod = o.paymentMethod || o.payment_method;
   const rawStatus = o.paymentStatus || o.payment_status;
 
-  const normalizedMethod = normalizePaymentMethod(rawMethod);
+  const rawGatewayProvider = (o.gatewayProvider || o.gateway_provider) as Order["gatewayProvider"] | undefined;
+  const rawPaymentUrl = (o.paymentUrl || o.payment_url) as string | undefined;
+  const rawDuitkuRef = (o.duitkuReference || o.duitku_reference) as string | undefined;
+  const rawUuid = (o.uuid || (typeof o.id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(o.id) ? o.id : undefined)) as string | undefined;
+
+  let normalizedMethod = normalizePaymentMethod(rawMethod);
+  if (rawGatewayProvider === "duitku" && normalizedMethod === "QRIS Statis") {
+    normalizedMethod = "QRIS";
+  }
   const normalizedStatus = normalizePaymentStatus(rawStatus, normalizedMethod);
 
   const rawItems = Array.isArray(o.items) ? o.items : [];
@@ -172,10 +180,14 @@ export function normalizeOrder(order: unknown): Order {
   return {
     ...(o as unknown as Order),
     id: String(o.id || o.orderNumber || o.order_number || ""),
+    uuid: rawUuid,
     orderStatus: (o.orderStatus || o.order_status || "Pesanan baru") as OrderStatus,
     paymentStatus: normalizedStatus,
     paymentMethod: normalizedMethod,
     merchantName: String(o.merchantName || o.merchant_name || "Nook by Jina"),
+    gatewayProvider: rawGatewayProvider || undefined,
+    paymentUrl: rawPaymentUrl || undefined,
+    duitkuReference: rawDuitkuRef || undefined,
     items: rawItems.map((item: unknown) => {
       const it = (item || {}) as Record<string, unknown>;
       const rawOptions = Array.isArray(it.selectedOptions) ? it.selectedOptions : [];

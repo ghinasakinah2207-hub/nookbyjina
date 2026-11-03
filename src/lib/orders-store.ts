@@ -77,8 +77,13 @@ function mapDatabaseRowToOrder(row: Record<string, unknown>, rawToken?: string):
   const normalizedMethod = normalizePaymentMethod(row.payment_method);
   const normalizedPaymentStatus = normalizePaymentStatus(row.payment_status, normalizedMethod);
 
+  const rawUuid = typeof row.id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.id)
+    ? row.id
+    : (row.uuid as string) || undefined;
+
   return {
     id: (row.order_number as string) || (row.id as string),
+    uuid: rawUuid,
     token: rawToken || "",
     createdAt: (row.created_at as string) || new Date().toISOString(),
     customerName: (row.customer_name as string) || "",
@@ -348,6 +353,40 @@ export async function getOrderByToken(token: string): Promise<Order | null> {
     }
   }
 
+  // Enrich with payments metadata if available
+  if (order && (!order.gatewayProvider || !order.paymentUrl)) {
+    try {
+      let orderUuid = order.uuid;
+      if (!orderUuid || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderUuid)) {
+        const { data: oRow } = await client
+          .from("orders")
+          .select("id")
+          .eq("order_number", order.id)
+          .maybeSingle();
+        if (oRow?.id) {
+          orderUuid = oRow.id;
+          order.uuid = oRow.id;
+        }
+      }
+
+      if (orderUuid && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderUuid)) {
+        const { data: payRecord } = await client
+          .from("payments")
+          .select("gateway_provider, payment_url, duitku_reference, gateway_status")
+          .eq("order_id", orderUuid)
+          .maybeSingle();
+
+        if (payRecord) {
+          if (payRecord.gateway_provider) order.gatewayProvider = payRecord.gateway_provider;
+          if (payRecord.payment_url) order.paymentUrl = payRecord.payment_url;
+          if (payRecord.duitku_reference) order.duitkuReference = payRecord.duitku_reference;
+        }
+      }
+    } catch {
+      // Graceful fallback if payments columns not yet queried
+    }
+  }
+
   if (order && isOrderExpired(order)) {
     if (order.orderStatus !== "Dibatalkan" || order.paymentStatus !== "Dibatalkan") {
       try {
@@ -460,6 +499,36 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
     fetchedOrders = (orderRows as Record<string, unknown>[]).map((row) =>
       mapDatabaseRowToOrder(row, orderIdToToken.get(String(row.id)))
     );
+  }
+
+  // Enrich fetched orders with payments metadata
+  if (client && fetchedOrders.length > 0) {
+    try {
+      const uuids = fetchedOrders
+        .map((o) => o.uuid)
+        .filter((u): u is string => typeof u === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u));
+
+      if (uuids.length > 0) {
+        const { data: payRecords } = await client
+          .from("payments")
+          .select("order_id, gateway_provider, payment_url, duitku_reference, gateway_status")
+          .in("order_id", uuids);
+
+        if (payRecords && Array.isArray(payRecords)) {
+          const payMap = new Map(payRecords.map((p) => [String(p.order_id), p]));
+          for (const o of fetchedOrders) {
+            if (o.uuid && payMap.has(o.uuid)) {
+              const p = payMap.get(o.uuid)!;
+              if (p.gateway_provider) o.gatewayProvider = p.gateway_provider;
+              if (p.payment_url) o.paymentUrl = p.payment_url;
+              if (p.duitku_reference) o.duitkuReference = p.duitku_reference;
+            }
+          }
+        }
+      }
+    } catch {
+      // Graceful fallback
+    }
   }
 
   await syncExpiredOrders(fetchedOrders);

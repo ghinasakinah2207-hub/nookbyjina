@@ -164,9 +164,34 @@ export function getDuitkuConfig(): DuitkuConfig {
     );
   }
 
-  // Fallback defaults for URLs if not explicitly specified
-  const resolvedCallback = callbackUrl || "/api/payments/duitku/callback";
-  const resolvedReturn = returnUrl || "/pesanan/return";
+  let resolvedCallback: string;
+  let resolvedReturn: string;
+
+  if (env === "production") {
+    // Production environment strictly uses authoritative production domain
+    const prodBase = (
+      process.env.NEXT_PUBLIC_APP_URL ||
+      "https://www.nookbyjina.my.id"
+    ).replace(/\/+$/, "");
+
+    resolvedCallback = callbackUrl || `${prodBase}/api/payments/duitku/callback`;
+    resolvedReturn = returnUrl || `${prodBase}/pesanan/return`;
+  } else {
+    // Sandbox environment: NEVER accidentally target the live production domain!
+    // Priority: DUITKU_CALLBACK_URL -> DUITKU_SANDBOX_BASE_URL -> VERCEL_URL (preview) -> non-production APP_URL -> localhost:3000
+    const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
+    const isProdDomain = rawAppUrl.includes("nookbyjina.my.id");
+
+    const sandboxBase = (
+      process.env.DUITKU_SANDBOX_BASE_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+      (!isProdDomain && rawAppUrl ? rawAppUrl : "") ||
+      "http://localhost:3000"
+    ).replace(/\/+$/, "");
+
+    resolvedCallback = callbackUrl || `${sandboxBase}/api/payments/duitku/callback`;
+    resolvedReturn = returnUrl || `${sandboxBase}/pesanan/return`;
+  }
   const inquiryEndpoint = env === "production"
     ? DUITKU_PRODUCTION_INQUIRY_ENDPOINT
     : DUITKU_SANDBOX_INQUIRY_ENDPOINT;
@@ -183,8 +208,7 @@ export function getDuitkuConfig(): DuitkuConfig {
 
 /**
  * Generates HMAC-SHA256 signature for Duitku v2 transaction inquiry:
- * Formula: HMAC-SHA256(merchantCode + merchantOrderId + paymentAmount + apiKey, apiKey)
- * Note: Duitku standard v2 inquiry signature combines merchantCode, merchantOrderId, amount, and apiKey.
+ * Formula: HMAC-SHA256(merchantCode + merchantOrderId + paymentAmount, apiKey)
  */
 export function generateDuitkuInquirySignature(
   merchantCode: string,
@@ -192,7 +216,7 @@ export function generateDuitkuInquirySignature(
   paymentAmount: number,
   apiKey: string
 ): string {
-  const data = `${merchantCode}${merchantOrderId}${paymentAmount}${apiKey}`;
+  const data = `${merchantCode}${merchantOrderId}${paymentAmount}`;
   return crypto.createHmac("sha256", apiKey).update(data).digest("hex");
 }
 

@@ -138,11 +138,14 @@ export function computeOrderProgress(order: Order) {
     if (isPaid) {
       statusSummaryText = "Pembayaran terverifikasi • Menunggu dapur";
       statusDotColor = "bg-blue-500";
-    } else if (order.paymentStatus === "Menunggu Verifikasi") {
-      statusSummaryText = "Menunggu verifikasi pembayaran QRIS";
+    } else if (order.paymentMethod === "Cash") {
+      statusSummaryText = "Menunggu pembayaran tunai (Cash)";
+      statusDotColor = "bg-amber-500";
+    } else if (order.gatewayProvider === "duitku" || order.paymentMethod === "QRIS") {
+      statusSummaryText = "Menunggu verifikasi otomatis QRIS Duitku";
       statusDotColor = "bg-amber-500";
     } else {
-      statusSummaryText = "Menunggu pembayaran tunai (Cash)";
+      statusSummaryText = "Menunggu verifikasi pembayaran QRIS";
       statusDotColor = "bg-amber-500";
     }
   }

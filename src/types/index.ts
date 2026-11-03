@@ -117,6 +117,7 @@ export interface PaymentMethodsConfig {
 
 export interface Order {
   id: string; // TJ-YYMMDD-NNN
+  uuid?: string; // Underlying PostgreSQL UUID primary key
   token: string; // High-entropy secure access token
   createdAt: string; // ISO 8601
   customerName: string;

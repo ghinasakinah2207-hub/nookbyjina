@@ -420,6 +420,7 @@ export async function POST(request: Request) {
               email: `${existingOrder.id.toLowerCase()}@customer.nookbyjina.com`,
               phoneNumber: existingOrder.customerWhatsapp,
               customerVaName: existingOrder.customerName,
+              paymentMethod: "SP",
               expiryPeriod: 30,
             });
             existingPaymentUrl = inquiryRes.paymentUrl;
@@ -523,6 +524,7 @@ export async function POST(request: Request) {
           email: `${savedOrder.id.toLowerCase()}@customer.nookbyjina.com`,
           phoneNumber: cleanWhatsapp,
           customerVaName: cleanName,
+          paymentMethod: "SP",
           expiryPeriod: 30,
         });
 
@@ -535,17 +537,36 @@ export async function POST(request: Request) {
         const supabase = getServiceRoleSupabaseClient();
         if (supabase) {
           try {
-            await supabase
-              .from("payments")
-              .update({
-                gateway_provider: "duitku",
-                duitku_merchant_order_id: savedOrder.id,
-                duitku_reference: inquiryRes.reference,
-                payment_url: inquiryRes.paymentUrl,
-                gateway_status: "INVOICE_CREATED",
-                raw_response: inquiryRes as unknown as Record<string, unknown>,
-              })
-              .eq("order_id", (savedOrder as unknown as { uuid?: string }).uuid || savedOrder.id);
+            let orderUuid = (savedOrder as unknown as { uuid?: string }).uuid;
+            if (!orderUuid || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderUuid)) {
+              const { data: oRow } = await supabase
+                .from("orders")
+                .select("id")
+                .eq("order_number", savedOrder.id)
+                .maybeSingle();
+              if (oRow?.id) {
+                orderUuid = oRow.id;
+                savedOrder.uuid = oRow.id;
+              }
+            }
+
+            if (orderUuid && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderUuid)) {
+              const { error: updateErr } = await supabase
+                .from("payments")
+                .update({
+                  gateway_provider: "duitku",
+                  duitku_merchant_order_id: savedOrder.id,
+                  duitku_reference: inquiryRes.reference,
+                  payment_url: inquiryRes.paymentUrl,
+                  gateway_status: "INVOICE_CREATED",
+                  raw_response: inquiryRes as unknown as Record<string, unknown>,
+                })
+                .eq("order_id", orderUuid);
+
+              if (updateErr) {
+                console.error("[POST /api/orders] Error recording Duitku payment metadata:", updateErr);
+              }
+            }
           } catch (updateErr) {
             console.error("[POST /api/orders] Error recording Duitku payment metadata:", updateErr);
           }

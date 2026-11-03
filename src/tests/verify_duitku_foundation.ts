@@ -1,4 +1,5 @@
 import assert from "assert";
+import crypto from "crypto";
 import { NextRequest } from "next/server";
 import {
   generateDuitkuCallbackSignature,
@@ -84,6 +85,11 @@ async function runTests() {
   // 5. Inquiry Signature Formula check
   console.log("--- TEST 5: Inquiry HMAC-SHA256 Signature Generation ---");
   const inquirySig = generateDuitkuInquirySignature(merchantCode, merchantOrderId, 45000, apiKey);
+  const expectedInquirySig = crypto
+    .createHmac("sha256", apiKey)
+    .update(`${merchantCode}${merchantOrderId}45000`)
+    .digest("hex");
+  assert.strictEqual(inquirySig, expectedInquirySig, "Inquiry signature must strictly match HMAC-SHA256(merchantCode + merchantOrderId + paymentAmount, apiKey)");
   assert.strictEqual(inquirySig.length, 64, "Inquiry signature should be 64-char hex");
   console.log("✅ Passed: Inquiry signature generated correctly.\n");
 

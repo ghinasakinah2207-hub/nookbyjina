@@ -109,7 +109,11 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
                           ...local,
                           orderStatus: remote.orderStatus,
                           paymentStatus: remote.paymentStatus,
+                          paymentMethod: remote.paymentMethod || local.paymentMethod,
                           paymentDeadline: remote.paymentDeadline,
+                          gatewayProvider: remote.gatewayProvider || local.gatewayProvider,
+                          paymentUrl: remote.paymentUrl || local.paymentUrl,
+                          duitkuReference: remote.duitkuReference || local.duitkuReference,
                           token: local.token || getOrderToken(local.id) || "",
                         };
                       });
