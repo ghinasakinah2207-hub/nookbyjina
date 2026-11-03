@@ -230,9 +230,15 @@ export function PaymentsManager({ initialOrders }: PaymentsManagerProps = {}) {
                       <span className="text-[10px] text-[#8A4B08] bg-[#FFF4E5] px-2 py-0.5 rounded-md font-medium">
                         Tenggat 30 Menit
                       </span>
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                        QRIS Statis
-                      </span>
+                      {order.gatewayProvider === "duitku" ? (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-50 text-[#F25B09] border border-orange-200">
+                          QRIS Duitku
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                          QRIS Statis (Lama)
+                        </span>
+                      )}
                     </div>
 
                     <div className="text-xs text-[#111111]">
@@ -271,18 +277,25 @@ export function PaymentsManager({ initialOrders }: PaymentsManagerProps = {}) {
                         <MessageCircle className="w-4 h-4" />
                       </a>
 
-                      <button
-                        disabled={isOrderExpired(order)}
-                        onClick={() => setConfirmQrisOrder(order)}
-                        className={`px-3.5 py-2 rounded-xl text-white text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-                          isOrderExpired(order)
-                            ? "bg-neutral-300 text-neutral-500 cursor-not-allowed"
-                            : "bg-[#18794E] hover:bg-emerald-700 cursor-pointer"
-                        }`}
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>{isOrderExpired(order) ? "Kedaluwarsa" : "Verifikasi QRIS"}</span>
-                      </button>
+                      {order.gatewayProvider === "duitku" ? (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-50 border border-orange-200 text-[#F25B09] text-xs font-semibold">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Menunggu Callback Duitku</span>
+                        </div>
+                      ) : (
+                        <button
+                          disabled={isOrderExpired(order)}
+                          onClick={() => setConfirmQrisOrder(order)}
+                          className={`px-3.5 py-2 rounded-xl text-white text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                            isOrderExpired(order)
+                              ? "bg-neutral-300 text-neutral-500 cursor-not-allowed"
+                              : "bg-[#18794E] hover:bg-emerald-700 cursor-pointer"
+                          }`}
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>{isOrderExpired(order) ? "Kedaluwarsa" : "Verifikasi QRIS"}</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

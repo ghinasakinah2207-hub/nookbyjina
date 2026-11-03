@@ -432,21 +432,33 @@ Terima kasih telah memesan di Nook by Jina!`;
               Batas waktu pembayaran QRIS (30 menit) telah berakhir atau pesanan telah dibatalkan oleh sistem.
             </p>
           </div>
-        ) : isPendingQrisStatus(order.paymentStatus) ? (
+        ) : isPendingQrisStatus(order.paymentStatus) || (order.paymentMethod === "QRIS" && order.paymentStatus === "Menunggu Pembayaran") ? (
           <div className="p-3.5 bg-[#FFF4E5] border border-[#FBD38D] rounded-xl flex items-center justify-between text-xs text-[#8A4B08]">
             <div>
-              <p className="font-semibold">Pembayaran Menunggu Verifikasi</p>
+              <p className="font-semibold">Pembayaran Sedang Diproses</p>
               <p className="text-[11px] mt-0.5">
-                Admin akan memverifikasi di mutasi DANA Bisnis.
+                {order.gatewayProvider === "duitku"
+                  ? "Menunggu verifikasi pembayaran otomatis dari gateway Duitku."
+                  : "Admin akan memverifikasi di mutasi DANA Bisnis."}
               </p>
             </div>
-            <Link
-              href={`/pembayaran/${order.id}`}
-              className="px-3 py-1.5 bg-[#F25B09] text-white rounded-lg font-semibold text-xs flex items-center gap-1 shrink-0"
-            >
-              <QrCode className="w-3.5 h-3.5" />
-              <span>QRIS</span>
-            </Link>
+            {order.paymentUrl ? (
+              <a
+                href={order.paymentUrl}
+                className="px-3 py-1.5 bg-[#F25B09] text-white rounded-lg font-semibold text-xs flex items-center gap-1 shrink-0"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span>Bayar Duitku</span>
+              </a>
+            ) : (
+              <Link
+                href={`/pembayaran/${order.id}`}
+                className="px-3 py-1.5 bg-[#F25B09] text-white rounded-lg font-semibold text-xs flex items-center gap-1 shrink-0"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span>QRIS</span>
+              </Link>
+            )}
           </div>
         ) : order.paymentMethod === "Cash" && isPendingCashStatus(order.paymentStatus) ? (
           <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-1 text-xs text-[#8A4B08]">
@@ -569,7 +581,9 @@ Terima kasih telah memesan di Nook by Jina!`;
               • <strong>Metode Pembayaran:</strong>{" "}
               {order.paymentMethod === "Cash"
                 ? "Cash (Bayar Tunai)"
-                : `QRIS Statis Merchant (${order.merchantName || "DANA Bisnis"})`}
+                : order.gatewayProvider === "duitku"
+                ? "QRIS (Pembayaran Online Duitku)"
+                : `QRIS Merchant (${order.merchantName || "Nook by Jina"})`}
             </p>
             {order.orderNote ? (
               <p>
@@ -654,4 +668,3 @@ export default function OrderDetailPage() {
     </Suspense>
   );
 }
-

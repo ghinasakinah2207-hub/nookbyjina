@@ -106,7 +106,9 @@ export type PaymentStatus =
   | "Lunas"
   | "Dibatalkan";
 
-export type PaymentMethod = "QRIS Statis" | "Cash";
+export type PaymentMethod = "QRIS" | "Cash" | "QRIS Statis";
+
+export type GatewayProvider = "duitku" | null;
 
 export interface PaymentMethodsConfig {
   qris: boolean;
@@ -129,8 +131,11 @@ export interface Order {
   orderStatus: OrderStatus;
   paymentStatus: PaymentStatus;
   paymentMethod: PaymentMethod;
-  paymentDeadline: string; // ISO 8601, 30 minutes after creation
+  paymentDeadline: string; // ISO 8601
   merchantName: string;
+  gatewayProvider?: GatewayProvider;
+  duitkuReference?: string;
+  paymentUrl?: string;
 }
 
 export interface Banner {
@@ -190,4 +195,3 @@ export interface HomepageSectionWithProducts {
   viewAllUrl?: string | null;
   products: Product[];
 }
-

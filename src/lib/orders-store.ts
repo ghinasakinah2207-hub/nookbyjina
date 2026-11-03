@@ -113,6 +113,9 @@ function mapDatabaseRowToOrder(row: Record<string, unknown>, rawToken?: string):
     paymentMethod: normalizedMethod,
     paymentDeadline: (row.payment_deadline as string) || "",
     merchantName: (row.merchant_name as string) || "Nook by Jina",
+    gatewayProvider: (row.gateway_provider as Order["gatewayProvider"]) || undefined,
+    duitkuReference: (row.duitku_reference as string) || undefined,
+    paymentUrl: (row.payment_url as string) || undefined,
   };
 }
 
@@ -153,13 +156,16 @@ export async function saveOrder(order: Order): Promise<Order> {
       );
     }
   } else {
+    // QRIS can be either "Menunggu Verifikasi" (legacy static) or "Menunggu Pembayaran" (Duitku gateway)
     if (
       rawStatus &&
       rawStatus !== "Menunggu Verifikasi" &&
-      rawStatus !== "Menunggu verifikasi admin"
+      rawStatus !== "Menunggu verifikasi admin" &&
+      rawStatus !== "Menunggu Pembayaran" &&
+      rawStatus !== "Menunggu pembayaran"
     ) {
       throw new Error(
-        `Status pembayaran awal "${rawStatus}" tidak valid untuk metode QRIS (harus "Menunggu verifikasi admin").`
+        `Status pembayaran awal "${rawStatus}" tidak valid untuk metode QRIS.`
       );
     }
   }
@@ -252,6 +258,33 @@ export async function saveOrder(order: Order): Promise<Order> {
     ? rawMsg
     : "Gagal menyimpan pesanan ke database. Silakan coba lagi dalam beberapa saat.";
   throw new Error(safeMsg);
+}
+
+export async function getOrderById(orderId: string): Promise<Order | null> {
+  if (!orderId) return null;
+  const client = getServiceRoleSupabaseClient();
+  if (!client) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("SUPABASE_SERVICE_ROLE_KEY belum dikonfigurasi.");
+    }
+    const devOrder = devOrdersById.get(orderId);
+    return devOrder ? { ...devOrder } : null;
+  }
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
+  let orderQuery = client
+    .from("orders")
+    .select("id, order_number, total, payment_method, payment_status, order_status, paid_at, cancelled_at");
+
+  if (isUuid) {
+    orderQuery = orderQuery.eq("id", orderId);
+  } else {
+    orderQuery = orderQuery.eq("order_number", orderId);
+  }
+
+  const { data: order, error } = await orderQuery.maybeSingle();
+  if (error || !order) return null;
+  return mapDatabaseRowToOrder(order);
 }
 
 /**
@@ -559,12 +592,6 @@ export async function updateOrderStatusServer(
           (rawTargetStatus === "Menunggu Verifikasi" || rawTargetStatus === "Menunggu verifikasi admin")
         ) {
           throw new Error('Metode pembayaran Cash tidak valid dengan status "Menunggu verifikasi admin".');
-        }
-        if (
-          (currentMethod === "QRIS" || currentMethod === "QRIS Statis") &&
-          (rawTargetStatus === "Menunggu Pembayaran" || rawTargetStatus === "Menunggu pembayaran")
-        ) {
-          throw new Error('Metode pembayaran QRIS tidak valid dengan status "Menunggu pembayaran".');
         }
       }
 

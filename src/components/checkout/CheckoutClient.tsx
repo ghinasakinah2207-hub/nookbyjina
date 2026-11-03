@@ -101,7 +101,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
     const methods: PaymentMethod[] = [];
     const qrisActive = storeSettings?.paymentMethods?.qris !== false; // defaults to true
     const cashActive = Boolean(storeSettings?.paymentMethods?.cash);
-    if (qrisActive) methods.push("QRIS Statis");
+    if (qrisActive) methods.push("QRIS");
     if (cashActive) methods.push("Cash");
     return methods;
   }, [storeSettings]);
@@ -321,10 +321,14 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
         selectedItems.forEach((item) => removeFromCart(item.id));
       }
 
-      // Navigate appropriately based on selected payment method
+      // Navigate appropriately based on payment result
       if (selectedPaymentMethod === "Cash") {
         router.push(`/pesanan/${data.order.token}`);
+      } else if (data.paymentUrl) {
+        // Direct redirect to Duitku payment gateway
+        window.location.href = data.paymentUrl;
       } else {
+        // Fallback for legacy QRIS or offline dev
         router.push(`/pembayaran/${data.order.id}`);
       }
     } catch (err: unknown) {
@@ -869,11 +873,11 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
               </div>
             ) : (
               <div className="space-y-2">
-                {/* Option 1: QRIS Statis */}
-                {availablePaymentMethods.includes("QRIS Statis") && (
+                {/* Option 1: QRIS Online */}
+                {(availablePaymentMethods.includes("QRIS") || availablePaymentMethods.includes("QRIS Statis")) && (
                   <label
                     className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
-                      selectedPaymentMethod === "QRIS Statis"
+                      selectedPaymentMethod === "QRIS" || selectedPaymentMethod === "QRIS Statis"
                         ? "border-[#F25B09] bg-orange-50/40 ring-1 ring-[#F25B09]"
                         : "border-[#E5E5E5] bg-white hover:border-neutral-300"
                     }`}
@@ -881,22 +885,23 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                     <input
                       type="radio"
                       name="paymentMethodOption"
-                      value="QRIS Statis"
-                      checked={selectedPaymentMethod === "QRIS Statis"}
-                      onChange={() => setSelectedPaymentMethod("QRIS Statis")}
+                      value="QRIS"
+                      checked={selectedPaymentMethod === "QRIS" || selectedPaymentMethod === "QRIS Statis"}
+                      onChange={() => setSelectedPaymentMethod("QRIS")}
                       className="w-4 h-4 mt-0.5 text-[#F25B09] focus:ring-[#F25B09] accent-[#F25B09]"
                     />
                     <div className="space-y-0.5 min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <QrCode className="w-3.5 h-3.5 text-[#F25B09]" />
                         <span className="text-xs font-bold text-[#111111]">
-                          QRIS Statis
+                          QRIS
+                        </span>
+                        <span className="text-[10px] font-semibold text-[#F25B09] bg-orange-100 px-1.5 py-0.2 rounded">
+                          Online
                         </span>
                       </div>
                       <p className="text-[11px] text-[#737373] leading-relaxed">
-                        Pembayaran non-tunai melalui QRIS merchant (
-                        {storeSettings?.qrisMerchantName || "Nook by Jina"}). Kode QR dan
-                        panduan transfer akan ditampilkan setelah pesanan dibuat.
+                        Pembayaran digital praktis melalui QRIS nasional (BCA, Mandiri, BRI, GoPay, OVO, Dana, ShopeePay, dll). Diproses secara instan dan aman melalui gateway pembayaran online.
                       </p>
                     </div>
                   </label>

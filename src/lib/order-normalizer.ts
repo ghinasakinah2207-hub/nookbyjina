@@ -34,14 +34,17 @@ export function normalizePaymentStatus(rawStatus?: unknown, rawMethod?: unknown)
 }
 
 /**
- * Normalizes payment method into canonical PaymentMethod enum ("QRIS Statis" | "Cash").
+ * Normalizes payment method into canonical PaymentMethod enum ("QRIS" | "Cash" | "QRIS Statis").
  */
 export function normalizePaymentMethod(rawMethod?: unknown): PaymentMethod {
   const methodStr = String(rawMethod || "").trim().toLowerCase();
   if (methodStr === "cash" || methodStr.includes("cash") || methodStr.includes("tunai")) {
     return "Cash";
   }
-  return "QRIS Statis";
+  if (methodStr === "qris statis") {
+    return "QRIS Statis";
+  }
+  return "QRIS";
 }
 
 export function isQrisMethod(method?: unknown): boolean {
@@ -91,6 +94,8 @@ export function isOrderExpired(
     order_status?: unknown;
     createdAt?: unknown;
     created_at?: unknown;
+    gatewayProvider?: unknown;
+    gateway_provider?: unknown;
   } | null,
   nowMs: number = Date.now()
 ): boolean {
@@ -99,6 +104,7 @@ export function isOrderExpired(
   const paymentStatus = String(order.paymentStatus || order.payment_status || "").trim().toLowerCase();
   const orderStatus = String(order.orderStatus || order.order_status || "").trim();
   const paymentMethod = String(order.paymentMethod || order.payment_method || "").trim();
+  const gatewayProvider = String(order.gatewayProvider || order.gateway_provider || "").trim().toLowerCase();
 
   // 1. Paid orders never expire
   if (isPaidStatus(paymentStatus)) {
@@ -115,13 +121,17 @@ export function isOrderExpired(
     return false;
   }
 
-  // 4. Only QRIS payment method is subject to the 30-minute verification window
+  // 4. Cash never expires due to payment deadline
   if (!isQrisMethod(paymentMethod)) {
     return false;
   }
 
-  // 5. Must be an unpaid order waiting for verification or in newly created state
-  const isPending = isPendingQrisStatus(paymentStatus) || orderStatus === "Pesanan baru";
+  // 5. Must be an unpaid order in pending/initial state
+  const isPending =
+    isPendingQrisStatus(paymentStatus) ||
+    orderStatus === "Pesanan baru" ||
+    (paymentStatus === "menunggu pembayaran" && gatewayProvider === "duitku");
+
   if (!isPending) {
     return false;
   }
@@ -132,8 +142,10 @@ export function isOrderExpired(
 
   let deadlineMs: number;
   if (rawDeadline && !isNaN(Date.parse(rawDeadline))) {
+    // If an authoritative deadline exists (e.g. gateway expiry or legacy deadline), use it directly
     deadlineMs = new Date(rawDeadline).getTime();
   } else if (rawCreatedAt && !isNaN(Date.parse(rawCreatedAt))) {
+    // For legacy static QRIS without explicit payment_deadline, fall back to 30 mins
     deadlineMs = new Date(rawCreatedAt).getTime() + ORDER_PAYMENT_DEADLINE_MS;
   } else {
     return false;
