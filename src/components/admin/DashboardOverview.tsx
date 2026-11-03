@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   ShoppingBag,
   Clock,
-  QrCode,
   DollarSign,
   ArrowRight,
   ShieldCheck,
@@ -16,6 +15,7 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
+  Settings,
 } from "lucide-react";
 import { Order } from "@/types";
 import { DashboardMetrics } from "@/lib/admin-reports";
@@ -189,25 +189,25 @@ export function DashboardOverview({
           </div>
         </div>
 
-        {/* Card 2: Menunggu Verifikasi QRIS */}
+        {/* Card 2: Menunggu Bayar */}
         <div className="bg-white border border-[#E5E5E5] rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[#737373] font-medium">Verifikasi QRIS</span>
+            <span className="text-xs text-[#737373] font-medium">Menunggu Bayar</span>
             <div className="w-8 h-8 rounded-xl bg-amber-50 text-[#8A4B08] flex items-center justify-center">
-              <QrCode className="w-4 h-4" />
+              <Clock className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3">
             <div className="text-2xl sm:text-3xl font-extrabold text-[#111111]" suppressHydrationWarning>
-              {currentMetrics.pendingQrisCount}
+              {currentMetrics.unpaidOrdersCount}
             </div>
             <div className="mt-1 flex items-center gap-1.5">
-              {currentMetrics.pendingQrisCount > 0 ? (
+              {currentMetrics.unpaidOrdersCount > 0 ? (
                 <span className="text-[10px] font-semibold text-[#8A4B08] bg-[#FFF4E5] px-2 py-0.5 rounded-full">
-                  Cek DANA Bisnis
+                  Belum Lunas
                 </span>
               ) : (
-                <span className="text-[10px] text-[#737373]">Tidak ada antrean</span>
+                <span className="text-[10px] text-[#737373]">Semua lunas</span>
               )}
             </div>
           </div>
@@ -278,11 +278,11 @@ export function DashboardOverview({
 
           <div className="p-2.5 rounded-xl bg-[#FAF9F8] border border-[#F0F0F0] flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-[#8A4B08]">
-              <QrCode className="w-3.5 h-3.5" />
-              <span className="font-medium text-[#111111]">Cek QRIS</span>
+              <Clock className="w-3.5 h-3.5" />
+              <span className="font-medium text-[#111111]">Menunggu Bayar</span>
             </div>
             <span className="font-bold text-[#111111] font-mono">
-              {currentMetrics.paymentBreakdown.menungguVerifikasi}
+              {currentMetrics.unpaidOrdersCount}
             </span>
           </div>
 
@@ -328,17 +328,17 @@ export function DashboardOverview({
         </Link>
 
         <Link
-          href="/admin/pembayaran"
+          href="/admin/pengaturan"
           className="bg-white border border-[#E5E5E5] hover:border-neutral-400 p-3.5 rounded-2xl flex items-center gap-3 transition-colors group"
         >
           <div className="w-8 h-8 rounded-xl bg-neutral-100 group-hover:bg-[#111111] group-hover:text-white flex items-center justify-center text-[#111111] transition-colors">
-            <QrCode className="w-4 h-4" />
+            <Settings className="w-4 h-4" />
           </div>
           <div className="min-w-0">
             <span className="text-xs font-bold text-[#111111] block truncate">
-              Verifikasi QRIS
+              Pengaturan Toko
             </span>
-            <span className="text-[10px] text-[#737373] block truncate">Mutasi DANA</span>
+            <span className="text-[10px] text-[#737373] block truncate">Buka-tutup & tarif</span>
           </div>
         </Link>
 

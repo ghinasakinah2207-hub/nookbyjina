@@ -8,7 +8,6 @@ import {
   ShoppingBag,
   UtensilsCrossed,
   Layers,
-  QrCode,
   BarChart3,
   Settings,
   Store,
@@ -64,13 +63,6 @@ const NAV_ITEMS: NavItem[] = [
     badgeColor: "bg-blue-100 text-blue-700",
   },
   {
-    name: "Verifikasi QRIS",
-    href: "/admin/pembayaran",
-    icon: QrCode,
-    badge: "DANA",
-    badgeColor: "bg-emerald-100 text-[#18794E]",
-  },
-  {
     name: "Laporan Penjualan",
     href: "/admin/laporan",
     icon: BarChart3,
@@ -107,12 +99,6 @@ const ROUTE_CONFIG: Record<string, RouteHeaderConfig> = {
     description:
       "Konfigurasi banner hero beranda, susunan seksi, visibilitas, dan penugasan produk etalase beranda pelanggan",
   },
-  "/admin/pembayaran": {
-    title: "Verifikasi Pembayaran & QRIS",
-    badge: "QRIS Merchant",
-    description:
-      "Pemeriksaan mutasi DANA Bisnis merchant dan konfirmasi pesanan lunas",
-  },
   "/admin/laporan": {
     title: "Laporan Penjualan & Keuangan",
     badge: "Keuangan",
@@ -139,7 +125,6 @@ export function AdminShell({
   const [currentUserEmail, setCurrentUserEmail] = useState(userEmail);
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const [orderQueueCount, setOrderQueueCount] = useState<number>(0);
-  const [qrisQueueCount, setQrisQueueCount] = useState<number>(0);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -189,26 +174,16 @@ export function AdminShell({
         const data = await res.json();
         if (isMounted && data?.success && Array.isArray(data.orders)) {
           let newOrders = 0;
-          let pendingQris = 0;
           for (const order of data.orders) {
             const status = String(order.orderStatus || order.status || "").toLowerCase();
-            const payStatus = String(order.paymentStatus || "").toLowerCase();
-            const method = String(order.paymentMethod || order.payment_method || "").toLowerCase();
             const isExpired = order.expiresAt ? new Date(order.expiresAt).getTime() < Date.now() : false;
 
             // Pending/new orders queue
             if ((status === "pesanan baru" || status === "menunggu_konfirmasi") && !isExpired) {
               newOrders++;
             }
-            // Pending QRIS queue
-            const isQris = method.includes("qris") || method.includes("dana");
-            const isWaitingVerification = payStatus.includes("menunggu") || payStatus === "pending";
-            if (isQris && isWaitingVerification && !isExpired && status !== "dibatalkan") {
-              pendingQris++;
-            }
           }
           setOrderQueueCount(newOrders);
-          setQrisQueueCount(pendingQris);
         }
       } catch {
         // Silently catch background errors
@@ -249,7 +224,6 @@ export function AdminShell({
   const isDashboardActive = pathname === "/admin";
   const isOrdersActive = pathname.startsWith("/admin/pesanan");
   const isMenuActive = pathname.startsWith("/admin/menu") || pathname.startsWith("/admin/produk");
-  const isQrisActive = pathname.startsWith("/admin/pembayaran");
   const isMoreActive =
     moreSheetOpen ||
     pathname.startsWith("/admin/beranda") ||
@@ -539,39 +513,7 @@ export function AdminShell({
             </div>
           </Link>
 
-          {/* 4. QRIS */}
-          <Link
-            href="/admin/pembayaran"
-            prefetch={true}
-            className="flex flex-col items-center justify-center flex-1 h-full py-1 min-h-[48px] select-none"
-          >
-            <div
-              className={`w-[60px] h-[48px] rounded-xl flex flex-col items-center justify-center transition-all duration-200 ${
-                isQrisActive
-                  ? "bg-[#FFF0E8] text-[#F25B09] font-medium"
-                  : "bg-transparent text-[#737373] hover:text-[#111111]"
-              }`}
-            >
-              <div className="relative flex items-center justify-center w-6 h-6">
-                <QrCode
-                  className="w-5 h-5 transition-transform"
-                  strokeWidth={isQrisActive ? 2.3 : 1.8}
-                  aria-hidden="true"
-                />
-                {qrisQueueCount > 0 && (
-                  <span
-                    className="absolute -top-1.5 -right-2 bg-[#F25B09] text-white text-[10px] font-semibold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border border-white"
-                    aria-label={`${qrisQueueCount} verifikasi QRIS menunggu`}
-                  >
-                    {qrisQueueCount > 99 ? "99+" : qrisQueueCount}
-                  </span>
-                )}
-              </div>
-              <span className="text-[11px] mt-0.5 leading-none">QRIS</span>
-            </div>
-          </Link>
-
-          {/* 5. Lainnya */}
+          {/* 4. Lainnya */}
           <button
             type="button"
             onClick={() => setMoreSheetOpen((prev) => !prev)}

@@ -183,7 +183,7 @@ export function calculateDashboardMetrics(
   let dibatalkanPayment = 0;
 
   for (const order of orders) {
-    const isExpired = isOrderExpired(order);
+    const isExpired = isOrderExpired(order, referenceDate.getTime());
     const isCancelled = order.orderStatus === "Dibatalkan" || isExpired;
     const isPaid = order.paymentStatus === "Lunas";
     const orderWibKey = getWIBDateKey(order.createdAt);

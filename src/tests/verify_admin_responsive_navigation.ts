@@ -83,24 +83,20 @@ function verifyAdminResponsiveNavigation() {
     "Tab 3 uses UtensilsCrossed icon"
   );
 
-  // Tab 4: QRIS
+  // Verifikasi QRIS tab is permanently removed as Duitku QRIS verifies automatically
   assert(
-    content.includes('href="/admin/pembayaran"') && content.includes(">QRIS<"),
-    "Tab 4 (QRIS) links to /admin/pembayaran with label 'QRIS'"
-  );
-  assert(
-    content.includes("QrCode"),
-    "Tab 4 uses QrCode icon"
+    !content.includes('href="/admin/pembayaran"'),
+    "Tab QRIS (/admin/pembayaran) is permanently removed from navigation"
   );
 
-  // Tab 5: Lainnya
+  // Tab 4: Lainnya
   assert(
     content.includes(">Lainnya<") && content.includes("setMoreSheetOpen"),
-    "Tab 5 (Lainnya) toggles bottom sheet"
+    "Tab 4 (Lainnya) toggles bottom sheet"
   );
   assert(
     content.includes("MoreHorizontal"),
-    "Tab 5 uses MoreHorizontal icon"
+    "Tab 4 uses MoreHorizontal icon"
   );
 
   console.log("\n--- Section 2: Active Indicators & Queue Badges ---");
@@ -123,10 +119,6 @@ function verifyAdminResponsiveNavigation() {
   assert(
     content.includes("orderQueueCount > 0"),
     "Pesanan tab renders queue badge when pending orders exist"
-  );
-  assert(
-    content.includes("qrisQueueCount > 0"),
-    "QRIS tab renders queue badge when pending verifications exist"
   );
 
   console.log("\n--- Section 3: 'Lainnya' Bottom Sheet Modal ---");

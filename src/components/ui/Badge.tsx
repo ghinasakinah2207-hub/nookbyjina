@@ -43,7 +43,7 @@ export function StatusBadge({
   const displayStatus = isPendingVerifikasi
     ? "Menunggu Verifikasi"
     : isPendingPembayaran
-    ? "Menunggu Pembayaran"
+    ? "Menunggu bayar"
     : isPaid
     ? "Lunas"
     : isCancelled
@@ -69,7 +69,13 @@ export function StatusBadge({
           }`}
         />
       )}
-      {type === "payment" ? `Pembayaran: ${displayStatus}` : displayStatus}
+      {type === "payment"
+        ? isPendingPembayaran
+          ? "Menunggu bayar"
+          : isPaid
+          ? "Lunas"
+          : displayStatus
+        : displayStatus}
     </span>
   );
 }
