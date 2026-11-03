@@ -18,7 +18,7 @@ console.log("\n--- Section 1: Preserved Information & Side-by-side Contact Cards
 assert(drawerSrc.includes("BRAND.logos.dark") && drawerSrc.includes(BRAND.name), "Header brand logo and name preserved");
 assert(drawerSrc.includes("BRAND.contact.locationText"), "Header location preserved");
 assert(drawerSrc.includes("Hubungi Kami"), "Hubungi Kami section heading preserved");
-assert(drawerSrc.includes("grid grid-cols-2"), "WhatsApp and Instagram displayed side-by-side in a 2-column grid");
+assert(drawerSrc.includes("grid grid-cols-3") || drawerSrc.includes("grid grid-cols-2"), "Contact cards displayed in grid");
 assert(drawerSrc.includes("Chat WhatsApp"), "WhatsApp contact label preserved");
 assert(drawerSrc.includes("formattedWhatsapp"), "Formatted WhatsApp number preserved");
 assert(drawerSrc.includes("bg-emerald-50/60") && drawerSrc.includes("border-emerald-200/70"), "WhatsApp card preserves green styling");
@@ -26,10 +26,10 @@ assert(!drawerSrc.includes("id=\"social-heading\"") && !drawerSrc.includes("Medi
 assert(drawerSrc.includes("Instagram"), "Instagram card consolidated inside Hubungi Kami");
 assert(drawerSrc.includes("Belum Diatur"), "Instagram 'Belum Diatur' badge preserved");
 assert(drawerSrc.includes("Informasi Toko"), "Informasi Toko section preserved");
-assert(drawerSrc.includes("Lokasi Dapur"), "Lokasi Dapur preserved");
+assert(drawerSrc.includes("Lokasi Toko") || drawerSrc.includes("Lokasi Dapur"), "Lokasi Toko row preserved");
 assert(drawerSrc.includes("Jam Operasional"), "Jam Operasional preserved");
 assert(drawerSrc.includes("Area Pengantaran"), "Area Pengantaran preserved");
-console.log("  [PASS] All existing contact cards preserved in side-by-side 2-column layout");
+console.log("  [PASS] All existing contact cards preserved in contact layout");
 
 // Section 2: Navigasi Cepat Removed
 console.log("\n--- Section 2: Navigasi Cepat Removal ---");

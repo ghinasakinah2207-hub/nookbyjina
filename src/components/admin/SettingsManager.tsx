@@ -18,6 +18,7 @@ import {
   Upload,
   Trash2,
   Image as ImageIcon,
+  Mail,
 } from "lucide-react";
 import { StoreSettings } from "@/types";
 import { formatRupiah } from "@/data/dummy-data";
@@ -72,10 +73,13 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
     formState.storeName !== confirmedSettings.storeName ||
     formState.tagline !== confirmedSettings.tagline ||
     formState.location !== confirmedSettings.location ||
+    (formState.address || "").trim() !== (confirmedSettings.address || "").trim() ||
+    (formState.mapsUrl || "").trim() !== (confirmedSettings.mapsUrl || "").trim() ||
     formState.isOpen !== confirmedSettings.isOpen ||
     formState.operatingHoursText !== confirmedSettings.operatingHoursText ||
     formState.adminWhatsapp !== confirmedSettings.adminWhatsapp ||
     (formState.instagramUrl || "").trim() !== (confirmedSettings.instagramUrl || "").trim() ||
+    (formState.supportEmail || "").trim() !== (confirmedSettings.supportEmail || "").trim() ||
     formState.qrisMerchantName !== confirmedSettings.qrisMerchantName ||
     formState.qrisNmid !== confirmedSettings.qrisNmid ||
     (formState.qrisImageUrl || "").trim() !== (confirmedSettings.qrisImageUrl || "").trim() ||
@@ -119,6 +123,13 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
       }
     }
 
+    if (formState.supportEmail && formState.supportEmail.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formState.supportEmail.trim())) {
+        return "Format email support tidak valid (contoh: support@nookbyjina.com).";
+      }
+    }
+
     return null;
   };
 
@@ -146,8 +157,12 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
     const payload: StoreSettings = {
       ...formState,
       storeName: formState.storeName.trim(),
+      location: (formState.location || "Lhoksukon, Aceh Utara").trim(),
+      address: (formState.address || "").trim(),
+      mapsUrl: (formState.mapsUrl || "").trim(),
       adminWhatsapp: formState.adminWhatsapp.replace(/[^0-9]/g, ""),
       instagramUrl: igCheck && igCheck.isValid ? igCheck.normalized : "",
+      supportEmail: (formState.supportEmail || "").trim(),
       deliveryConfig: {
         ...formState.deliveryConfig,
         configuredArea: formState.deliveryConfig.configuredArea.trim(),
@@ -169,14 +184,20 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
           const submittedWa = payload.adminWhatsapp.replace(/[^0-9]/g, "");
           const savedIg = (result.settings.instagramUrl || "").trim();
           const submittedIg = (payload.instagramUrl || "").trim();
+          const savedEmail = (result.settings.supportEmail || "").trim();
+          const submittedEmail = (payload.supportEmail || "").trim();
 
           const waMismatch = submittedWa && savedWa !== submittedWa;
           const igMismatch = submittedIg && savedIg !== submittedIg;
+          const emailMismatch =
+            submittedEmail &&
+            savedEmail.toLowerCase() !== submittedEmail.toLowerCase();
 
-          if (waMismatch || igMismatch) {
+          if (waMismatch || igMismatch || emailMismatch) {
             const mismatchFields: string[] = [];
             if (waMismatch) mismatchFields.push(`WhatsApp (tersimpan: "${savedWa || "kosong"}")`);
             if (igMismatch) mismatchFields.push(`Instagram (tersimpan: "${savedIg || "kosong"}")`);
+            if (emailMismatch) mismatchFields.push(`Email Support (tersimpan: "${savedEmail || "kosong"}")`);
 
             setErrorMessage(
               `Sebagian pengaturan tidak terverifikasi di server: ${mismatchFields.join(", ")}. Nilai input Anda tetap dipertahankan. Silakan periksa koneksi atau schema database.`
@@ -499,7 +520,7 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
 
             <div>
               <label className="block font-semibold text-[#111111] mb-1.5">
-                Lokasi / Alamat
+                Label Lokasi Singkat
               </label>
               <input
                 type="text"
@@ -508,8 +529,47 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
                   setFormState({ ...formState, location: e.target.value })
                 }
                 className="w-full px-3.5 py-2.5 bg-white border border-[#E5E5E5] rounded-xl text-xs text-[#111111] focus:border-[#111111] focus:ring-1 focus:ring-[#111111] outline-none transition-colors"
-                placeholder="Contoh: Medan, Sumatera Utara"
+                placeholder="Contoh: Lhoksukon, Aceh Utara"
               />
+              <p className="text-[10px] text-[#737373] mt-1">
+                Label ringkas untuk header dan navigasi (contoh: Lhoksukon, Aceh Utara).
+              </p>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block font-semibold text-[#111111] mb-1.5">
+                Alamat Lengkap Toko (Publik)
+              </label>
+              <textarea
+                rows={2}
+                value={formState.address || ""}
+                onChange={(e) =>
+                  setFormState({ ...formState, address: e.target.value })
+                }
+                className="w-full px-3.5 py-2.5 bg-white border border-[#E5E5E5] rounded-xl text-xs text-[#111111] focus:border-[#111111] focus:ring-1 focus:ring-[#111111] outline-none transition-colors resize-none"
+                placeholder="Contoh: 28R9+M8H, Dayah Lb, Kec. Lhoksukon, Kabupaten Aceh Utara, Aceh 24382"
+              />
+              <p className="text-[10px] text-[#737373] mt-1">
+                Alamat fisik publik gerai / container box untuk tempat penjemputan pesanan oleh pelanggan dan verifikasi merchant.
+              </p>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block font-semibold text-[#111111] mb-1.5">
+                Link Google Maps Lokasi Toko
+              </label>
+              <input
+                type="url"
+                value={formState.mapsUrl || ""}
+                onChange={(e) =>
+                  setFormState({ ...formState, mapsUrl: e.target.value })
+                }
+                className="w-full px-3.5 py-2.5 bg-white border border-[#E5E5E5] rounded-xl text-xs text-[#111111] focus:border-[#111111] focus:ring-1 focus:ring-[#111111] outline-none transition-colors"
+                placeholder="https://maps.google.com/?q=..."
+              />
+              <p className="text-[10px] text-[#737373] mt-1">
+                Tautan Google Maps resmi lokasi toko agar pelanggan dapat langsung membuka peta / navigasi.
+              </p>
             </div>
 
             <div className="sm:col-span-2">
@@ -546,7 +606,7 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
                 Informasi Kontak Toko
               </h3>
               <p className="text-[11px] text-[#737373]">
-                Kelola nomor WhatsApp admin dan tautan profil Instagram resmi toko
+                Kelola nomor WhatsApp admin, tautan Instagram resmi, dan email support toko
               </p>
             </div>
           </div>
@@ -618,6 +678,42 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
                 />
                 <p className="text-[10px] text-[#737373] mt-1.5">
                   Tautan lengkap profil Instagram toko (contoh: https://www.instagram.com/yourhandle/). Kosongkan jika belum tersedia.
+                </p>
+              </div>
+            </div>
+
+            {/* Subtle Divider */}
+            <div className="border-t border-neutral-100" />
+
+            {/* 3. Email Support Toko Section */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-sky-50 text-[#0284C7] flex items-center justify-center flex-shrink-0">
+                  <Mail className="w-3.5 h-3.5" />
+                </div>
+                <h4 className="text-xs font-bold text-[#111111]">
+                  Email Support Toko
+                </h4>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#111111] mb-1.5">
+                  Email Support
+                </label>
+                <input
+                  type="email"
+                  value={formState.supportEmail || ""}
+                  onChange={(e) =>
+                    setFormState({
+                      ...formState,
+                      supportEmail: e.target.value,
+                    })
+                  }
+                  className="w-full px-3.5 py-2.5 bg-white border border-[#E5E5E5] rounded-xl text-xs text-[#111111] focus:border-[#111111] focus:ring-1 focus:ring-[#111111] outline-none transition-colors"
+                  placeholder="support@nookbyjina.com"
+                />
+                <p className="text-[10px] text-[#737373] mt-1.5">
+                  Alamat email resmi untuk bantuan pelanggan dan verifikasi merchant (contoh: support@nookbyjina.com). Kosongkan jika belum tersedia.
                 </p>
               </div>
             </div>

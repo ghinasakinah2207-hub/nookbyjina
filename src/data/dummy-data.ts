@@ -4,10 +4,13 @@ export const STORE_SETTINGS: StoreSettings = {
   storeName: "Nook by Jina",
   tagline: "Makanan homemade dibuat dengan penuh rasa dan kehangatan.",
   location: "Lhoksukon, Aceh Utara",
+  address: "28R9+M8H, Dayah Lb, Kec. Lhoksukon, Kabupaten Aceh Utara, Aceh 24382",
+  mapsUrl: "https://maps.google.com/?q=28R9%2BM8H,+Dayah+Lb,+Kec.+Lhoksukon,+Kabupaten+Aceh+Utara,+Aceh+24382",
   isOpen: true,
   operatingHoursText: "Setiap Hari: 09:00 – 17:00 WIB",
   adminWhatsapp: "6282273180000", // Format internasional tanpa +, placeholder admin
   instagramUrl: "",
+  supportEmail: "",
   qrisMerchantName: "Nook by Jina",
   qrisNmid: "ID1020038829101",
   qrisImageUrl: "",

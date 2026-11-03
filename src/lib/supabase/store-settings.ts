@@ -32,6 +32,18 @@ export function readLocalStoreSettings(): StoreSettings {
           parsed.instagramUrl !== undefined
             ? parsed.instagramUrl
             : (DEFAULT_SETTINGS.instagramUrl || ""),
+        supportEmail:
+          parsed.supportEmail !== undefined
+            ? parsed.supportEmail
+            : (DEFAULT_SETTINGS.supportEmail || ""),
+        address:
+          parsed.address !== undefined
+            ? parsed.address
+            : (DEFAULT_SETTINGS.address || ""),
+        mapsUrl:
+          parsed.mapsUrl !== undefined
+            ? parsed.mapsUrl
+            : (DEFAULT_SETTINGS.mapsUrl || ""),
         qrisImageUrl:
           parsed.qrisImageUrl !== undefined
             ? parsed.qrisImageUrl
@@ -117,6 +129,13 @@ export function validateStoreSettings(settings: StoreSettings): string | null {
     }
   }
 
+  if (settings.supportEmail && settings.supportEmail.trim()) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(settings.supportEmail.trim())) {
+      return "Format email support tidak valid (contoh: support@nookbyjina.com).";
+    }
+  }
+
   if (settings.paymentMethods?.qris) {
     const merchantName = (settings.qrisMerchantName || "").trim();
     if (!merchantName || merchantName.length < 2) {
@@ -142,7 +161,7 @@ export async function fetchAuthoritativeStoreSettings(
       client
         .from("store_settings")
         .select(
-          "id, store_name, is_open, whatsapp_number, qris_image_url, updated_at, location, operating_hours_text, qris_merchant_name, qris_nmid, tagline, instagram_url, payment_methods"
+          "id, store_name, is_open, whatsapp_number, qris_image_url, updated_at, location, address, maps_url, operating_hours_text, qris_merchant_name, qris_nmid, tagline, instagram_url, support_email, payment_methods"
         )
         .limit(1)
         .maybeSingle(),
@@ -209,6 +228,12 @@ export async function fetchAuthoritativeStoreSettings(
       if (typeof ssData.location === "string") {
         merged.location = ssData.location;
       }
+      if (typeof ssData.address === "string") {
+        merged.address = ssData.address;
+      }
+      if (typeof ssData.maps_url === "string") {
+        merged.mapsUrl = ssData.maps_url;
+      }
       if (typeof ssData.operating_hours_text === "string") {
         merged.operatingHoursText = ssData.operating_hours_text;
       }
@@ -223,6 +248,9 @@ export async function fetchAuthoritativeStoreSettings(
       }
       if (typeof ssData.instagram_url === "string") {
         merged.instagramUrl = ssData.instagram_url;
+      }
+      if (typeof ssData.support_email === "string") {
+        merged.supportEmail = ssData.support_email;
       }
       if (ssData.payment_methods && typeof ssData.payment_methods === "object") {
         const pm = ssData.payment_methods as Record<string, unknown>;

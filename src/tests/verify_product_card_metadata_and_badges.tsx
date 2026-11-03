@@ -168,8 +168,10 @@ assert(
 console.log("\n=== 4. Verifying Long Titles & Card Design Preservation ===");
 
 assert(
-  (htmlLongTitle.includes(">PRE-ORDER</span>") || htmlLongTitle.includes(">READY</span>")) && htmlLongTitle.includes("font-normal"),
-  "Product title weight 400 and product-type badge are strictly preserved on long titles"
+  htmlLongTitle.includes(">NOOK</span>") &&
+    (htmlLongTitle.includes("PRE-ORDER") || htmlLongTitle.includes("READY")) &&
+    htmlLongTitle.includes("font-normal"),
+  "Product title weight 400, NOOK badge, and product-type badge are strictly preserved on long titles"
 );
 
 assert(

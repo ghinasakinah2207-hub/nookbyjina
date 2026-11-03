@@ -13,6 +13,7 @@ import {
   CreditCard,
   RotateCcw,
   HelpCircle,
+  Mail,
 } from "lucide-react";
 import { BRAND } from "@/lib/branding";
 import { StoreSettings } from "@/types";
@@ -162,6 +163,23 @@ export function ContactDrawer({
     igValidation && igValidation.isValid && igValidation.normalized
   );
 
+  // Determine Support Email configuration (store settings priority)
+  const rawEmail = settings?.supportEmail?.trim() || "";
+  const isEmailConfigured = Boolean(
+    rawEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)
+  );
+  const emailMailtoUrl = isEmailConfigured ? `mailto:${rawEmail}` : "";
+
+  // Determine Store Address and Maps URL (store settings priority, fallback to brand defaults)
+  const storeAddress =
+    settings?.address?.trim() || BRAND.contact.addressText;
+  const storeMapsUrl =
+    settings?.mapsUrl?.trim() || BRAND.contact.mapsUrl;
+  const storeOperatingHours =
+    settings?.operatingHoursText?.trim() || BRAND.contact.operatingHoursText;
+  const storeLocationLabel =
+    settings?.location?.trim() || BRAND.contact.locationText;
+
   return (
     <div
       role="dialog"
@@ -204,7 +222,7 @@ export function ContactDrawer({
                 {BRAND.name}
               </h2>
               <p className="text-[11px] text-[#737373] truncate">
-                {BRAND.contact.locationText}
+                {storeLocationLabel}
               </p>
             </div>
           </div>
@@ -231,99 +249,145 @@ export function ContactDrawer({
               Hubungi Kami
             </span>
 
-            <div className="grid grid-cols-2 gap-2 items-stretch">
-              {/* Left card — WhatsApp */}
+            <div className="grid grid-cols-3 gap-1.5 items-stretch">
+              {/* Card 1: WhatsApp */}
               {waUrl ? (
                 <a
                   href={waUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={onClose}
-                  className="group flex flex-col justify-between p-2.5 bg-emerald-50/60 hover:bg-emerald-50 border border-emerald-200/70 hover:border-emerald-300 rounded-xl transition-all h-full"
+                  className="group flex flex-col justify-between p-2 bg-emerald-50/60 hover:bg-emerald-50 border border-emerald-200/70 hover:border-emerald-300 rounded-xl transition-all h-full"
                 >
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <div className="w-7 h-7 rounded-lg bg-[#25D366] text-white flex items-center justify-center flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
-                        <WhatsAppIcon className="w-3.5 h-3.5" />
+                      <div className="w-6 h-6 rounded-lg bg-[#25D366] text-white flex items-center justify-center flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                        <WhatsAppIcon className="w-3 h-3" />
                       </div>
-                      <ArrowUpRight className="w-3 h-3 text-emerald-700 opacity-80" />
+                      <ArrowUpRight className="w-2.5 h-2.5 text-emerald-700 opacity-80" />
                     </div>
-                    <h3 className="text-[11.5px] font-bold text-neutral-900 group-hover:text-emerald-950 leading-tight">
+                    <h3 className="text-[10px] sm:text-[10.5px] font-bold text-neutral-900 group-hover:text-emerald-950 leading-tight">
                       Chat WhatsApp
                     </h3>
-                    <p className="text-[10px] sm:text-[10.5px] font-semibold text-emerald-800 mt-0.5 tracking-tight break-all leading-tight">
+                    <p className="text-[8.5px] sm:text-[9px] font-semibold text-emerald-800 mt-0.5 tracking-tight break-all leading-tight">
                       {formattedWhatsapp}
                     </p>
                   </div>
-                  <p className="text-[9.5px] text-neutral-500 mt-1.5 leading-tight">
-                    Tanya menu, katering, atau konfirmasi pesanan
+                  <p className="text-[8px] sm:text-[8.5px] text-neutral-500 mt-1 leading-tight line-clamp-2">
+                    Tanya menu & pesanan
                   </p>
                 </a>
               ) : (
-                <div className="flex flex-col justify-between p-2.5 bg-neutral-50 border border-dashed border-[#E5E5E5] rounded-xl select-none h-full">
+                <div className="flex flex-col justify-between p-2 bg-neutral-50 border border-dashed border-[#E5E5E5] rounded-xl select-none h-full">
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <div className="w-7 h-7 rounded-lg bg-neutral-200 text-neutral-500 flex items-center justify-center flex-shrink-0">
-                        <WhatsAppIcon className="w-3.5 h-3.5" />
+                      <div className="w-6 h-6 rounded-lg bg-neutral-200 text-neutral-500 flex items-center justify-center flex-shrink-0">
+                        <WhatsAppIcon className="w-3 h-3" />
                       </div>
-                      <span className="text-[8.5px] font-medium bg-neutral-200/80 text-neutral-600 px-1.5 py-0.5 rounded-full">
+                      <span className="text-[7.5px] font-medium bg-neutral-200/80 text-neutral-600 px-1 py-0.5 rounded leading-none">
                         Belum Diatur
                       </span>
                     </div>
-                    <h3 className="text-[11.5px] font-bold text-neutral-700 leading-tight">
-                      WhatsApp Toko
+                    <h3 className="text-[10px] sm:text-[10.5px] font-bold text-neutral-700 leading-tight">
+                      WhatsApp
                     </h3>
                   </div>
-                  <p className="text-[9.5px] text-neutral-500 mt-1.5 leading-tight">
-                    Nomor WhatsApp toko belum dikonfigurasi di Pengaturan.
+                  <p className="text-[8px] sm:text-[8.5px] text-neutral-400 mt-1 leading-tight line-clamp-2">
+                    Belum dikonfigurasi
                   </p>
                 </div>
               )}
 
-              {/* Right card — Instagram */}
+              {/* Card 2: Instagram */}
               {isInstagramConfigured && igValidation ? (
                 <a
                   href={igValidation.normalized}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={onClose}
-                  className="group flex flex-col justify-between p-2.5 bg-white hover:bg-neutral-50 border border-[#E5E5E5] hover:border-neutral-300 rounded-xl transition-all h-full"
+                  className="group flex flex-col justify-between p-2 bg-white hover:bg-neutral-50 border border-[#E5E5E5] hover:border-neutral-300 rounded-xl transition-all h-full"
                 >
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF] text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
-                        <InstagramIcon className="w-3.5 h-3.5" />
+                      <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF] text-white flex items-center justify-center flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                        <InstagramIcon className="w-3 h-3" />
                       </div>
-                      <ArrowUpRight className="w-3 h-3 text-neutral-400 group-hover:text-black transition-colors" />
+                      <ArrowUpRight className="w-2.5 h-2.5 text-neutral-400 group-hover:text-black transition-colors" />
                     </div>
-                    <h3 className="text-[11.5px] font-semibold text-[#111111] leading-tight">
+                    <h3 className="text-[10px] sm:text-[10.5px] font-semibold text-[#111111] leading-tight">
                       Instagram
                     </h3>
-                    <p className="text-[10px] sm:text-[10.5px] text-[#737373] mt-0.5 truncate leading-tight">
+                    <p className="text-[8.5px] sm:text-[9px] text-[#737373] mt-0.5 truncate leading-tight">
                       {igValidation.handle || BRAND.social.instagramHandle || "Profil"}
                     </p>
                   </div>
-                  <p className="text-[9.5px] text-neutral-500 mt-1.5 leading-tight">
-                    Kunjungi akun Instagram resmi Nook by Jina
+                  <p className="text-[8px] sm:text-[8.5px] text-neutral-500 mt-1 leading-tight line-clamp-2">
+                    Kunjungi profil resmi
                   </p>
                 </a>
               ) : (
-                <div className="flex flex-col justify-between p-2.5 bg-neutral-50 border border-dashed border-[#E5E5E5] rounded-xl select-none h-full">
+                <div className="flex flex-col justify-between p-2 bg-neutral-50 border border-dashed border-[#E5E5E5] rounded-xl select-none h-full">
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <div className="w-7 h-7 rounded-lg bg-neutral-200 text-neutral-500 flex items-center justify-center flex-shrink-0">
-                        <InstagramIcon className="w-3.5 h-3.5" />
+                      <div className="w-6 h-6 rounded-lg bg-neutral-200 text-neutral-500 flex items-center justify-center flex-shrink-0">
+                        <InstagramIcon className="w-3 h-3" />
                       </div>
-                      <span className="text-[8.5px] font-medium bg-neutral-200/80 text-neutral-600 px-1.5 py-0.5 rounded-full">
+                      <span className="text-[7.5px] font-medium bg-neutral-200/80 text-neutral-600 px-1 py-0.5 rounded leading-none">
                         Belum Diatur
                       </span>
                     </div>
-                    <h3 className="text-[11.5px] font-semibold text-neutral-800 leading-tight">
+                    <h3 className="text-[10px] sm:text-[10.5px] font-semibold text-neutral-700 leading-tight">
                       Instagram
                     </h3>
                   </div>
-                  <p className="text-[9.5px] text-neutral-500 mt-1.5 leading-tight">
-                    Akun media sosial Instagram toko belum ditautkan.
+                  <p className="text-[8px] sm:text-[8.5px] text-neutral-400 mt-1 leading-tight line-clamp-2">
+                    Belum ditautkan
+                  </p>
+                </div>
+              )}
+
+              {/* Card 3: Email Support */}
+              {isEmailConfigured ? (
+                <a
+                  href={emailMailtoUrl}
+                  onClick={onClose}
+                  className="group flex flex-col justify-between p-2 bg-sky-50/60 hover:bg-sky-50 border border-sky-200/70 hover:border-sky-300 rounded-xl transition-all h-full"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="w-6 h-6 rounded-lg bg-[#0284C7] text-white flex items-center justify-center flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                        <Mail className="w-3 h-3" />
+                      </div>
+                      <ArrowUpRight className="w-2.5 h-2.5 text-sky-700 opacity-80" />
+                    </div>
+                    <h3 className="text-[10px] sm:text-[10.5px] font-bold text-neutral-900 group-hover:text-sky-950 leading-tight">
+                      Email Support
+                    </h3>
+                    <p className="text-[8.5px] sm:text-[9px] font-medium text-sky-900 mt-0.5 break-all leading-tight">
+                      {rawEmail}
+                    </p>
+                  </div>
+                  <p className="text-[8px] sm:text-[8.5px] text-neutral-500 mt-1 leading-tight line-clamp-2">
+                    Hubungi kami melalui email
+                  </p>
+                </a>
+              ) : (
+                <div className="flex flex-col justify-between p-2 bg-neutral-50 border border-dashed border-[#E5E5E5] rounded-xl select-none h-full">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="w-6 h-6 rounded-lg bg-neutral-200 text-neutral-500 flex items-center justify-center flex-shrink-0">
+                        <Mail className="w-3 h-3" />
+                      </div>
+                      <span className="text-[7.5px] font-medium bg-neutral-200/80 text-neutral-600 px-1 py-0.5 rounded leading-none">
+                        Belum Diatur
+                      </span>
+                    </div>
+                    <h3 className="text-[10px] sm:text-[10.5px] font-semibold text-neutral-700 leading-tight">
+                      Email Support
+                    </h3>
+                  </div>
+                  <p className="text-[8px] sm:text-[8.5px] text-neutral-400 mt-1 leading-tight line-clamp-2">
+                    Belum dikonfigurasi
                   </p>
                 </div>
               )}
@@ -342,10 +406,25 @@ export function ContactDrawer({
             <div className="bg-white border border-[#E5E5E5] rounded-2xl p-3 space-y-2.5 text-xs text-neutral-700">
               <div className="flex items-start gap-2.5">
                 <MapPin className="w-4 h-4 text-[#F25B09] flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-neutral-900">Lokasi Dapur</p>
-                  <p className="text-[11px] text-neutral-500">
-                    {BRAND.contact.locationText}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold text-neutral-900 leading-tight">
+                      Lokasi Toko
+                    </p>
+                    {storeMapsUrl && (
+                      <a
+                        href={storeMapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-0.5 text-[10.5px] font-semibold text-[#F25B09] hover:text-[#D94F08] hover:underline flex-shrink-0 transition-colors"
+                      >
+                        <span>Lihat Lokasi</span>
+                        <ArrowUpRight className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-neutral-600 mt-1 break-words leading-relaxed">
+                    {storeAddress}
                   </p>
                 </div>
               </div>
@@ -353,9 +432,11 @@ export function ContactDrawer({
               <div className="flex items-start gap-2.5 border-t border-neutral-100 pt-2.5">
                 <Clock className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-neutral-900">Jam Operasional</p>
-                  <p className="text-[11px] text-neutral-500">
-                    {BRAND.contact.operatingHoursText}
+                  <p className="font-semibold text-neutral-900 leading-tight">
+                    Jam Operasional
+                  </p>
+                  <p className="text-[11px] text-neutral-500 mt-0.5 leading-normal">
+                    {storeOperatingHours}
                   </p>
                 </div>
               </div>
@@ -363,8 +444,10 @@ export function ContactDrawer({
               <div className="flex items-start gap-2.5 border-t border-neutral-100 pt-2.5">
                 <Truck className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-neutral-900">Area Pengantaran</p>
-                  <p className="text-[11px] text-neutral-500">
+                  <p className="font-semibold text-neutral-900 leading-tight">
+                    Area Pengantaran
+                  </p>
+                  <p className="text-[11px] text-neutral-500 mt-0.5 leading-normal">
                     {BRAND.contact.serviceAreaText}
                   </p>
                 </div>

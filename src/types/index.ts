@@ -148,10 +148,13 @@ export interface StoreSettings {
   storeName: string;
   tagline: string;
   location: string;
+  address?: string;
+  mapsUrl?: string;
   isOpen: boolean;
   operatingHoursText: string;
   adminWhatsapp: string;
   instagramUrl?: string;
+  supportEmail?: string;
   qrisMerchantName: string;
   qrisNmid: string;
   qrisImageUrl?: string;

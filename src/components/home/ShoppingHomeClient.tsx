@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, UtensilsCrossed, AlertCircle, RefreshCw } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
+import { HomeFooter } from "@/components/home/HomeFooter";
 import { ProductCard } from "@/components/product/ProductCard";
 import { PromoCarousel } from "@/components/home/PromoCarousel";
 import { SearchBar } from "@/components/ui/SearchBar";
@@ -458,6 +459,9 @@ export default function ShoppingHomeClient({
             </div>
           </div>
         )}
+
+        {/* 6. Compact Business Contact Information Footer */}
+        <HomeFooter storeSettings={storeSettings} />
       </main>
 
       {/* 6. Existing Bottom Navigation */}

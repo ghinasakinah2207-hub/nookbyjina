@@ -9,6 +9,8 @@ export const BRAND = {
   uppercaseName: "NOOK BY JINA",
   tagline: "Makanan homemade dibuat dengan penuh rasa dan kehangatan.",
   defaultLocation: "Lhoksukon, Aceh Utara",
+  defaultAddress: "28R9+M8H, Dayah Lb, Kec. Lhoksukon, Kabupaten Aceh Utara, Aceh 24382",
+  defaultMapsUrl: "https://maps.google.com/?q=28R9%2BM8H,+Dayah+Lb,+Kec.+Lhoksukon,+Kabupaten+Aceh+Utara,+Aceh+24382",
   defaultArea: "Lhoksukon",
   defaultWhatsapp: "6282273180000",
   contact: {
@@ -16,6 +18,8 @@ export const BRAND = {
     formattedWhatsapp: "+62 822-7318-0000",
     defaultWhatsappMessage: "Halo Nook by Jina, saya ingin bertanya seputar menu dan pemesanan.",
     locationText: "Lhoksukon, Aceh Utara",
+    addressText: "28R9+M8H, Dayah Lb, Kec. Lhoksukon, Kabupaten Aceh Utara, Aceh 24382",
+    mapsUrl: "https://maps.google.com/?q=28R9%2BM8H,+Dayah+Lb,+Kec.+Lhoksukon,+Kabupaten+Aceh+Utara,+Aceh+24382",
     operatingHoursText: "Setiap Hari: 09:00 – 17:00 WIB",
     serviceAreaText: "Lhoksukon & Sekitarnya",
   },

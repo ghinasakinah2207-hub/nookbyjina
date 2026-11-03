@@ -109,10 +109,15 @@ export async function POST(request: Request) {
         .maybeSingle();
 
       const instagramVal = normalizedBody.instagramUrl ? normalizedBody.instagramUrl.trim() : null;
+      const supportEmailVal = body.supportEmail ? String(body.supportEmail).trim() : null;
       const qrisMerchantNameVal = (body.qrisMerchantName || "Nook by Jina").trim();
       const qrisNmidVal = (body.qrisNmid || "").trim();
       const qrisImageVal = body.qrisImageUrl ? String(body.qrisImageUrl).trim() : null;
       const locationVal = (body.location || "Lhoksukon, Aceh Utara").trim();
+      const addressVal = (
+        body.address || "28R9+M8H, Dayah Lb, Kec. Lhoksukon, Kabupaten Aceh Utara, Aceh 24382"
+      ).trim();
+      const mapsUrlVal = body.mapsUrl ? String(body.mapsUrl).trim() : null;
       const operatingHoursVal = (body.operatingHoursText || "Setiap Hari: 09:00 – 17:00 WIB").trim();
       const taglineVal = (body.tagline || "").trim();
       const nowIso = new Date().toISOString();
@@ -126,10 +131,13 @@ export async function POST(request: Request) {
               is_open: Boolean(body.isOpen),
               whatsapp_number: (body.adminWhatsapp || "").trim(),
               instagram_url: instagramVal,
+              support_email: supportEmailVal,
               qris_merchant_name: qrisMerchantNameVal,
               qris_nmid: qrisNmidVal,
               qris_image_url: qrisImageVal,
               location: locationVal,
+              address: addressVal,
+              maps_url: mapsUrlVal,
               operating_hours_text: operatingHoursVal,
               tagline: taglineVal,
               updated_at: nowIso,

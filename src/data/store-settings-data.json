@@ -1,12 +1,25 @@
 {
   "storeName": "Nook by Jina",
+  "tagline": "Makanan homemade dibuat dengan penuh rasa dan kehangatan.",
+  "location": "Lhoksukon, Aceh Utara",
+  "address": "28R9+M8H, Dayah Lb, Kec. Lhoksukon, Kabupaten Aceh Utara, Aceh 24382",
+  "mapsUrl": "https://maps.google.com/?q=28R9%2BM8H,+Dayah+Lb,+Kec.+Lhoksukon,+Kabupaten+Aceh+Utara,+Aceh+24382",
   "isOpen": true,
+  "operatingHoursText": "Setiap Hari: 09:00 – 17:00 WIB",
   "adminWhatsapp": "082273180000",
+  "instagramUrl": "",
+  "supportEmail": "",
+  "qrisMerchantName": "Nook by Jina",
+  "qrisNmid": "ID1020038829101",
+  "qrisImageUrl": "",
   "deliveryConfig": {
     "configuredArea": "Lhoksukon",
     "standardFee": 4000,
     "freeShippingThreshold": 50000
   },
-  "instagramUrl": "",
-  "updatedAt": "2026-10-21T16:40:04.111Z"
+  "paymentMethods": {
+    "qris": true,
+    "cash": true
+  },
+  "updatedAt": "2026-11-03T13:26:00.000Z"
 }

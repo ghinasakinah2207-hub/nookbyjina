@@ -213,6 +213,9 @@ export async function saveStoreSettingsAction(
     const instagramVal = settings.instagramUrl
       ? settings.instagramUrl.trim()
       : null;
+    const supportEmailVal = settings.supportEmail
+      ? settings.supportEmail.trim()
+      : null;
     const qrisMerchantNameVal = (
       settings.qrisMerchantName || "Nook by Jina"
     ).trim();
@@ -221,6 +224,10 @@ export async function saveStoreSettingsAction(
       ? settings.qrisImageUrl.trim()
       : null;
     const locationVal = (settings.location || "Lhoksukon, Aceh Utara").trim();
+    const addressVal = (
+      settings.address || "28R9+M8H, Dayah Lb, Kec. Lhoksukon, Kabupaten Aceh Utara, Aceh 24382"
+    ).trim();
+    const mapsUrlVal = settings.mapsUrl ? settings.mapsUrl.trim() : null;
     const operatingHoursVal = (
       settings.operatingHoursText || "Setiap Hari: 09:00 – 17:00 WIB"
     ).trim();
@@ -244,10 +251,13 @@ export async function saveStoreSettingsAction(
             is_open: isOpenVal,
             whatsapp_number: whatsappVal,
             instagram_url: instagramVal,
+            support_email: supportEmailVal,
             qris_merchant_name: qrisMerchantNameVal,
             qris_nmid: qrisNmidVal,
             qris_image_url: qrisImageVal,
             location: locationVal,
+            address: addressVal,
+            maps_url: mapsUrlVal,
             operating_hours_text: operatingHoursVal,
             tagline: taglineVal,
             payment_methods: paymentMethodsVal,
@@ -287,10 +297,13 @@ export async function saveStoreSettingsAction(
           is_open: isOpenVal,
           whatsapp_number: whatsappVal,
           instagram_url: instagramVal,
+          support_email: supportEmailVal,
           qris_merchant_name: qrisMerchantNameVal,
           qris_nmid: qrisNmidVal,
           qris_image_url: qrisImageVal,
           location: locationVal,
+          address: addressVal,
+          maps_url: mapsUrlVal,
           operating_hours_text: operatingHoursVal,
           tagline: taglineVal,
           payment_methods: paymentMethodsVal,

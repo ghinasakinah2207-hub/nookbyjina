@@ -42,10 +42,10 @@ assert(
 assert(html.includes("line-clamp-2"), "Product title preserves line-clamp-2");
 assert(html.includes("leading-snug"), "Product title preserves leading-snug");
 
-// Verify product type badge exists (replaces legacy nook badge)
+// Verify NOOK badge exists before product name
 assert(
-  html.includes(">PRE-ORDER</span>") || html.includes(">READY</span>"),
-  "Product card renders compact product type badge"
+  html.includes(">NOOK</span>"),
+  "Product card renders compact NOOK badge"
 );
 
 // Verify badge styling: brand orange, white text, compact shape
@@ -59,7 +59,7 @@ assert(
   "Badge uses compact horizontal shape with subtly rounded corners"
 );
 
-// Verify badge is inside the h3 element before product name
+// Verify NOOK badge is inside the h3 element before product name
 const h3Regex = /<h3[^>]*>([\s\S]*?)<\/h3>/;
 const h3Match = html.match(h3Regex);
 assert(Boolean(h3Match), "h3 title element exists in rendered markup");
@@ -67,17 +67,24 @@ assert(Boolean(h3Match), "h3 title element exists in rendered markup");
 if (h3Match) {
   const h3Content = h3Match[1];
   assert(
-    (h3Content.includes(">PRE-ORDER</span>") || h3Content.includes(">READY</span>")) &&
+    h3Content.includes(">NOOK</span>") &&
       h3Content.includes("Nasi Bakar Cakalang Asap"),
-    "Badge and product title are enclosed together in the h3 element"
+    "NOOK badge and product title are enclosed together in the h3 element"
   );
-  const badgeIndex = Math.max(
-    h3Content.indexOf(">PRE-ORDER</span>"),
-    h3Content.indexOf(">READY</span>")
-  );
+  const badgeIndex = h3Content.indexOf(">NOOK</span>");
   const nameIndex = h3Content.indexOf("Nasi Bakar Cakalang Asap");
-  assert(badgeIndex < nameIndex, "Badge appears before the product title text on line 1");
+  assert(badgeIndex < nameIndex, "NOOK badge appears before the product title text on line 1");
 }
+
+// Verify top-left frosted product type badge exists
+assert(
+  html.includes("PRE-ORDER") || html.includes("READY"),
+  "Product image renders frosted product type badge"
+);
+assert(
+  html.includes("backdrop-blur-md") && html.includes("rounded-full"),
+  "Product type badge uses frosted glass backdrop-blur and rounded-full pill shape"
+);
 
 // Verify price typography is bold and visually stronger
 assert(
@@ -88,9 +95,9 @@ assert(
 console.log("\n=== 2. Verifying Long Title Product Card ===");
 const longHtml = renderCard(longTitleProduct);
 assert(
-  (longHtml.includes(">PRE-ORDER</span>") || longHtml.includes(">READY</span>")) &&
+  longHtml.includes(">NOOK</span>") &&
     longHtml.includes("Nasi Bakar Cakalang Asap Super Pedas"),
-  "Long title product card renders product-type badge and title correctly"
+  "Long title product card renders NOOK badge and title correctly"
 );
 
 console.log("\nAll ProductCard Title & Nook Badge tests passed successfully! 🎉\n");
