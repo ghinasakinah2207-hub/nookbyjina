@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -28,7 +28,11 @@ function OrderDetailContent() {
   const router = useRouter();
   const rawParam = decodeURIComponent((params?.token as string) || "").trim();
 
-  const { orders, getOrderByToken, addOrder } = useOrder();
+  const { orders, addOrder } = useOrder();
+  const ordersRef = useRef(orders);
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -37,6 +41,9 @@ function OrderDetailContent() {
   const [copyStatus, setCopyStatus] = useState<"idle" | "success" | "failed">("idle");
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  // In-flight guard to prevent parallel concurrent requests
+  const inFlightRef = useRef(false);
 
   // Authoritative server fetch for order details
   const fetchOrder = useCallback(
@@ -61,6 +68,10 @@ function OrderDetailContent() {
         return;
       }
 
+      // Prevent concurrent duplicate fetch
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+
       if (showSpinner) setIsRefreshing(true);
       try {
         const res = await fetch(`/api/orders/${encodeURIComponent(rawParam)}`, {
@@ -79,9 +90,7 @@ function OrderDetailContent() {
           setLastRefreshed(new Date());
         } else {
           // Fallback to local order reference only if server reports 404/error but local cache exists
-          const local =
-            getOrderByToken(rawParam) ||
-            orders.find((o) => o.token === rawParam);
+          const local = ordersRef.current.find((o) => o.token === rawParam || o.id === rawParam);
           if (local) {
             setOrder(local);
             setFetchError(null);
@@ -92,9 +101,7 @@ function OrderDetailContent() {
           }
         }
       } catch {
-        const local =
-          getOrderByToken(rawParam) ||
-          orders.find((o) => o.token === rawParam);
+        const local = ordersRef.current.find((o) => o.token === rawParam || o.id === rawParam);
         if (local) {
           setOrder(local);
           setFetchError(null);
@@ -104,102 +111,39 @@ function OrderDetailContent() {
       } finally {
         setLoading(false);
         if (showSpinner) setIsRefreshing(false);
+        inFlightRef.current = false;
       }
     },
-    [rawParam, router, getOrderByToken, orders, addOrder]
+    [rawParam, router, addOrder]
   );
 
-  // Initial load
+  // Keep a stable ref pointing to the latest fetchOrder implementation
+  const fetchOrderRef = useRef(fetchOrder);
   useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      if (!rawParam) {
-        setLoading(false);
-        setFetchError("Token akses tidak disertakan.");
-        return;
-      }
+    fetchOrderRef.current = fetchOrder;
+  }, [fetchOrder]);
 
-      if (rawParam.startsWith("TJ-")) {
-        const vaultToken = getOrderToken(rawParam);
-        if (vaultToken) {
-          if (router) {
-            router.replace(`/pesanan/${vaultToken}`);
-            return;
-          }
-        }
-        if (!cancelled) {
-          setIsOrderIdParam(true);
-          setLoading(false);
-        }
-        return;
-      }
-
-      try {
-        const res = await fetch(`/api/orders/${encodeURIComponent(rawParam)}`, {
-          cache: "no-store",
-        });
-        const data = await res.json();
-        if (cancelled) return;
-        if (res.ok && data.success && data.order) {
-          const loadedOrder: Order = {
-            ...data.order,
-            token: rawParam,
-          };
-          saveOrderToken(loadedOrder.id, rawParam);
-          addOrder(loadedOrder);
-          setOrder(loadedOrder);
-          setFetchError(null);
-          setLastRefreshed(new Date());
-        } else {
-          const local =
-            getOrderByToken(rawParam) ||
-            orders.find((o) => o.token === rawParam);
-          if (local) {
-            setOrder(local);
-            setFetchError(null);
-          } else {
-            setFetchError(
-              data.error || "Pesanan tidak ditemukan atau tautan akses tidak valid."
-            );
-          }
-        }
-      } catch {
-        if (cancelled) return;
-        const local =
-          getOrderByToken(rawParam) ||
-          orders.find((o) => o.token === rawParam);
-        if (local) {
-          setOrder(local);
-          setFetchError(null);
-        } else {
-          setFetchError("Gagal menghubungi server untuk memuat rincian pesanan.");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [rawParam, router, getOrderByToken, orders, addOrder]);
+  // Single initial load when mount or when token parameter changes
+  useEffect(() => {
+    fetchOrderRef.current(false);
+  }, [rawParam]);
 
   // Real 15-second polling when tab is active and order is not terminal per PRD Section 14
   useEffect(() => {
-    if (!order) return;
-    if (order.orderStatus === "Selesai" || order.orderStatus === "Dibatalkan") {
+    if (!rawParam) return;
+    if (order?.orderStatus === "Selesai" || order?.orderStatus === "Dibatalkan") {
       return; // Stop polling permanently on terminal states
     }
 
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
-        fetchOrder(false);
+        fetchOrderRef.current(false);
       }
     }, 15000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        fetchOrder(false);
+        fetchOrderRef.current(false);
       }
     };
 
@@ -209,7 +153,7 @@ function OrderDetailContent() {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [order, fetchOrder]);
+  }, [rawParam, order?.orderStatus]);
 
   const handleManualRefresh = () => {
     fetchOrder(true);
@@ -341,7 +285,7 @@ Ongkir (${order.deliveryArea}): ${
     order.shippingFee === 0 ? "Gratis" : formatRupiah(order.shippingFee)
   }
 *TOTAL: ${formatRupiah(order.total)}*
-Metode: ${order.paymentMethod === "Cash" ? "Cash (Bayar Tunai)" : `QRIS Statis (${order.merchantName || "Nook by Jina"})`}
+Metode: ${order.paymentMethod === "Cash" ? "Cash (Bayar Tunai)" : order.gatewayProvider === "duitku" ? "QRIS" : `QRIS Statis (${order.merchantName || "Nook by Jina"})`}
 ------------------------------
 Pantau status pesanan: ${typeof window !== "undefined" ? window.location.href : ""}
 Terima kasih telah memesan di Nook by Jina!`;
@@ -432,20 +376,20 @@ Terima kasih telah memesan di Nook by Jina!`;
               Batas waktu pembayaran QRIS (30 menit) telah berakhir atau pesanan telah dibatalkan oleh sistem.
             </p>
           </div>
-        ) : isPendingQrisStatus(order.paymentStatus) || (order.paymentMethod === "QRIS" && order.paymentStatus === "Menunggu Pembayaran") ? (
+        ) : order.paymentMethod !== "Cash" && (isPendingQrisStatus(order.paymentStatus) || order.paymentStatus === "Menunggu Pembayaran") ? (
           <div className="p-3.5 bg-[#FFF4E5] border border-[#FBD38D] rounded-xl flex items-center justify-between text-xs text-[#8A4B08]">
             <div>
               <p className="font-semibold">Pembayaran Sedang Diproses</p>
               <p className="text-[11px] mt-0.5">
-                {order.gatewayProvider === "duitku"
+                {order.gatewayProvider === "duitku" || order.paymentMethod === "QRIS"
                   ? "Menunggu verifikasi pembayaran otomatis dari gateway Duitku."
-                  : "Admin akan memverifikasi di mutasi DANA Bisnis."}
+                  : "Admin akan memverifikasi di mutasi akun merchant."}
               </p>
             </div>
             {order.paymentUrl ? (
               <a
                 href={order.paymentUrl}
-                className="px-3 py-1.5 bg-[#F25B09] text-white rounded-lg font-semibold text-xs flex items-center gap-1 shrink-0"
+                className="px-3 py-1.5 bg-[#F25B09] hover:bg-[#D94D06] text-white rounded-lg font-semibold text-xs flex items-center gap-1 shrink-0 transition-colors shadow-xs"
               >
                 <QrCode className="w-3.5 h-3.5" />
                 <span>Bayar Duitku</span>
@@ -453,10 +397,10 @@ Terima kasih telah memesan di Nook by Jina!`;
             ) : (
               <Link
                 href={`/pembayaran/${order.id}`}
-                className="px-3 py-1.5 bg-[#F25B09] text-white rounded-lg font-semibold text-xs flex items-center gap-1 shrink-0"
+                className="px-3 py-1.5 bg-[#F25B09] hover:bg-[#D94D06] text-white rounded-lg font-semibold text-xs flex items-center gap-1 shrink-0 transition-colors shadow-xs"
               >
                 <QrCode className="w-3.5 h-3.5" />
-                <span>QRIS</span>
+                <span>Bayar QRIS</span>
               </Link>
             )}
           </div>
@@ -480,7 +424,9 @@ Terima kasih telah memesan di Nook by Jina!`;
               <p className="text-[11px] text-emerald-700">
                 {order.paymentMethod === "Cash"
                   ? "Pembayaran tunai telah diterima dan dikonfirmasi kasir."
-                  : "Pembayaran telah terverifikasi melalui DANA Bisnis."}
+                  : order.gatewayProvider === "duitku" || order.paymentMethod === "QRIS"
+                  ? "Pembayaran QRIS telah diverifikasi otomatis secara instan."
+                  : "Pembayaran telah terverifikasi melalui akun merchant."}
               </p>
             </div>
           </div>

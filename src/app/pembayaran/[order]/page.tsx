@@ -13,6 +13,8 @@ import {
   Info,
   Loader2,
   HelpCircle,
+  ExternalLink,
+  ShieldCheck,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { StatusBadge } from "@/components/ui/Badge";
@@ -36,24 +38,52 @@ function PaymentContent() {
   // Authoritative server-time offset (serverTime - localTime) in ms
   const serverOffsetRef = React.useRef<number>(0);
 
-  // Fallback recovery: fetch remote order if not found in local context
+  // Guard refs to prevent concurrent or infinite duplicate fetches
+  const inFlightFallbackRef = React.useRef(false);
+  const fetchedTokensRef = React.useRef<Set<string>>(new Set());
+  const ordersRef = React.useRef(orders);
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
+
+  // Fallback recovery: fetch remote order if not found or missing payment metadata
   useEffect(() => {
     if (!isHydrated || !orderId) return;
-    const existsLocally = getOrderById(orderId) || orders.find((o) => o.token === orderId);
-    if (existsLocally) return;
+
+    const existsLocally = ordersRef.current.find((o) => o.id === orderId || o.token === orderId);
+    if (existsLocally && (existsLocally.paymentUrl || existsLocally.paymentMethod === "Cash")) {
+      return;
+    }
 
     const lookupToken = orderId.length >= 16 ? orderId : getOrderToken(orderId);
     if (!lookupToken) return;
+
+    // Prevent duplicate fetch for the same lookup token
+    if (fetchedTokensRef.current.has(lookupToken) || inFlightFallbackRef.current) {
+      return;
+    }
+
+    inFlightFallbackRef.current = true;
+    fetchedTokensRef.current.add(lookupToken);
 
     fetch(`/api/orders/${encodeURIComponent(lookupToken)}`, { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.success && data?.order) {
           addOrder({ ...data.order, token: lookupToken });
+        } else {
+          // If fetch returned error/not found, allow controlled retry later
+          fetchedTokensRef.current.delete(lookupToken);
         }
       })
-      .catch(() => {});
-  }, [isHydrated, orderId, getOrderById, orders, addOrder]);
+      .catch(() => {
+        // Allow controlled retry on network failure
+        fetchedTokensRef.current.delete(lookupToken);
+      })
+      .finally(() => {
+        inFlightFallbackRef.current = false;
+      });
+  }, [isHydrated, orderId, addOrder]);
 
   // Fetch live store settings from authoritative backend
   useEffect(() => {
@@ -120,6 +150,23 @@ function PaymentContent() {
       router.replace(resolvedToken ? `/pesanan/${resolvedToken}` : "/pesanan");
     }
   }, [order, resolvedToken, router]);
+
+  // If order uses Duitku QRIS and has paymentUrl, redirect to Duitku payment gateway immediately
+  useEffect(() => {
+    if (
+      order &&
+      order.paymentMethod !== "Cash" &&
+      (order.paymentMethod === "QRIS" ||
+        order.gatewayProvider === "duitku" ||
+        Boolean(order.paymentUrl)) &&
+      order.paymentUrl &&
+      order.paymentStatus !== "Lunas" &&
+      order.paymentStatus !== "Dibatalkan" &&
+      order.orderStatus !== "Dibatalkan"
+    ) {
+      window.location.href = order.paymentUrl;
+    }
+  }, [order]);
 
   // 30-minute QRIS countdown anchored to persisted order paymentDeadline
   const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(() => {
@@ -225,6 +272,12 @@ function PaymentContent() {
     String(order.paymentStatus || "").toLowerCase() === "dibatalkan";
   const isExpired = !isPaid && (isCancelled || timeLeftSeconds <= 0);
   const isAwaitingVerification = !isPaid && !isExpired && isPendingQrisStatus(order.paymentStatus);
+  const isDuitkuQris =
+    order.paymentMethod !== "Cash" &&
+    (order.paymentMethod === "QRIS" ||
+      order.gatewayProvider === "duitku" ||
+      Boolean(order.paymentUrl) ||
+      Boolean(order.duitkuReference));
 
   // Authoritative merchant details
   const merchantName = storeSettings?.qrisMerchantName || order.merchantName || "Nook by Jina";
@@ -430,12 +483,16 @@ Mohon dicek di riwayat transaksi merchant. Terima kasih!`;
             {/* Subtle Pending Status Notice */}
             <div className="p-3 bg-neutral-100/80 border border-[#E5E5E5] rounded-xl flex items-center justify-between text-xs text-[#737373]">
               <span className="font-medium text-[#111111]">
-                {isAwaitingVerification
+                {isDuitkuQris
+                  ? "Menunggu Pembayaran via Duitku"
+                  : isAwaitingVerification
                   ? "Menunggu Konfirmasi & Verifikasi Merchant"
                   : "Menunggu Pembayaran"}
               </span>
               <span className="text-[11px] text-[#737373]">
-                Pindai QRIS & bayar nominal tepat
+                {isDuitkuQris
+                  ? "Verifikasi otomatis sistem gateway"
+                  : "Pindai QRIS & bayar nominal tepat"}
               </span>
             </div>
 
@@ -460,115 +517,164 @@ Mohon dicek di riwayat transaksi merchant. Terima kasih!`;
         )}
 
         {/* =========================================================================
-            MERCHANT INFORMATION OUTSIDE THE CARD
-            (Visible only when payment is active: not paid, not cancelled/expired)
+            ACTIVE PAYMENT SECTION
             ========================================================================= */}
         {!isPaid && !isExpired && (
-          <div className="text-center space-y-1 px-1">
-            <h2 className="text-base sm:text-lg font-bold text-[#111111] tracking-tight">
-              Pindai QRIS Merchant
-            </h2>
-            <div className="space-y-0.5 text-xs text-[#737373]">
-              <p className="font-medium text-[#111111]">
-                Merchant: <strong className="font-bold text-[#111111]">{merchantName}</strong>
-              </p>
-              {merchantNmid ? (
-                <p className="text-[11px] font-mono text-[#737373]">
-                  NMID: {merchantNmid}
-                </p>
-              ) : null}
-            </div>
-          </div>
-        )}
-
-        {/* =========================================================================
-            ENLARGED SEPARATE QRIS IMAGE CARD
-            (Visible only when payment is active)
-            ========================================================================= */}
-        {!isPaid && !isExpired && (
-          <>
-            {qrisImageUrl ? (
-              <div className="bg-white rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center space-y-2.5">
-                {/* Full card width QR container preserving full uncropped aspect ratio */}
-                <div className="w-full aspect-square relative bg-white flex items-center justify-center">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={qrisImageUrl}
-                    alt={`QRIS Merchant ${merchantName}`}
-                    className="w-full h-full object-contain"
-                  />
+          isDuitkuQris ? (
+            /* Duitku Gateway Flow: Redirect & Gateway Card (No static QR, No WhatsApp confirmation) */
+            <div className="space-y-2.5">
+              <div className="bg-white rounded-2xl p-5 flex flex-col items-center justify-center space-y-4 text-center shadow-xs border border-[#E5E5E5]/60">
+                <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#F25B09]">
+                  <Loader2 className="w-7 h-7 animate-spin text-[#F25B09]" />
                 </div>
-                <p className="text-[11px] text-[#737373] text-center max-w-xs leading-relaxed px-1">
-                  Periksa dan pastikan nama merchant <strong className="text-[#111111]">{merchantName}</strong> muncul di aplikasi Anda sebelum memasukkan PIN.
-                </p>
-              </div>
-            ) : (
-              /* Neutral Fallback State if QRIS is not configured by merchant */
-              <div className="p-6 bg-white rounded-2xl text-center space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-white border border-[#E5E5E5] text-[#737373] flex items-center justify-center mx-auto shadow-xs">
-                  <AlertCircle className="w-6 h-6 text-[#737373]" />
-                </div>
-                <div className="space-y-1 max-w-sm mx-auto">
-                  <h3 className="text-xs font-bold text-[#111111]">
-                    QRIS Merchant Belum Dikonfigurasi
-                  </h3>
-                  <p className="text-[11px] text-[#737373] leading-relaxed">
-                    Toko belum mengunggah kode QRIS resmi. Pembayaran mandiri via QRIS sementara tidak dapat diproses.
+                <div className="space-y-1.5 max-w-sm">
+                  <h2 className="text-base font-bold text-[#111111]">
+                    Menuju Gateway Pembayaran QRIS Duitku
+                  </h2>
+                  <p className="text-xs text-[#737373] leading-relaxed">
+                    Sistem sedang mengarahkan Anda ke portal pembayaran resmi Duitku untuk memindai kode QRIS transaksi Anda.
                   </p>
                 </div>
-                <div className="pt-1">
+
+                {order.paymentUrl ? (
+                  <div className="w-full pt-1 space-y-2">
+                    <a
+                      href={order.paymentUrl}
+                      className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#C2410C] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors shadow-xs"
+                    >
+                      <span>Buka Halaman Pembayaran Duitku</span>
+                      <ExternalLink className="w-4 h-4 shrink-0" />
+                    </a>
+                    <p className="text-[11px] text-[#737373]">
+                      Jika halaman pembayaran tidak terbuka secara otomatis, silakan klik tombol di atas.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="w-full p-3 bg-neutral-50 rounded-xl text-xs text-[#737373] text-center border border-[#E5E5E5]">
+                    Menyiapkan tautan pembayaran gateway Duitku...
+                  </div>
+                )}
+              </div>
+
+              {/* Automatic Gateway Verification Notice (No WhatsApp confirmation needed) */}
+              <section className="bg-white rounded-2xl p-4 sm:p-5 text-xs text-[#737373] space-y-2 border border-[#E5E5E5]/60">
+                <p className="font-semibold text-[#111111] flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-[#18794E] flex-shrink-0" />
+                  Konfirmasi Pembayaran Otomatis
+                </p>
+                <div className="space-y-1.5 text-[11px] leading-relaxed text-[#737373]">
+                  <p>
+                    • Transaksi diverifikasi secara otomatis oleh sistem gateway Duitku setelah Anda menyelesaikan pembayaran di aplikasi e-wallet atau mobile banking.
+                  </p>
+                  <p>
+                    • <strong>Tidak perlu konfirmasi manual atau mengirim bukti transfer ke WhatsApp.</strong> Status pembayaran akan otomatis diperbarui menjadi &quot;Lunas&quot;.
+                  </p>
+                </div>
+              </section>
+            </div>
+          ) : (
+            /* Legacy Static QRIS (Retained for older orders) */
+            <>
+              {/* Merchant Information Outside the Card */}
+              <div className="text-center space-y-1 px-1">
+                <h2 className="text-base sm:text-lg font-bold text-[#111111] tracking-tight">
+                  Pindai QRIS Merchant
+                </h2>
+                <div className="space-y-0.5 text-xs text-[#737373]">
+                  <p className="font-medium text-[#111111]">
+                    Merchant: <strong className="font-bold text-[#111111]">{merchantName}</strong>
+                  </p>
+                  {merchantNmid ? (
+                    <p className="text-[11px] font-mono text-[#737373]">
+                      NMID: {merchantNmid}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Enlarged Separate QRIS Image Card */}
+              {qrisImageUrl ? (
+                <div className="bg-white rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center space-y-2.5">
+                  <div className="w-full aspect-square relative bg-white flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={qrisImageUrl}
+                      alt={`QRIS Merchant ${merchantName}`}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  <p className="text-[11px] text-[#737373] text-center max-w-xs leading-relaxed px-1">
+                    Periksa dan pastikan nama merchant <strong className="text-[#111111]">{merchantName}</strong> muncul di aplikasi Anda sebelum memasukkan PIN.
+                  </p>
+                </div>
+              ) : (
+                /* Neutral Fallback State if QRIS is not configured by merchant */
+                <div className="p-6 bg-white rounded-2xl text-center space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-white border border-[#E5E5E5] text-[#737373] flex items-center justify-center mx-auto shadow-xs">
+                    <AlertCircle className="w-6 h-6 text-[#737373]" />
+                  </div>
+                  <div className="space-y-1 max-w-sm mx-auto">
+                    <h3 className="text-xs font-bold text-[#111111]">
+                      QRIS Merchant Belum Dikonfigurasi
+                    </h3>
+                    <p className="text-[11px] text-[#737373] leading-relaxed">
+                      Toko belum mengunggah kode QRIS resmi. Pembayaran mandiri via QRIS sementara tidak dapat diproses.
+                    </p>
+                  </div>
+                  <div className="pt-1">
+                    <a
+                      href={`https://wa.me/${adminWhatsapp}?text=${encodeURIComponent(
+                        `Halo admin Nook by Jina, saya ingin membayar pesanan ${order.id} (${formatRupiah(order.total)}) tetapi QRIS belum tersedia di aplikasi.`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#111111] hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors"
+                    >
+                      <MessageCircle className="w-4 h-4 fill-white" />
+                      <span>Hubungi Toko via WhatsApp</span>
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment Instructions (5 Steps) */}
+              <section className="bg-white rounded-2xl p-4 sm:p-5 text-xs text-[#737373] space-y-2">
+                <p className="font-semibold text-[#111111] flex items-center gap-1.5">
+                  <Info className="w-4 h-4 text-[#F25B09] flex-shrink-0" />
+                  Petunjuk Pembayaran:
+                </p>
+                <ol className="list-decimal list-inside space-y-1.5 text-[11px] leading-relaxed pl-0.5">
+                  <li>Buka aplikasi mobile banking atau e-wallet (BCA, Mandiri, BRI, BNI, DANA, GoPay, OVO, ShopeePay, dll).</li>
+                  <li>Pindai QRIS yang tertera pada halaman ini.</li>
+                  <li>Pastikan nama merchant yang muncul sesuai: <strong className="text-[#111111]">{merchantName}</strong>.</li>
+                  <li>Masukkan nominal transfer tepat sebesar <strong className="text-[#111111]">{formatRupiah(order.total)}</strong>.</li>
+                  <li>Setelah berhasil melakukan pembayaran, tekan tombol konfirmasi WhatsApp di bawah.</li>
+                </ol>
+              </section>
+
+              {/* WhatsApp Confirmation Action (Only if QRIS image is configured) */}
+              {qrisImageUrl && (
+                <div className="space-y-2">
                   <a
-                    href={`https://wa.me/${adminWhatsapp}?text=${encodeURIComponent(
-                      `Halo admin Nook by Jina, saya ingin membayar pesanan ${order.id} (${formatRupiah(order.total)}) tetapi QRIS belum tersedia di aplikasi.`
-                    )}`}
+                    href={waUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#111111] hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors"
+                    className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-[#25D366] hover:bg-[#1EBE5D] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors shadow-xs"
                   >
-                    <MessageCircle className="w-4 h-4 fill-white" />
-                    <span>Hubungi Toko via WhatsApp</span>
+                    <MessageCircle className="w-5 h-5 fill-white" />
+                    <span>Konfirmasi Pembayaran ke WhatsApp</span>
                   </a>
+
+                  {/* Verification Notice: Non-authoritative WhatsApp confirmation */}
+                  <div className="p-3 bg-neutral-100/70 rounded-xl border border-[#E5E5E5] text-[11px] text-[#737373] text-left leading-relaxed">
+                    <p>
+                      <strong>Catatan Verifikasi:</strong> Admin akan memeriksa riwayat mutasi aktual pada akun merchant. Menekan tombol WhatsApp atau melampirkan screenshot bukti transfer tidak otomatis menandai pesanan lunas.
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
-
-            {/* Payment Instructions (5 Steps) in a separate clean card */}
-            <section className="bg-white rounded-2xl p-4 sm:p-5 text-xs text-[#737373] space-y-2">
-              <p className="font-semibold text-[#111111] flex items-center gap-1.5">
-                <Info className="w-4 h-4 text-[#F25B09] flex-shrink-0" />
-                Petunjuk Pembayaran:
-              </p>
-              <ol className="list-decimal list-inside space-y-1.5 text-[11px] leading-relaxed pl-0.5">
-                <li>Buka aplikasi mobile banking atau e-wallet (BCA, Mandiri, BRI, BNI, DANA, GoPay, OVO, ShopeePay, dll).</li>
-                <li>Pindai QRIS yang tertera pada halaman ini.</li>
-                <li>Pastikan nama merchant yang muncul sesuai: <strong className="text-[#111111]">{merchantName}</strong>.</li>
-                <li>Masukkan nominal transfer tepat sebesar <strong className="text-[#111111]">{formatRupiah(order.total)}</strong>.</li>
-                <li>Setelah berhasil melakukan pembayaran, tekan tombol konfirmasi WhatsApp di bawah.</li>
-              </ol>
-            </section>
-
-            {/* WhatsApp Confirmation Action (Only if QRIS image is configured) */}
-            {qrisImageUrl && (
-              <div className="space-y-2">
-                <a
-                  href={waUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-[#25D366] hover:bg-[#1EBE5D] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors shadow-xs"
-                >
-                  <MessageCircle className="w-5 h-5 fill-white" />
-                  <span>Konfirmasi Pembayaran ke WhatsApp</span>
-                </a>
-
-                {/* Verification Notice: Non-authoritative WhatsApp confirmation */}
-                <div className="p-3 bg-neutral-100/70 rounded-xl border border-[#E5E5E5] text-[11px] text-[#737373] text-left leading-relaxed">
-                  <p>
-                    <strong>Catatan Verifikasi:</strong> Admin akan memeriksa riwayat mutasi aktual pada akun merchant. Menekan tombol WhatsApp atau melampirkan screenshot bukti transfer tidak otomatis menandai pesanan lunas.
-                  </p>
-                </div>
-              </div>
-            )}
-          </>
+              )}
+            </>
+          )
         )}
 
         {/* Link to order detail & token */}
