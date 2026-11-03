@@ -3,7 +3,7 @@
 import React, { useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Heart, Plus, Star, Clock, Truck } from "lucide-react";
+import { Heart, Plus, Clock, Truck } from "lucide-react";
 import { Product } from "@/types";
 import { formatRupiah } from "@/data/dummy-data";
 import { useCart } from "@/context/CartContext";
@@ -88,10 +88,15 @@ export function ProductCard({
           sizes="(max-width: 640px) 160px, 220px"
         />
 
-        {/* 2. Top-Left: Compact Rating Badge */}
-        <div className="absolute top-1.5 left-1.5 z-10 inline-flex items-center gap-0.5 bg-black/75 text-white text-[8.55px] font-semibold px-1.5 py-0.5 rounded-full backdrop-blur-xs">
-          <Star className="w-2.5 h-2.5 text-[#FFC83D] fill-[#FFC83D]" />
-          <span>4.9</span>
+        {/* 2. Top-Left: Soft Frosted Glass Product Type Badge (READY / PRE-ORDER) */}
+        <div
+          className={`absolute top-1.5 left-1.5 z-10 inline-flex items-center justify-center backdrop-blur-md rounded-full px-2 py-[2px] text-[8px] sm:text-[8.5px] font-bold tracking-tight select-none border shadow-xs ${
+            isReady
+              ? "bg-emerald-100/70 text-[#18794E] border-emerald-300/40"
+              : "bg-orange-100/70 text-[#C2410C] border-orange-300/40"
+          }`}
+        >
+          {typeConfig.label}
         </div>
 
         {/* 3. Top-Right: Subtle Translucent Favorite Button */}
@@ -128,14 +133,10 @@ export function ProductCard({
           {/* Top row: Name & Price on the left, circular Orange Plus button on the right */}
           <div className="flex items-start justify-between gap-1.5">
             <div className="min-w-0 flex-1">
-              {/* 4. Product Name - with compact product-type badge (READY / PRE-ORDER) */}
+              {/* 4. Product Name - Font weight 400 (normal/regular) with compact NOOK badge */}
               <h3 className="text-[10.26px] sm:text-[11.97px] font-normal text-[#111111] line-clamp-2 leading-snug">
-                <span
-                  className={`inline-flex items-center justify-center text-white text-[7px] sm:text-[8px] font-bold px-1 py-[0.5px] rounded-[2.5px] align-middle -translate-y-[0.5px] mr-1 leading-none select-none tracking-tight ${
-                    isReady ? "bg-[#18794E]" : "bg-[#F25B09]"
-                  }`}
-                >
-                  {typeConfig.label}
+                <span className="inline-flex items-center justify-center bg-[#F25B09] text-white text-[7.5px] sm:text-[8.5px] font-medium px-1 py-[0.5px] rounded-[2.5px] align-middle -translate-y-[0.5px] mr-1 leading-none select-none">
+                  NOOK
                 </span>
                 {product.name}
               </h3>
