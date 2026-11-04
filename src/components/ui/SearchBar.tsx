@@ -9,6 +9,8 @@ interface SearchBarProps {
   onClear?: () => void;
   placeholder?: string;
   className?: string;
+  id?: string;
+  name?: string;
 }
 
 export function SearchBar({
@@ -17,6 +19,8 @@ export function SearchBar({
   onClear,
   placeholder = "Mau order apa, bestie...",
   className = "",
+  id = "search-menu-input",
+  name = "search",
 }: SearchBarProps) {
   const handleClear = () => {
     onChange("");
@@ -26,11 +30,14 @@ export function SearchBar({
   return (
     <div className={`relative w-full ${className}`}>
       <input
+        id={id}
+        name={name}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label="Pencarian menu makanan"
+        autoComplete="off"
         className="w-full h-11 sm:h-12 pl-10 pr-10 bg-white border border-[#E5E5E5] rounded-2xl text-xs sm:text-sm text-[#111111] placeholder:text-[#737373] focus:outline-hidden focus:border-[#F25B09] transition-colors"
       />
       <Search

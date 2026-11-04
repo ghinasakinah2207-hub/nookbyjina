@@ -214,7 +214,8 @@ export function ContactDrawer({
                 width={36}
                 height={36}
                 unoptimized
-                className="w-auto h-7 object-contain"
+                className="w-7 h-7 object-contain"
+                style={{ aspectRatio: "1 / 1" }}
               />
             </div>
             <div className="min-w-0">

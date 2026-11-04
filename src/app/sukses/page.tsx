@@ -103,6 +103,8 @@ function OrderSuccessContent() {
 
           <div className="flex gap-2">
             <input
+              id="order-share-url"
+              name="orderUrl"
               type="text"
               readOnly
               value={orderUrl}

@@ -850,6 +850,7 @@ export default function ProductDetailClient({
           </label>
           <input
             id="item-note-input"
+            name="itemNote"
             type="text"
             disabled={!product.isAvailable || !storeOpen}
             value={itemNote}

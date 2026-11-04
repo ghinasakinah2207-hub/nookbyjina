@@ -456,6 +456,7 @@ function QuickAddForm({
           </div>
           <textarea
             id="quickAddNote"
+            name="quickAddNote"
             value={itemNote}
             onChange={(e) => setItemNote(e.target.value.slice(0, 200))}
             placeholder="Contoh: Sambal dipisah, daun kemangi diperbanyak..."
