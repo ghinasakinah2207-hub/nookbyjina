@@ -285,7 +285,7 @@ Ongkir (${order.deliveryArea}): ${
     order.shippingFee === 0 ? "Gratis" : formatRupiah(order.shippingFee)
   }
 *TOTAL: ${formatRupiah(order.total)}*
-Metode: ${order.paymentMethod === "Cash" ? "Cash (Bayar Tunai)" : order.gatewayProvider === "duitku" ? "QRIS" : `QRIS Statis (${order.merchantName || "Nook by Jina"})`}
+Metode: ${order.paymentMethod === "Cash" ? "Cash (Bayar Tunai)" : (order.gatewayProvider === "waroengpay" || order.gatewayProvider === "duitku" || order.paymentMethod === "QRIS") ? "QRIS" : `QRIS Statis (${order.merchantName || "Nook by Jina"})`}
 ------------------------------
 Pantau status pesanan: ${typeof window !== "undefined" ? window.location.href : ""}
 Terima kasih telah memesan di Nook by Jina!`;
@@ -381,28 +381,18 @@ Terima kasih telah memesan di Nook by Jina!`;
             <div>
               <p className="font-semibold">Pembayaran Sedang Diproses</p>
               <p className="text-[11px] mt-0.5">
-                {order.gatewayProvider === "duitku" || order.paymentMethod === "QRIS"
-                  ? "Menunggu verifikasi pembayaran otomatis dari gateway Duitku."
+                {(order.gatewayProvider === "waroengpay" || order.gatewayProvider === "duitku" || order.paymentMethod === "QRIS")
+                  ? "Menunggu verifikasi pembayaran otomatis dari gateway QRIS."
                   : "Admin akan memverifikasi di mutasi akun merchant."}
               </p>
             </div>
-            {order.paymentUrl ? (
-              <a
-                href={order.paymentUrl}
-                className="px-3 py-1.5 bg-[#F25B09] hover:bg-[#D94D06] text-white rounded-lg font-semibold text-xs flex items-center gap-1 shrink-0 transition-colors shadow-xs"
-              >
-                <QrCode className="w-3.5 h-3.5" />
-                <span>Bayar Duitku</span>
-              </a>
-            ) : (
-              <Link
-                href={`/pembayaran/${order.id}`}
-                className="px-3 py-1.5 bg-[#F25B09] hover:bg-[#D94D06] text-white rounded-lg font-semibold text-xs flex items-center gap-1 shrink-0 transition-colors shadow-xs"
-              >
-                <QrCode className="w-3.5 h-3.5" />
-                <span>Bayar QRIS</span>
-              </Link>
-            )}
+            <Link
+              href={`/pembayaran/${order.id}`}
+              className="px-3 py-1.5 bg-[#F25B09] hover:bg-[#D94D06] text-white rounded-lg font-semibold text-xs flex items-center gap-1 shrink-0 transition-colors shadow-xs"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>Bayar QRIS</span>
+            </Link>
           </div>
         ) : order.paymentMethod === "Cash" && isPendingCashStatus(order.paymentStatus) ? (
           <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-1 text-xs text-[#8A4B08]">
@@ -424,7 +414,7 @@ Terima kasih telah memesan di Nook by Jina!`;
               <p className="text-[11px] text-emerald-700">
                 {order.paymentMethod === "Cash"
                   ? "Pembayaran tunai telah diterima dan dikonfirmasi kasir."
-                  : order.gatewayProvider === "duitku" || order.paymentMethod === "QRIS"
+                  : (order.gatewayProvider === "waroengpay" || order.gatewayProvider === "duitku" || order.paymentMethod === "QRIS")
                   ? "Pembayaran QRIS telah diverifikasi otomatis secara instan."
                   : "Pembayaran telah terverifikasi melalui akun merchant."}
               </p>
@@ -527,8 +517,8 @@ Terima kasih telah memesan di Nook by Jina!`;
               • <strong>Metode Pembayaran:</strong>{" "}
               {order.paymentMethod === "Cash"
                 ? "Cash (Bayar Tunai)"
-                : order.gatewayProvider === "duitku"
-                ? "QRIS (Pembayaran Online Duitku)"
+                : (order.gatewayProvider === "waroengpay" || order.gatewayProvider === "duitku" || order.paymentMethod === "QRIS")
+                ? "QRIS (Pembayaran Otomatis)"
                 : `QRIS Merchant (${order.merchantName || "Nook by Jina"})`}
             </p>
             {order.orderNote ? (

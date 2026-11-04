@@ -141,8 +141,8 @@ export function computeOrderProgress(order: Order) {
     } else if (order.paymentMethod === "Cash") {
       statusSummaryText = "Menunggu pembayaran tunai (Cash)";
       statusDotColor = "bg-amber-500";
-    } else if (order.gatewayProvider === "duitku" || order.paymentMethod === "QRIS") {
-      statusSummaryText = "Menunggu verifikasi otomatis QRIS Duitku";
+    } else if (order.gatewayProvider === "waroengpay" || order.gatewayProvider === "duitku" || order.paymentMethod === "QRIS") {
+      statusSummaryText = "Menunggu pembayaran QRIS";
       statusDotColor = "bg-amber-500";
     } else {
       statusSummaryText = "Menunggu verifikasi pembayaran QRIS";

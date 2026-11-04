@@ -6,13 +6,19 @@ import Link from "next/link";
 import { AlertCircle, Clock, ArrowRight } from "lucide-react";
 import { getOrderToken } from "@/lib/order-token-vault";
 
-export default function DuitkuReturnClient() {
+export default function PaymentReturnClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const merchantOrderId = searchParams.get("merchantOrderId")?.trim() || "";
-  const resultCode = searchParams.get("resultCode")?.trim() || "";
   const reference = searchParams.get("reference")?.trim() || "";
+  const resultCode = searchParams.get("resultCode")?.trim() || "";
+
+  const orderIdentifier =
+    reference ||
+    searchParams.get("merchantOrderId")?.trim() ||
+    searchParams.get("id")?.trim() ||
+    searchParams.get("token")?.trim() ||
+    "";
 
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -22,26 +28,26 @@ export default function DuitkuReturnClient() {
 
     async function resolveCustomerOrder() {
       // 1. Validate parameter existence
-      if (!merchantOrderId) {
-        setErrorMessage("Parameter transaksi tidak lengkap (merchantOrderId tidak ditemukan).");
+      if (!orderIdentifier) {
+        setErrorMessage("Parameter transaksi tidak lengkap (nomor pesanan tidak ditemukan).");
         setLoading(false);
         return;
       }
 
+      // If identifier is already a 32-char token, redirect immediately
+      if (orderIdentifier.length >= 24) {
+        router.replace(`/pesanan/${encodeURIComponent(orderIdentifier)}`);
+        return;
+      }
+
       // 2. Check local token vault for matching token
-      // Customers who initiated checkout on this browser will have their token saved by orderId
-      const savedToken = getOrderToken(merchantOrderId);
+      const savedToken = getOrderToken(orderIdentifier);
 
       if (savedToken) {
-        // Redirect seamlessly to the customer's authoritative tracking page
-        // Never rely on resultCode from URL query parameter; /pesanan/[token] fetches real-time DB status
         router.replace(`/pesanan/${encodeURIComponent(savedToken)}`);
         return;
       }
 
-      // 3. If token is not in local vault (e.g. redirected to a different browser session),
-      // do NOT expose other customers' orders or brute force tokens.
-      // Display safe guidance to user.
       if (!isCancelled) {
         setLoading(false);
       }
@@ -52,7 +58,7 @@ export default function DuitkuReturnClient() {
     return () => {
       isCancelled = true;
     };
-  }, [merchantOrderId, router]);
+  }, [orderIdentifier, router]);
 
   if (loading) {
     return (
@@ -101,14 +107,14 @@ export default function DuitkuReturnClient() {
         <div className="text-center">
           <h1 className="text-base font-bold text-[#111111]">Transaksi Telah Diproses</h1>
           <p className="text-xs text-[#737373] mt-1.5 leading-relaxed">
-            Sistem pembayaran Duitku telah menyelesaikan proses verifikasi.
+            Sistem pembayaran gateway telah memproses transaksi Anda.
           </p>
         </div>
 
         <div className="p-3 bg-neutral-50 rounded-xl border border-[#E5E5E5] text-xs space-y-1.5">
           <div className="flex justify-between">
             <span className="text-[#737373]">Nomor Pesanan:</span>
-            <span className="font-semibold text-[#111111]">{merchantOrderId}</span>
+            <span className="font-semibold text-[#111111]">{orderIdentifier}</span>
           </div>
           {reference ? (
             <div className="flex justify-between">

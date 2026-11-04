@@ -113,6 +113,12 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
                           paymentDeadline: remote.paymentDeadline,
                           gatewayProvider: remote.gatewayProvider || local.gatewayProvider,
                           paymentUrl: remote.paymentUrl || local.paymentUrl,
+                          waroengpayInvoiceId: remote.waroengpayInvoiceId || local.waroengpayInvoiceId,
+                          qrisPayload: remote.qrisPayload || local.qrisPayload,
+                          uniqueCode: remote.uniqueCode ?? local.uniqueCode,
+                          rawAmount: remote.rawAmount ?? local.rawAmount,
+                          expiresAt: remote.expiresAt || local.expiresAt,
+                          livemode: remote.livemode ?? local.livemode,
                           duitkuReference: remote.duitkuReference || local.duitkuReference,
                           token: local.token || getOrderToken(local.id) || "",
                         };

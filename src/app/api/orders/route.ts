@@ -6,7 +6,7 @@ import { Order, CartItem, FulfillmentType, SelectedOption, SelectedAddon, Option
 import { validateIndonesianPhone } from "@/lib/phone";
 import { saveOrder, getOrderByToken } from "@/lib/orders-store";
 import { generateSecureOrderToken, isValidTokenFormat } from "@/lib/token-security";
-import { isDuitkuConfigured, createDuitkuTransaction, checkDuitkuTransaction } from "@/lib/duitku";
+import { isWaroengPayConfigured, createWaroengPayPayment, getWaroengPayPayment } from "@/lib/waroengpay";
 import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
 
 export async function POST(request: Request) {
@@ -400,55 +400,16 @@ export async function POST(request: Request) {
       // Check if order was already created with this secret token (retry defense)
       const existingOrder = await getOrderByToken(clientProvidedToken);
       if (existingOrder) {
-        // If order exists and is a QRIS order with Duitku configured, check if we need to return paymentUrl
-        let existingPaymentUrl = existingOrder.paymentUrl;
-        if (existingOrder.paymentMethod === "QRIS" && !existingPaymentUrl && isDuitkuConfigured()) {
+        // If order exists and is a QRIS order with WaroengPay configured, check if we need to reconcile status
+        if (existingOrder.paymentMethod === "QRIS" && isWaroengPayConfigured() && existingOrder.waroengpayInvoiceId) {
           try {
-            // First check if an invoice already exists on Duitku
-            const checkRes = await checkDuitkuTransaction(existingOrder.id);
-            if (checkRes && checkRes.statusCode === "00") {
-              // Transaction already settled on Duitku
+            const checkRes = await getWaroengPayPayment(existingOrder.waroengpayInvoiceId);
+            if (checkRes && checkRes.status === "paid") {
               existingOrder.paymentStatus = "Lunas";
               existingOrder.orderStatus = "Diproses";
             }
-
-            const productDetails = existingOrder.items.map((i) => `${i.quantity}x ${i.productName}`).join(", ").slice(0, 255);
-            const inquiryRes = await createDuitkuTransaction({
-              paymentAmount: existingOrder.total,
-              merchantOrderId: existingOrder.id,
-              productDetails: productDetails || "Pesanan Nook by Jina",
-              email: `${existingOrder.id.toLowerCase()}@customer.nookbyjina.com`,
-              phoneNumber: existingOrder.customerWhatsapp,
-              customerVaName: existingOrder.customerName,
-              paymentMethod: "SP",
-              expiryPeriod: 30,
-            });
-            existingPaymentUrl = inquiryRes.paymentUrl;
-
-            const supabase = getServiceRoleSupabaseClient();
-            if (supabase) {
-              await supabase
-                .from("payments")
-                .update({
-                  gateway_provider: "duitku",
-                  duitku_merchant_order_id: existingOrder.id,
-                  duitku_reference: inquiryRes.reference,
-                  payment_url: inquiryRes.paymentUrl,
-                  gateway_status: "INVOICE_CREATED",
-                  raw_response: inquiryRes as unknown as Record<string, unknown>,
-                })
-                .eq("order_id", (existingOrder as unknown as { uuid?: string }).uuid || existingOrder.id);
-            }
-          } catch (retryInquiryErr: unknown) {
-            console.error("[POST /api/orders] Retry Duitku inquiry failed:", retryInquiryErr);
-            const errMsg = retryInquiryErr instanceof Error ? retryInquiryErr.message : "";
-            if (errMsg.toLowerCase().includes("duplicate") || errMsg.toLowerCase().includes("already exists")) {
-              // Invoice was already created on Duitku; check status to reconcile
-              const checkRes = await checkDuitkuTransaction(existingOrder.id);
-              if (checkRes && checkRes.reference) {
-                existingOrder.duitkuReference = checkRes.reference;
-              }
-            }
+          } catch (retryCheckErr) {
+            console.error("[POST /api/orders] Retry WaroengPay status check failed:", retryCheckErr);
           }
         }
 
@@ -456,7 +417,7 @@ export async function POST(request: Request) {
           {
             success: true,
             order: existingOrder,
-            paymentUrl: existingPaymentUrl,
+            paymentUrl: existingOrder.paymentUrl,
             isRetry: true,
             serverValidated: {
               subtotal: existingOrder.subtotal,
@@ -480,8 +441,8 @@ export async function POST(request: Request) {
         : generateSecureOrderToken();
 
     const now = new Date();
-    // Default expiry period: 30 minutes, or matching configured invoice window
-    const EXPIRY_MINUTES = 30;
+    // WaroengPay standard expiry period: 15 minutes
+    const EXPIRY_MINUTES = 15;
     const deadline = new Date(now.getTime() + EXPIRY_MINUTES * 60 * 1000);
 
     const isCashOrder = canonicalMethod === "Cash";
@@ -512,28 +473,38 @@ export async function POST(request: Request) {
     // Persist to server store
     const savedOrder = await saveOrder(order);
 
-    // If QRIS and Duitku is configured, request invoice from Duitku Sandbox
+    // If QRIS and WaroengPay is configured, request dynamic QRIS invoice from WaroengPay
     let paymentUrl: string | undefined = undefined;
-    if (canonicalMethod === "QRIS" && isDuitkuConfigured()) {
+    if (canonicalMethod === "QRIS" && isWaroengPayConfigured()) {
       try {
-        const productDetails = validatedItems.map((i) => `${i.quantity}x ${i.productName}`).join(", ").slice(0, 255);
-        const inquiryRes = await createDuitkuTransaction({
-          paymentAmount: savedOrder.total,
-          merchantOrderId: savedOrder.id,
-          productDetails: productDetails || "Pesanan Nook by Jina",
-          email: `${savedOrder.id.toLowerCase()}@customer.nookbyjina.com`,
-          phoneNumber: cleanWhatsapp,
-          customerVaName: cleanName,
-          paymentMethod: "SP",
-          expiryPeriod: 30,
-        });
+        const hostDomain = (process.env.NEXT_PUBLIC_APP_URL || "https://www.nookbyjina.my.id").replace(/\/+$/, "");
+        const callbackUrl = `${hostDomain}/api/payments/waroengpay/webhook`;
+        const redirectUrl = `${hostDomain}/pesanan/${savedOrder.token}`;
 
-        paymentUrl = inquiryRes.paymentUrl;
+        const waroengPayRes = await createWaroengPayPayment(
+          {
+            amount: savedOrder.total,
+            reference: savedOrder.id,
+            description: `Pesanan Nook by Jina ${savedOrder.id}`.slice(0, 200),
+            callback_url: callbackUrl,
+            redirect_url: redirectUrl,
+            expires_in: 15,
+          },
+          savedOrder.id // Idempotency-Key
+        );
+
+        paymentUrl = waroengPayRes.pay_url;
         savedOrder.paymentUrl = paymentUrl;
-        savedOrder.duitkuReference = inquiryRes.reference;
-        savedOrder.gatewayProvider = "duitku";
+        savedOrder.gatewayProvider = "waroengpay";
+        savedOrder.waroengpayInvoiceId = waroengPayRes.id;
+        savedOrder.qrisPayload = waroengPayRes.qris;
+        savedOrder.uniqueCode = waroengPayRes.unique_code;
+        savedOrder.rawAmount = waroengPayRes.amount;
+        savedOrder.total = waroengPayRes.amount; // Authoritative amount including unique code
+        savedOrder.paymentDeadline = waroengPayRes.expires_at;
+        savedOrder.livemode = waroengPayRes.livemode;
 
-        // Store Duitku transaction reference in payments table
+        // Store WaroengPay transaction metadata in payments table
         const supabase = getServiceRoleSupabaseClient();
         if (supabase) {
           try {
@@ -554,26 +525,24 @@ export async function POST(request: Request) {
               const { error: updateErr } = await supabase
                 .from("payments")
                 .update({
-                  gateway_provider: "duitku",
-                  duitku_merchant_order_id: savedOrder.id,
-                  duitku_reference: inquiryRes.reference,
-                  payment_url: inquiryRes.paymentUrl,
+                  gateway_provider: "waroengpay",
+                  payment_url: waroengPayRes.pay_url,
                   gateway_status: "INVOICE_CREATED",
-                  raw_response: inquiryRes as unknown as Record<string, unknown>,
+                  raw_response: waroengPayRes as unknown as Record<string, unknown>,
                 })
                 .eq("order_id", orderUuid);
 
               if (updateErr) {
-                console.error("[POST /api/orders] Error recording Duitku payment metadata:", updateErr);
+                console.error("[POST /api/orders] Error recording WaroengPay payment metadata:", updateErr);
               }
             }
           } catch (updateErr) {
-            console.error("[POST /api/orders] Error recording Duitku payment metadata:", updateErr);
+            console.error("[POST /api/orders] Error recording WaroengPay payment metadata:", updateErr);
           }
         }
       } catch (inquiryErr: unknown) {
-        console.error("[POST /api/orders] Duitku inquiry failed:", inquiryErr);
-        const errMsg = inquiryErr instanceof Error ? inquiryErr.message : "Gagal meminta invoice Duitku";
+        console.error("[POST /api/orders] WaroengPay invoice creation failed:", inquiryErr);
+        const errMsg = inquiryErr instanceof Error ? inquiryErr.message : "Gagal membuat invoice WaroengPay";
         return NextResponse.json(
           {
             success: false,

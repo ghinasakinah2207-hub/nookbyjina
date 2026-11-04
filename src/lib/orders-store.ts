@@ -372,7 +372,7 @@ export async function getOrderByToken(token: string): Promise<Order | null> {
       if (orderUuid && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderUuid)) {
         const { data: payRecord } = await client
           .from("payments")
-          .select("gateway_provider, payment_url, duitku_reference, gateway_status")
+          .select("gateway_provider, payment_url, duitku_reference, gateway_status, raw_response")
           .eq("order_id", orderUuid)
           .maybeSingle();
 
@@ -380,6 +380,15 @@ export async function getOrderByToken(token: string): Promise<Order | null> {
           if (payRecord.gateway_provider) order.gatewayProvider = payRecord.gateway_provider;
           if (payRecord.payment_url) order.paymentUrl = payRecord.payment_url;
           if (payRecord.duitku_reference) order.duitkuReference = payRecord.duitku_reference;
+          const rawResp = payRecord.raw_response as Record<string, unknown> | null;
+          if (rawResp) {
+            if (rawResp.id) order.waroengpayInvoiceId = String(rawResp.id);
+            if (rawResp.qris) order.qrisPayload = String(rawResp.qris);
+            if (rawResp.unique_code !== undefined) order.uniqueCode = Number(rawResp.unique_code);
+            if (rawResp.amount !== undefined) order.rawAmount = Number(rawResp.amount);
+            if (rawResp.expires_at) order.expiresAt = String(rawResp.expires_at);
+            if (rawResp.livemode !== undefined) order.livemode = Boolean(rawResp.livemode);
+          }
         }
       }
     } catch {
@@ -511,7 +520,7 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
       if (uuids.length > 0) {
         const { data: payRecords } = await client
           .from("payments")
-          .select("order_id, gateway_provider, payment_url, duitku_reference, gateway_status")
+          .select("order_id, gateway_provider, payment_url, duitku_reference, gateway_status, raw_response")
           .in("order_id", uuids);
 
         if (payRecords && Array.isArray(payRecords)) {
@@ -522,6 +531,15 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
               if (p.gateway_provider) o.gatewayProvider = p.gateway_provider;
               if (p.payment_url) o.paymentUrl = p.payment_url;
               if (p.duitku_reference) o.duitkuReference = p.duitku_reference;
+              const rawResp = p.raw_response as Record<string, unknown> | null;
+              if (rawResp) {
+                if (rawResp.id) o.waroengpayInvoiceId = String(rawResp.id);
+                if (rawResp.qris) o.qrisPayload = String(rawResp.qris);
+                if (rawResp.unique_code !== undefined) o.uniqueCode = Number(rawResp.unique_code);
+                if (rawResp.amount !== undefined) o.rawAmount = Number(rawResp.amount);
+                if (rawResp.expires_at) o.expiresAt = String(rawResp.expires_at);
+                if (rawResp.livemode !== undefined) o.livemode = Boolean(rawResp.livemode);
+              }
             }
           }
         }

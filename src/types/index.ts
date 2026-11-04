@@ -108,7 +108,7 @@ export type PaymentStatus =
 
 export type PaymentMethod = "QRIS" | "Cash" | "QRIS Statis";
 
-export type GatewayProvider = "duitku" | null;
+export type GatewayProvider = "waroengpay" | "duitku" | null;
 
 export interface PaymentMethodsConfig {
   qris: boolean;
@@ -135,6 +135,12 @@ export interface Order {
   paymentDeadline: string; // ISO 8601
   merchantName: string;
   gatewayProvider?: GatewayProvider;
+  waroengpayInvoiceId?: string;
+  qrisPayload?: string;
+  uniqueCode?: number;
+  rawAmount?: number;
+  expiresAt?: string;
+  livemode?: boolean;
   duitkuReference?: string;
   paymentUrl?: string;
 }

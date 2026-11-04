@@ -1,28 +1,32 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, Suspense } from "react";
+import React, { useState, useEffect, useMemo, Suspense, useRef } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import QRCode from "qrcode";
 import {
   Clock,
-  MessageCircle,
-  AlertCircle,
   CheckCircle2,
   Copy,
   ChevronRight,
   Info,
   Loader2,
   HelpCircle,
-  ExternalLink,
-  ShieldCheck,
+  Download,
+  Share2,
+  Sparkles,
+  Smartphone,
+  Check,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { StatusBadge } from "@/components/ui/Badge";
 import { useOrder } from "@/context/OrderContext";
-import { formatRupiah, STORE_SETTINGS } from "@/data/dummy-data";
+import { formatRupiah } from "@/data/dummy-data";
 import { StoreSettings } from "@/types";
 import { getOrderToken } from "@/lib/order-token-vault";
-import { isPendingQrisStatus, isPendingCashStatus, isPaidStatus } from "@/lib/order-normalizer";
+import { isPendingQrisStatus, isPaidStatus } from "@/lib/order-normalizer";
 
 function PaymentContent() {
   const params = useParams();
@@ -36,29 +40,28 @@ function PaymentContent() {
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
   // Authoritative server-time offset (serverTime - localTime) in ms
-  const serverOffsetRef = React.useRef<number>(0);
+  const serverOffsetRef = useRef<number>(0);
 
   // Guard refs to prevent concurrent or infinite duplicate fetches
-  const inFlightFallbackRef = React.useRef(false);
-  const fetchedTokensRef = React.useRef<Set<string>>(new Set());
-  const ordersRef = React.useRef(orders);
+  const inFlightFallbackRef = useRef(false);
+  const fetchedTokensRef = useRef<Set<string>>(new Set());
+  const ordersRef = useRef(orders);
   useEffect(() => {
     ordersRef.current = orders;
   }, [orders]);
 
-  // Fallback recovery: fetch remote order if not found or missing payment metadata
+  // Fallback recovery: fetch remote order if not found locally
   useEffect(() => {
     if (!isHydrated || !orderId) return;
 
     const existsLocally = ordersRef.current.find((o) => o.id === orderId || o.token === orderId);
-    if (existsLocally && (existsLocally.paymentUrl || existsLocally.paymentMethod === "Cash")) {
+    if (existsLocally && (existsLocally.qrisPayload || existsLocally.paymentMethod === "Cash")) {
       return;
     }
 
     const lookupToken = orderId.length >= 16 ? orderId : getOrderToken(orderId);
     if (!lookupToken) return;
 
-    // Prevent duplicate fetch for the same lookup token
     if (fetchedTokensRef.current.has(lookupToken) || inFlightFallbackRef.current) {
       return;
     }
@@ -72,12 +75,10 @@ function PaymentContent() {
         if (data?.success && data?.order) {
           addOrder({ ...data.order, token: lookupToken });
         } else {
-          // If fetch returned error/not found, allow controlled retry later
           fetchedTokensRef.current.delete(lookupToken);
         }
       })
       .catch(() => {
-        // Allow controlled retry on network failure
         fetchedTokensRef.current.delete(lookupToken);
       })
       .finally(() => {
@@ -85,7 +86,7 @@ function PaymentContent() {
       });
   }, [isHydrated, orderId, addOrder]);
 
-  // Fetch live store settings from authoritative backend
+  // Fetch live store settings
   useEffect(() => {
     let isMounted = true;
     async function loadStoreSettings() {
@@ -98,7 +99,7 @@ function PaymentContent() {
           }
         }
       } catch {
-        // Fall back gracefully to STORE_SETTINGS if network is unavailable
+        // Fall back gracefully
       } finally {
         if (isMounted) {
           setIsLoadingSettings(false);
@@ -151,26 +152,62 @@ function PaymentContent() {
     }
   }, [order, resolvedToken, router]);
 
-  // If order uses Duitku QRIS and has paymentUrl, redirect to Duitku payment gateway immediately
-  useEffect(() => {
-    if (
-      order &&
-      order.paymentMethod !== "Cash" &&
-      (order.paymentMethod === "QRIS" ||
-        order.gatewayProvider === "duitku" ||
-        Boolean(order.paymentUrl)) &&
-      order.paymentUrl &&
-      order.paymentStatus !== "Lunas" &&
-      order.paymentStatus !== "Dibatalkan" &&
-      order.orderStatus !== "Dibatalkan"
-    ) {
-      window.location.href = order.paymentUrl;
-    }
-  }, [order]);
+  // QR Code data URL state
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  const [qrError, setQrError] = useState<string | null>(null);
 
-  // 30-minute QRIS countdown anchored to persisted order paymentDeadline
+  // Generate QR code from actual qris payload
+  useEffect(() => {
+    if (!order?.qrisPayload) return;
+
+    QRCode.toDataURL(order.qrisPayload, {
+      width: 400,
+      margin: 2,
+      errorCorrectionLevel: "M",
+      color: {
+        dark: "#111111",
+        light: "#FFFFFF",
+      },
+    })
+      .then((url) => {
+        setQrDataUrl(url);
+        setQrError(null);
+      })
+      .catch((err) => {
+        console.error("Error generating QR code:", err);
+        setQrError("Gagal merender kode QRIS.");
+      });
+  }, [order?.qrisPayload]);
+
+  // Polling for payment status (every 6 seconds while pending)
+  useEffect(() => {
+    if (!order || !resolvedToken) return;
+    if (isPaidStatus(order.paymentStatus) || order.paymentStatus === "Dibatalkan" || order.orderStatus === "Dibatalkan") {
+      return;
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/orders/${encodeURIComponent(resolvedToken)}`, { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.success && data?.order) {
+            if (data.order.paymentStatus === "Lunas" || data.order.paymentStatus === "Dibatalkan") {
+              addOrder({ ...data.order, token: resolvedToken });
+            }
+          }
+        }
+      } catch {
+        // Non-fatal polling error
+      }
+    }, 6000);
+
+    return () => clearInterval(interval);
+  }, [order, resolvedToken, addOrder]);
+
+  // 15-minute countdown anchored to order paymentDeadline (expires_at)
   const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(() => {
-    if (!order?.paymentDeadline) return 30 * 60;
+    if (!order?.paymentDeadline) return 15 * 60;
     const deadline = new Date(order.paymentDeadline).getTime();
     return Math.max(0, Math.floor((deadline - Date.now()) / 1000));
   });
@@ -178,24 +215,30 @@ function PaymentContent() {
   // Independent copy feedback states
   const [copiedOrderId, setCopiedOrderId] = useState(false);
   const [copiedAmount, setCopiedAmount] = useState(false);
+  const [sharedStatus, setSharedStatus] = useState<string | null>(null);
 
-  // Sync countdown timer with server time and handle expiry
+  // Simulation in progress state (Sandbox only)
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simulateSuccess, setSimulateSuccess] = useState(false);
+
+  // Countdown timer with WaroengPay 5-minute grace period enforcement
   useEffect(() => {
     if (!order || order.paymentMethod === "Cash" || !order.paymentDeadline) return;
 
-    // Verified paid orders ("Lunas") and cancelled orders never expire
-    if (order.paymentStatus === "Lunas" || order.paymentStatus === "Dibatalkan" || order.orderStatus === "Dibatalkan") return;
+    if (order.paymentStatus === "Lunas" || order.paymentStatus === "Dibatalkan" || order.orderStatus === "Dibatalkan") {
+      return;
+    }
 
     const deadline = new Date(order.paymentDeadline).getTime();
+    const GRACE_PERIOD_MS = 5 * 60 * 1000; // 5-minute grace period
+
     const updateCountdown = () => {
       const now = Date.now() + serverOffsetRef.current;
-      const diff = Math.max(0, Math.floor((deadline - now) / 1000));
+      const diff = Math.floor((deadline - now) / 1000);
       setTimeLeftSeconds(diff);
 
-      // Auto cancel unpaid order if timer expired and still pending payment or verification
-      const isUnpaidPending =
-        isPendingQrisStatus(order.paymentStatus) || isPendingCashStatus(order.paymentStatus);
-      if (diff <= 0 && isUnpaidPending) {
+      // Only mark cancelled after the full 5-minute grace period has passed
+      if (now >= deadline + GRACE_PERIOD_MS && isPendingQrisStatus(order.paymentStatus)) {
         updateOrderStatus(order.id, "Dibatalkan", "Dibatalkan", order.token);
       }
     };
@@ -209,19 +252,14 @@ function PaymentContent() {
   if (!isHydrated || isLoadingSettings) {
     return (
       <div className="min-h-screen pb-16 bg-[#F6F6F7]">
-        <Header
-          title="Pembayaran QRIS"
-          showBack={true}
-          backHref="/home"
-          showCart={false}
-        />
-        <main className="max-w-md mx-auto px-3 sm:px-4 pt-4 space-y-2">
+        <Header title="Pembayaran QRIS" showBack={true} backHref="/home" showCart={false} />
+        <main className="max-w-md mx-auto px-3 sm:px-4 pt-4 space-y-3">
           <div className="bg-white rounded-2xl p-4 sm:p-5 space-y-3 animate-pulse">
             <div className="h-4 bg-neutral-200 rounded w-1/3" />
             <div className="h-8 bg-neutral-200 rounded w-1/2" />
           </div>
           <div className="bg-white rounded-2xl p-4 space-y-4 text-center animate-pulse flex flex-col items-center justify-center">
-            <div className="w-full aspect-square bg-neutral-200 rounded-xl" />
+            <div className="w-64 h-64 bg-neutral-200 rounded-xl" />
             <div className="h-4 bg-neutral-200 rounded w-3/4" />
           </div>
         </main>
@@ -233,20 +271,13 @@ function PaymentContent() {
   if (!order) {
     return (
       <div className="min-h-screen pb-16 bg-[#F6F6F7]">
-        <Header
-          title="Pembayaran QRIS"
-          showBack={true}
-          backHref="/home"
-          showCart={false}
-        />
+        <Header title="Pembayaran QRIS" showBack={true} backHref="/home" showCart={false} />
         <main className="max-w-md mx-auto px-3 sm:px-4 pt-12 text-center space-y-4">
           <div className="w-14 h-14 rounded-2xl bg-white border border-[#E5E5E5] text-[#737373] flex items-center justify-center mx-auto shadow-xs">
             <HelpCircle className="w-7 h-7 text-[#737373]" />
           </div>
           <div className="space-y-1.5">
-            <h1 className="text-base font-bold text-[#111111]">
-              Pesanan Tidak Ditemukan
-            </h1>
+            <h1 className="text-base font-bold text-[#111111]">Pesanan Tidak Ditemukan</h1>
             <p className="text-xs text-[#737373] max-w-xs mx-auto leading-relaxed">
               Nomor pesanan &quot;{orderId}&quot; tidak tersimpan di riwayat perangkat ini.
             </p>
@@ -270,47 +301,21 @@ function PaymentContent() {
     order.paymentStatus === "Dibatalkan" ||
     order.orderStatus === "Dibatalkan" ||
     String(order.paymentStatus || "").toLowerCase() === "dibatalkan";
-  const isExpired = !isPaid && (isCancelled || timeLeftSeconds <= 0);
-  const isAwaitingVerification = !isPaid && !isExpired && isPendingQrisStatus(order.paymentStatus);
-  const isDuitkuQris =
-    order.paymentMethod !== "Cash" &&
-    (order.paymentMethod === "QRIS" ||
-      order.gatewayProvider === "duitku" ||
-      Boolean(order.paymentUrl) ||
-      Boolean(order.duitkuReference));
 
-  // Authoritative merchant details
-  const merchantName = storeSettings?.qrisMerchantName || order.merchantName || "Nook by Jina";
-  const merchantNmid = storeSettings?.qrisNmid || "";
-  const qrisImageUrl = storeSettings?.qrisImageUrl || "";
-  const adminWhatsapp = storeSettings?.adminWhatsapp || STORE_SETTINGS.adminWhatsapp;
+  // Grace period: countdown <= 0, but still within 5-minute grace period
+  const isInGracePeriod = !isPaid && !isCancelled && timeLeftSeconds <= 0 && timeLeftSeconds > -300;
+  const isExpired = !isPaid && (isCancelled || timeLeftSeconds <= -300);
 
-  // Format countdown string HH:MM:SS
-  const hours = Math.floor(timeLeftSeconds / 3600);
-  const minutes = Math.floor((timeLeftSeconds % 3600) / 60);
-  const seconds = timeLeftSeconds % 60;
-  const formattedCountdown = `${String(hours).padStart(2, "0")}:${String(
-    minutes
-  ).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  // Authoritative amounts
+  const paymentAmount = order.rawAmount || order.total;
+  const uniqueCode = order.uniqueCode;
+  const isSandbox = order.livemode === false || Boolean(order.waroengpayInvoiceId && order.qrisPayload?.startsWith("WAROENGPAY-TEST"));
 
-  // Deadline timestamp formatted in WIB (UTC+7)
-  const deadlineDate = order.paymentDeadline ? new Date(order.paymentDeadline) : new Date();
-  const formattedDeadlineWIB = deadlineDate.toLocaleTimeString("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Jakarta",
-  }) + " WIB";
-
-  // Pre-filled WhatsApp message for customer payment confirmation
-  const waMessage = `Halo admin Nook by Jina, saya ingin konfirmasi pembayaran untuk:
-- No. Pesanan: ${order.id}
-- Nama: ${order.customerName}
-- Total: ${formatRupiah(order.total)}
-- Metode: QRIS Statis (${merchantName})
-
-Mohon dicek di riwayat transaksi merchant. Terima kasih!`;
-
-  const waUrl = `https://wa.me/${adminWhatsapp}?text=${encodeURIComponent(waMessage)}`;
+  // Format countdown string MM:SS
+  const absRemaining = Math.max(0, timeLeftSeconds);
+  const countdownMinutes = Math.floor(absRemaining / 60);
+  const countdownSeconds = absRemaining % 60;
+  const formattedCountdown = `${String(countdownMinutes).padStart(2, "0")}:${String(countdownSeconds).padStart(2, "0")}`;
 
   // Copy Order ID
   const handleCopyOrderId = async (e?: React.MouseEvent) => {
@@ -321,16 +326,6 @@ Mohon dicek di riwayat transaksi merchant. Terima kasih!`;
     try {
       if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(order.id);
-      } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = order.id;
-        textArea.style.position = "fixed";
-        textArea.style.opacity = "0";
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textArea);
       }
       setCopiedOrderId(true);
       setTimeout(() => setCopiedOrderId(false), 2000);
@@ -339,32 +334,98 @@ Mohon dicek di riwayat transaksi merchant. Terima kasih!`;
     }
   };
 
-  // Copy Payment Amount (Raw numeric only, e.g. "25000" or "50000" without Rp/dots)
+  // Copy Payment Amount (Raw numeric without Rp/dots)
   const handleCopyAmount = async (e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
-    if (order.total === undefined || order.total === null) return;
     try {
-      const rawNumberString = String(Math.round(order.total));
+      const rawNumberString = String(Math.round(paymentAmount));
       if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(rawNumberString);
-      } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = rawNumberString;
-        textArea.style.position = "fixed";
-        textArea.style.opacity = "0";
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textArea);
       }
       setCopiedAmount(true);
       setTimeout(() => setCopiedAmount(false), 2000);
     } catch (err) {
       console.error("Failed to copy amount:", err);
+    }
+  };
+
+  // Download QRIS Image
+  const handleDownloadQr = () => {
+    if (!qrDataUrl) return;
+    const link = document.createElement("a");
+    link.href = qrDataUrl;
+    link.download = `QRIS-NOOK-${order.id}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Share QRIS
+  const handleShareQr = async () => {
+    const shareText = `Halo! Berikut tagihan QRIS untuk pesanan Nook by Jina (${order.id}) sebesar ${formatRupiah(paymentAmount)}. Selesaikan pembayaran sebelum masa berlaku habis.`;
+
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        if (qrDataUrl && navigator.canShare) {
+          const res = await fetch(qrDataUrl);
+          const blob = await res.blob();
+          const file = new File([blob], `QRIS-${order.id}.png`, { type: "image/png" });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: `QRIS Pesanan ${order.id} - Nook by Jina`,
+              text: shareText,
+              files: [file],
+            });
+            return;
+          }
+        }
+        await navigator.share({
+          title: `QRIS Pesanan ${order.id} - Nook by Jina`,
+          text: shareText,
+          url: window.location.href,
+        });
+      } catch {
+        // User cancelled share or unsupported
+      }
+    } else {
+      // Fallback: Copy link
+      navigator.clipboard?.writeText(window.location.href);
+      setSharedStatus("Tautan disalin ke clipboard!");
+      setTimeout(() => setSharedStatus(null), 2500);
+    }
+  };
+
+  // Simulate payment (Sandbox only)
+  const handleSimulatePayment = async () => {
+    if (!order.waroengpayInvoiceId || isSimulating) return;
+    setIsSimulating(true);
+    try {
+      const res = await fetch("/api/payments/waroengpay/simulate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentId: order.waroengpayInvoiceId,
+          action: "pay",
+        }),
+      });
+      if (res.ok) {
+        setSimulateSuccess(true);
+        // Prompt re-fetch of order status
+        if (resolvedToken) {
+          const orderRes = await fetch(`/api/orders/${encodeURIComponent(resolvedToken)}`, { cache: "no-store" });
+          if (orderRes.ok) {
+            const data = await orderRes.json();
+            if (data?.order) addOrder({ ...data.order, token: resolvedToken });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Simulation error:", err);
+    } finally {
+      setIsSimulating(false);
     }
   };
 
@@ -377,316 +438,303 @@ Mohon dicek di riwayat transaksi merchant. Terima kasih!`;
         showCart={false}
       />
 
-      <main className="max-w-md mx-auto px-3 sm:px-4 pt-3.5 space-y-2">
-        {/* =========================================================================
-            ORDER SUMMARY CARD
-            ========================================================================= */}
-        <section className="bg-white rounded-2xl p-4 sm:p-5 space-y-3.5">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs text-[#737373]">No. Pesanan:</span>
-              <span className="text-xs font-mono font-bold text-[#111111]">
-                {order.id}
-              </span>
-              <button
-                type="button"
-                onClick={handleCopyOrderId}
-                title="Salin nomor pesanan"
-                aria-label="Salin nomor pesanan"
-                className="text-[#737373] hover:text-[#111111] p-1 transition-colors cursor-pointer rounded-md hover:bg-neutral-100"
-              >
-                <Copy className="w-3.5 h-3.5" />
-              </button>
-              {copiedOrderId && (
-                <span className="text-[10px] text-[#18794E] font-medium bg-emerald-50 px-1.5 py-0.5 rounded animate-landing-fade">
-                  Tersalin!
+      <main className="max-w-md mx-auto px-3 sm:px-4 pt-3.5 space-y-3">
+        {/* Sandbox Mode Banner */}
+        {isSandbox && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center justify-between gap-2 shadow-xs">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+              <div>
+                <span className="font-bold block text-[11px] uppercase tracking-wider text-amber-800">
+                  Mode Uji Sandbox (WaroengPay)
                 </span>
-              )}
-            </div>
-            <StatusBadge status={order.paymentStatus} type="payment" />
-          </div>
-
-          <div className="pt-3 border-t border-[#E5E5E5] flex items-center justify-between gap-2">
-            <span className="text-xs font-medium text-[#737373]">
-              Total yang Harus Dibayar
-            </span>
-            <div className="flex items-center gap-1.5 flex-wrap justify-end">
-              {copiedAmount && (
-                <span className="text-[10px] text-[#18794E] font-medium bg-emerald-50 px-1.5 py-0.5 rounded animate-landing-fade">
-                  Nominal disalin!
+                <span className="text-[11px] text-amber-700">
+                  Tagihan simulasi — tidak memerlukan transfer uang sungguhan.
                 </span>
-              )}
-              <button
-                type="button"
-                onClick={handleCopyAmount}
-                title="Salin nominal transfer (hanya angka)"
-                aria-label={`Salin nominal transfer ${order.total}`}
-                className="group inline-flex items-center gap-1.5 px-2 py-1 -mr-1 rounded-xl hover:bg-neutral-100/80 active:bg-neutral-200/60 transition-colors cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-[#F25B09]/20"
-              >
-                <span className="text-xl font-extrabold text-[#F25B09] tracking-tight group-hover:opacity-95">
-                  {formatRupiah(order.total)}
-                </span>
-                <Copy className="w-3.5 h-3.5 text-[#F25B09] opacity-75 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* =========================================================================
-            PAYMENT STATUS BANNERS
-            ========================================================================= */}
-        {isExpired ? (
-          /* Cancelled or Expired State */
-          <div className="p-4 bg-red-50 border border-red-200 rounded-2xl space-y-2 text-xs text-[#B42318] shadow-xs">
-            <div className="flex items-center gap-2 font-bold text-sm">
-              <AlertCircle className="w-5 h-5 flex-shrink-0" />
-              <span>Pesanan Dibatalkan</span>
-            </div>
-            <p className="leading-relaxed">
-              Batas waktu pembayaran telah berakhir (30 menit) atau pesanan telah dibatalkan oleh sistem.
-            </p>
-            <p className="text-[11px] text-red-700 pt-1 leading-relaxed">
-              Jika Anda sudah terlanjur melakukan transfer setelah batas waktu berakhir, silakan hubungi admin toko secara manual dengan melampirkan nomor pesanan <strong>{order.id}</strong>.
-            </p>
-            <div className="pt-1.5">
-              <Link
-                href="/home"
-                className="inline-flex items-center gap-1.5 font-bold text-[#B42318] hover:underline"
-              >
-                Kembali ke Beranda <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-          </div>
-        ) : isPaid ? (
-          /* Verified Payment Success Panel */
-          <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-3 text-xs text-[#18794E] shadow-xs">
-            <div className="flex items-center gap-2 font-bold text-sm sm:text-base">
-              <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-[#18794E]" />
-              <span>Pembayaran Terverifikasi Lunas!</span>
-            </div>
-            <p className="leading-relaxed text-[#18794E]">
-              Merchant telah memeriksa dan memverifikasi transaksi Anda. Pesanan sedang diproses sesuai jadwal operasional dapur toko.
-            </p>
-            <div className="pt-1">
-              <Link
-                href={resolvedToken ? `/pesanan/${resolvedToken}` : "/pesanan"}
-                className="inline-flex items-center gap-1.5 font-bold text-white bg-[#18794E] hover:bg-emerald-700 px-4 py-2.5 rounded-xl text-xs transition-colors shadow-xs"
-              >
-                <span>Lihat Detail Pesanan & Token Akses</span>
-                <ChevronRight className="w-4 h-4" />
-              </Link>
-            </div>
-          </div>
-        ) : (
-          /* Active Payment: 30-Minute Countdown & Subtle Pending Guidance */
-          <div className="space-y-2">
-            {/* Subtle Pending Status Notice */}
-            <div className="p-3 bg-neutral-100/80 border border-[#E5E5E5] rounded-xl flex items-center justify-between text-xs text-[#737373]">
-              <span className="font-medium text-[#111111]">
-                {isDuitkuQris
-                  ? "Menunggu Pembayaran via Duitku"
-                  : isAwaitingVerification
-                  ? "Menunggu Konfirmasi & Verifikasi Merchant"
-                  : "Menunggu Pembayaran"}
-              </span>
-              <span className="text-[11px] text-[#737373]">
-                {isDuitkuQris
-                  ? "Verifikasi otomatis sistem gateway"
-                  : "Pindai QRIS & bayar nominal tepat"}
-              </span>
-            </div>
-
-            {/* Countdown Box */}
-            <div className="p-3.5 bg-[#FFF4E5] border border-[#FBD38D] rounded-xl flex items-center justify-between text-xs text-[#8A4B08] shadow-xs">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-[#8A4B08] flex-shrink-0" />
-                <div>
-                  <span className="font-semibold block leading-tight">
-                    Batas Pembayaran: {formattedDeadlineWIB}
-                  </span>
-                  <span className="text-[11px] text-[#8A4B08]/80">
-                    Selesaikan transfer sebelum:
-                  </span>
-                </div>
               </div>
-              <span className="font-mono font-bold text-base bg-white px-2.5 py-1 rounded-lg border border-[#FBD38D] text-[#8A4B08]">
-                {formattedCountdown}
-              </span>
             </div>
+            {!isPaid && !isExpired && (
+              <button
+                type="button"
+                onClick={handleSimulatePayment}
+                disabled={isSimulating || simulateSuccess}
+                className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white font-semibold rounded-lg text-[11px] shrink-0 transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-60"
+              >
+                {isSimulating ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Check className="w-3 h-3" />
+                )}
+                <span>{simulateSuccess ? "Terkirim" : "Simulasi Bayar"}</span>
+              </button>
+            )}
           </div>
         )}
 
+        {/* Order Info & Nominal Card */}
+        <section className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-[#E5E5E5]/60 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="text-[11px] text-[#737373] uppercase font-semibold tracking-wider">
+                Nomor Pesanan
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-bold text-[#111111] font-mono">{order.id}</span>
+                <button
+                  type="button"
+                  onClick={handleCopyOrderId}
+                  className="p-1 rounded-md hover:bg-neutral-100 text-[#737373] hover:text-[#111111] transition-colors cursor-pointer"
+                  title="Salin Nomor Pesanan"
+                >
+                  {copiedOrderId ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+            <StatusBadge
+              status={isPaid ? "Lunas" : isExpired ? "Dibatalkan" : "Menunggu bayar"}
+              type="payment"
+            />
+          </div>
+
+          <div className="h-px bg-neutral-100" />
+
+          {/* Amount to pay */}
+          <div className="space-y-1">
+            <div className="flex items-baseline justify-between">
+              <span className="text-xs text-[#737373]">Total yang Wajib Ditransfer:</span>
+              <button
+                type="button"
+                onClick={handleCopyAmount}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#F25B09] hover:underline cursor-pointer"
+              >
+                {copiedAmount ? (
+                  <>
+                    <Check className="w-3 h-3 text-emerald-600" />
+                    <span className="text-emerald-600">Disalin</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3" />
+                    <span>Salin Nominal</span>
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="text-2xl font-black text-[#111111] tracking-tight">
+              {formatRupiah(paymentAmount)}
+            </div>
+            {uniqueCode !== undefined && uniqueCode > 0 ? (
+              <p className="text-[11px] text-[#737373] leading-snug">
+                Termasuk kode unik <strong className="text-[#111111]">Rp {uniqueCode}</strong> untuk verifikasi instan otomatis.
+              </p>
+            ) : null}
+          </div>
+
+          {/* Countdown & Grace period indicator */}
+          {!isPaid && !isExpired && (
+            <div
+              className={`p-3 rounded-xl flex items-center justify-between text-xs shadow-xs border ${
+                isInGracePeriod
+                  ? "bg-amber-50 border-amber-300 text-amber-900"
+                  : "bg-[#FFF4E5] border-[#FBD38D] text-[#8A4B08]"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 shrink-0" />
+                <div>
+                  <span className="font-semibold block leading-tight">
+                    {isInGracePeriod ? "Masa Tenggang Tambahan (5 Menit)" : "Batas Waktu Pembayaran:"}
+                  </span>
+                  <span className="text-[11px] opacity-80">
+                    {isInGracePeriod
+                      ? "Menunggu konfirmasi mutasi bank..."
+                      : "Selesaikan sebelum waktu habis:"}
+                  </span>
+                </div>
+              </div>
+              <span className="font-mono font-bold text-base bg-white px-2.5 py-1 rounded-lg border border-current">
+                {isInGracePeriod ? "00:00" : formattedCountdown}
+              </span>
+            </div>
+          )}
+        </section>
+
         {/* =========================================================================
-            ACTIVE PAYMENT SECTION
+            STATE 1: PAID (LUNAS)
+            ========================================================================= */}
+        {isPaid && (
+          <section className="bg-white rounded-2xl p-6 text-center space-y-4 shadow-xs border border-emerald-100">
+            <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-xs">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-base font-bold text-[#111111]">Pembayaran Berhasil!</h2>
+              <p className="text-xs text-[#737373] leading-relaxed max-w-xs mx-auto">
+                Dana Anda telah diverifikasi otomatis oleh WaroengPay. Pesanan sedang disiapkan oleh tim dapur Nook by Jina.
+              </p>
+            </div>
+            <div className="pt-2">
+              <Link
+                href={resolvedToken ? `/pesanan/${resolvedToken}` : "/pesanan"}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-3 bg-[#F25B09] hover:bg-[#D94D06] text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
+              >
+                <span>Pantau Status Pesanan</span>
+                <ChevronRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </section>
+        )}
+
+        {/* =========================================================================
+            STATE 2: EXPIRED / CANCELLED (KEDALUWARSA)
+            ========================================================================= */}
+        {!isPaid && isExpired && (
+          <section className="bg-white rounded-2xl p-6 text-center space-y-4 shadow-xs border border-red-100">
+            <div className="w-14 h-14 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto shadow-xs">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <div className="space-y-1.5">
+              <h2 className="text-base font-bold text-[#111111]">Batas Waktu Pembayaran Habis</h2>
+              <p className="text-xs text-[#737373] leading-relaxed max-w-xs mx-auto">
+                Tagihan QRIS ini telah kedaluwarsa. Silakan lakukan pemesanan ulang untuk mendapatkan kode QRIS yang baru.
+              </p>
+            </div>
+            <div className="pt-2">
+              <Link
+                href="/menu"
+                className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-3 bg-[#111111] hover:bg-neutral-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Pesan Ulang di Menu</span>
+              </Link>
+            </div>
+          </section>
+        )}
+
+        {/* =========================================================================
+            STATE 3: PENDING (ACTIVE QRIS)
             ========================================================================= */}
         {!isPaid && !isExpired && (
-          isDuitkuQris ? (
-            /* Duitku Gateway Flow: Redirect & Gateway Card (No static QR, No WhatsApp confirmation) */
-            <div className="space-y-2.5">
-              <div className="bg-white rounded-2xl p-5 flex flex-col items-center justify-center space-y-4 text-center shadow-xs border border-[#E5E5E5]/60">
-                <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#F25B09]">
-                  <Loader2 className="w-7 h-7 animate-spin text-[#F25B09]" />
-                </div>
-                <div className="space-y-1.5 max-w-sm">
-                  <h2 className="text-base font-bold text-[#111111]">
-                    Menuju Gateway Pembayaran QRIS Duitku
-                  </h2>
-                  <p className="text-xs text-[#737373] leading-relaxed">
-                    Sistem sedang mengarahkan Anda ke portal pembayaran resmi Duitku untuk memindai kode QRIS transaksi Anda.
-                  </p>
-                </div>
+          <div className="space-y-3">
+            {/* Real QRIS Code Card */}
+            <section className="bg-white rounded-2xl p-4 sm:p-5 text-center space-y-3.5 shadow-xs border border-[#E5E5E5]/60 flex flex-col items-center">
+              <div className="space-y-1">
+                <h2 className="text-base font-bold text-[#111111]">
+                  {storeSettings?.qrisMerchantName || order.merchantName || "Nook by Jina"}
+                </h2>
+                <p className="text-xs text-[#737373]">
+                  Mendukung GoPay, OVO, DANA, ShopeePay, BCA, Mandiri, BRI, BSI & seluruh m-Banking.
+                </p>
+              </div>
 
-                {order.paymentUrl ? (
-                  <div className="w-full pt-1 space-y-2">
-                    <a
-                      href={order.paymentUrl}
-                      className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#C2410C] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors shadow-xs"
-                    >
-                      <span>Buka Halaman Pembayaran Duitku</span>
-                      <ExternalLink className="w-4 h-4 shrink-0" />
-                    </a>
-                    <p className="text-[11px] text-[#737373]">
-                      Jika halaman pembayaran tidak terbuka secara otomatis, silakan klik tombol di atas.
-                    </p>
-                  </div>
+              {/* QR Image */}
+              <div className="w-64 h-64 p-3 bg-white border border-[#E5E5E5] rounded-2xl shadow-sm flex items-center justify-center relative">
+                {qrDataUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={qrDataUrl}
+                    alt={`QRIS Pesanan ${order.id}`}
+                    className="w-full h-full object-contain"
+                  />
+                ) : qrError ? (
+                  <div className="text-xs text-red-600 p-4">{qrError}</div>
                 ) : (
-                  <div className="w-full p-3 bg-neutral-50 rounded-xl text-xs text-[#737373] text-center border border-[#E5E5E5]">
-                    Menyiapkan tautan pembayaran gateway Duitku...
+                  <div className="flex flex-col items-center gap-2 text-xs text-[#737373]">
+                    <Loader2 className="w-6 h-6 animate-spin text-[#F25B09]" />
+                    <span>Membuat kode QRIS...</span>
                   </div>
                 )}
               </div>
 
-              {/* Automatic Gateway Verification Notice (No WhatsApp confirmation needed) */}
-              <section className="bg-white rounded-2xl p-4 sm:p-5 text-xs text-[#737373] space-y-2 border border-[#E5E5E5]/60">
-                <p className="font-semibold text-[#111111] flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-[#18794E] flex-shrink-0" />
-                  Konfirmasi Pembayaran Otomatis
+              {/* Action Buttons: Download & Share */}
+              <div className="w-full max-w-xs grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleDownloadQr}
+                  disabled={!qrDataUrl}
+                  className="w-full min-h-[44px] px-3 py-2 bg-neutral-100 hover:bg-neutral-200 active:bg-neutral-300 text-[#111111] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4 shrink-0" />
+                  <span>Unduh QRIS</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleShareQr}
+                  disabled={!qrDataUrl}
+                  className="w-full min-h-[44px] px-3 py-2 bg-neutral-100 hover:bg-neutral-200 active:bg-neutral-300 text-[#111111] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <Share2 className="w-4 h-4 shrink-0" />
+                  <span>Bagikan</span>
+                </button>
+              </div>
+
+              {sharedStatus && (
+                <p className="text-[11px] text-emerald-600 font-semibold">{sharedStatus}</p>
+              )}
+
+              {/* Exact nominal warning */}
+              <div className="w-full p-2.5 bg-orange-50/70 border border-orange-200/80 rounded-xl text-left flex items-start gap-2">
+                <Info className="w-4 h-4 text-[#F25B09] shrink-0 mt-0.5" />
+                <p className="text-[11px] text-orange-950 leading-relaxed">
+                  <strong>PENTING:</strong> Transfer dengan nominal persis{" "}
+                  <strong className="text-[#F25B09] font-bold">{formatRupiah(paymentAmount)}</strong> hingga 3 digit terakhir. Nominal yang berbeda tidak dapat diverifikasi otomatis.
                 </p>
-                <div className="space-y-1.5 text-[11px] leading-relaxed text-[#737373]">
-                  <p>
-                    • Transaksi diverifikasi secara otomatis oleh sistem gateway Duitku setelah Anda menyelesaikan pembayaran di aplikasi e-wallet atau mobile banking.
-                  </p>
-                  <p>
-                    • <strong>Tidak perlu konfirmasi manual atau mengirim bukti transfer ke WhatsApp.</strong> Status pembayaran akan otomatis diperbarui menjadi &quot;Lunas&quot;.
-                  </p>
+              </div>
+            </section>
+
+            {/* Instructions for Paying with Single Phone */}
+            <section className="bg-white rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs border border-[#E5E5E5]/60 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-orange-100 text-[#F25B09] flex items-center justify-center shrink-0">
+                  <Smartphone className="w-4 h-4" />
                 </div>
-              </section>
-            </div>
-          ) : (
-            /* Legacy Static QRIS (Retained for older orders) */
-            <>
-              {/* Merchant Information Outside the Card */}
-              <div className="text-center space-y-1 px-1">
-                <h2 className="text-base sm:text-lg font-bold text-[#111111] tracking-tight">
-                  Pindai QRIS Merchant
-                </h2>
-                <div className="space-y-0.5 text-xs text-[#737373]">
-                  <p className="font-medium text-[#111111]">
-                    Merchant: <strong className="font-bold text-[#111111]">{merchantName}</strong>
-                  </p>
-                  {merchantNmid ? (
-                    <p className="text-[11px] font-mono text-[#737373]">
-                      NMID: {merchantNmid}
-                    </p>
-                  ) : null}
+                <div>
+                  <h3 className="font-bold text-[#111111]">Cara Bayar Menggunakan 1 HP</h3>
+                  <p className="text-[11px] text-[#737373]">Ikuti 4 langkah mudah berikut:</p>
                 </div>
               </div>
 
-              {/* Enlarged Separate QRIS Image Card */}
-              {qrisImageUrl ? (
-                <div className="bg-white rounded-2xl p-3 sm:p-4 flex flex-col items-center justify-center space-y-2.5">
-                  <div className="w-full aspect-square relative bg-white flex items-center justify-center">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={qrisImageUrl}
-                      alt={`QRIS Merchant ${merchantName}`}
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                  <p className="text-[11px] text-[#737373] text-center max-w-xs leading-relaxed px-1">
-                    Periksa dan pastikan nama merchant <strong className="text-[#111111]">{merchantName}</strong> muncul di aplikasi Anda sebelum memasukkan PIN.
-                  </p>
-                </div>
-              ) : (
-                /* Neutral Fallback State if QRIS is not configured by merchant */
-                <div className="p-6 bg-white rounded-2xl text-center space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-white border border-[#E5E5E5] text-[#737373] flex items-center justify-center mx-auto shadow-xs">
-                    <AlertCircle className="w-6 h-6 text-[#737373]" />
-                  </div>
-                  <div className="space-y-1 max-w-sm mx-auto">
-                    <h3 className="text-xs font-bold text-[#111111]">
-                      QRIS Merchant Belum Dikonfigurasi
-                    </h3>
-                    <p className="text-[11px] text-[#737373] leading-relaxed">
-                      Toko belum mengunggah kode QRIS resmi. Pembayaran mandiri via QRIS sementara tidak dapat diproses.
-                    </p>
-                  </div>
-                  <div className="pt-1">
-                    <a
-                      href={`https://wa.me/${adminWhatsapp}?text=${encodeURIComponent(
-                        `Halo admin Nook by Jina, saya ingin membayar pesanan ${order.id} (${formatRupiah(order.total)}) tetapi QRIS belum tersedia di aplikasi.`
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#111111] hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold transition-colors"
-                    >
-                      <MessageCircle className="w-4 h-4 fill-white" />
-                      <span>Hubungi Toko via WhatsApp</span>
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              {/* Payment Instructions (5 Steps) */}
-              <section className="bg-white rounded-2xl p-4 sm:p-5 text-xs text-[#737373] space-y-2">
-                <p className="font-semibold text-[#111111] flex items-center gap-1.5">
-                  <Info className="w-4 h-4 text-[#F25B09] flex-shrink-0" />
-                  Petunjuk Pembayaran:
-                </p>
-                <ol className="list-decimal list-inside space-y-1.5 text-[11px] leading-relaxed pl-0.5">
-                  <li>Buka aplikasi mobile banking atau e-wallet (BCA, Mandiri, BRI, BNI, DANA, GoPay, OVO, ShopeePay, dll).</li>
-                  <li>Pindai QRIS yang tertera pada halaman ini.</li>
-                  <li>Pastikan nama merchant yang muncul sesuai: <strong className="text-[#111111]">{merchantName}</strong>.</li>
-                  <li>Masukkan nominal transfer tepat sebesar <strong className="text-[#111111]">{formatRupiah(order.total)}</strong>.</li>
-                  <li>Setelah berhasil melakukan pembayaran, tekan tombol konfirmasi WhatsApp di bawah.</li>
-                </ol>
-              </section>
-
-              {/* WhatsApp Confirmation Action (Only if QRIS image is configured) */}
-              {qrisImageUrl && (
-                <div className="space-y-2">
-                  <a
-                    href={waUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-[#25D366] hover:bg-[#1EBE5D] text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors shadow-xs"
-                  >
-                    <MessageCircle className="w-5 h-5 fill-white" />
-                    <span>Konfirmasi Pembayaran ke WhatsApp</span>
-                  </a>
-
-                  {/* Verification Notice: Non-authoritative WhatsApp confirmation */}
-                  <div className="p-3 bg-neutral-100/70 rounded-xl border border-[#E5E5E5] text-[11px] text-[#737373] text-left leading-relaxed">
-                    <p>
-                      <strong>Catatan Verifikasi:</strong> Admin akan memeriksa riwayat mutasi aktual pada akun merchant. Menekan tombol WhatsApp atau melampirkan screenshot bukti transfer tidak otomatis menandai pesanan lunas.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </>
-          )
+              <ol className="space-y-2 text-[#404040] leading-relaxed text-[11px] list-none pl-0">
+                <li className="flex items-start gap-2">
+                  <span className="w-4 h-4 rounded-full bg-neutral-100 text-[#111111] font-bold flex items-center justify-center shrink-0 text-[10px]">
+                    1
+                  </span>
+                  <span>
+                    Ketuk tombol <strong>Unduh QRIS</strong> di atas atau ambil tangkapan layar (screenshot) kode QR.
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-4 h-4 rounded-full bg-neutral-100 text-[#111111] font-bold flex items-center justify-center shrink-0 text-[10px]">
+                    2
+                  </span>
+                  <span>
+                    Buka aplikasi m-Banking (BCA, Mandiri, BRI, BSI, dll) atau e-Wallet (GoPay, OVO, DANA, ShopeePay).
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-4 h-4 rounded-full bg-neutral-100 text-[#111111] font-bold flex items-center justify-center shrink-0 text-[10px]">
+                    3
+                  </span>
+                  <span>
+                    Pilih menu <strong>Scan / Bayar QRIS</strong>, lalu ketuk ikon <strong>Galeri / Foto</strong> di pojok layar untuk mengunggah gambar QRIS.
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-4 h-4 rounded-full bg-neutral-100 text-[#111111] font-bold flex items-center justify-center shrink-0 text-[10px]">
+                    4
+                  </span>
+                  <span>
+                    Periksa nominal transfer (pastikan persis <strong>{formatRupiah(paymentAmount)}</strong>) lalu konfirmasi PIN Anda.
+                  </span>
+                </li>
+              </ol>
+            </section>
+          </div>
         )}
-
-        {/* Link to order detail & token */}
-        <div>
-          <Link
-            href={resolvedToken ? `/pesanan/${resolvedToken}` : "/pesanan"}
-            className="w-full min-h-[44px] px-4 py-2.5 bg-white border border-[#E5E5E5] rounded-xl text-xs font-semibold text-[#111111] flex items-center justify-center gap-2 hover:bg-neutral-50 transition-colors shadow-xs"
-          >
-            <span>Buka Detail Pesanan & Token Akses</span>
-            <ChevronRight className="w-4 h-4 text-[#737373]" />
-          </Link>
-        </div>
       </main>
     </div>
   );
@@ -696,9 +744,9 @@ export default function PaymentPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#F6F6F7] flex items-center justify-center text-xs text-[#737373]">
-          <Loader2 className="w-5 h-5 text-[#111111] animate-spin mr-2" />
-          Memuat rincian pembayaran...
+        <div className="min-h-screen bg-[#F6F6F7] flex flex-col items-center justify-center p-4">
+          <div className="w-10 h-10 border-4 border-[#F25B09] border-t-transparent rounded-full animate-spin mb-4" />
+          <p className="text-sm font-medium text-[#737373]">Memuat halaman pembayaran QRIS...</p>
         </div>
       }
     >
@@ -706,4 +754,3 @@ export default function PaymentPage() {
     </Suspense>
   );
 }
-

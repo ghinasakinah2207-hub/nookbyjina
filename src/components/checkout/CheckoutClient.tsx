@@ -321,14 +321,11 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
         selectedItems.forEach((item) => removeFromCart(item.id));
       }
 
-      // Navigate appropriately based on payment result
+      // Navigate appropriately based on payment method
       if (selectedPaymentMethod === "Cash") {
         router.push(`/pesanan/${data.order.token}`);
-      } else if (data.paymentUrl) {
-        // Direct redirect to Duitku payment gateway
-        window.location.href = data.paymentUrl;
       } else {
-        // Fallback for legacy QRIS or offline dev
+        // Direct customer to custom Nook QRIS payment interface (never external gateway redirect)
         router.push(`/pembayaran/${data.order.id}`);
       }
     } catch (err: unknown) {

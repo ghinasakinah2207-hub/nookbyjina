@@ -130,20 +130,26 @@ export function isOrderExpired(
   const isPending =
     isPendingQrisStatus(paymentStatus) ||
     orderStatus === "Pesanan baru" ||
-    (paymentStatus === "menunggu pembayaran" && gatewayProvider === "duitku");
+    (paymentStatus === "menunggu pembayaran" && (gatewayProvider === "waroengpay" || gatewayProvider === "duitku"));
 
   if (!isPending) {
     return false;
   }
 
   // 6. Authoritative deadline check
+  // WaroengPay documentation specifies a 5-minute grace period after expires_at
+  // before an unpaid invoice is marked expired.
   const rawDeadline = String(order.paymentDeadline || order.payment_deadline || "").trim();
   const rawCreatedAt = String(order.createdAt || order.created_at || "").trim();
 
   let deadlineMs: number;
   if (rawDeadline && !isNaN(Date.parse(rawDeadline))) {
-    // If an authoritative deadline exists (e.g. gateway expiry or legacy deadline), use it directly
-    deadlineMs = new Date(rawDeadline).getTime();
+    const baseDeadline = new Date(rawDeadline).getTime();
+    if (gatewayProvider === "waroengpay") {
+      deadlineMs = baseDeadline + 5 * 60 * 1000;
+    } else {
+      deadlineMs = baseDeadline;
+    }
   } else if (rawCreatedAt && !isNaN(Date.parse(rawCreatedAt))) {
     // For legacy static QRIS without explicit payment_deadline, fall back to 30 mins
     deadlineMs = new Date(rawCreatedAt).getTime() + ORDER_PAYMENT_DEADLINE_MS;
@@ -167,10 +173,17 @@ export function normalizeOrder(order: unknown): Order {
   const rawGatewayProvider = (o.gatewayProvider || o.gateway_provider) as Order["gatewayProvider"] | undefined;
   const rawPaymentUrl = (o.paymentUrl || o.payment_url) as string | undefined;
   const rawDuitkuRef = (o.duitkuReference || o.duitku_reference) as string | undefined;
+  const rawWaroengPayId = (o.waroengpayInvoiceId || o.waroengpay_invoice_id || (o.raw_response as Record<string, unknown> | undefined)?.id) as string | undefined;
+  const rawQrisPayload = (o.qrisPayload || o.qris_payload || (o.raw_response as Record<string, unknown> | undefined)?.qris) as string | undefined;
+  const rawUniqueCode = o.uniqueCode !== undefined ? Number(o.uniqueCode) : (o.raw_response as Record<string, unknown> | undefined)?.unique_code !== undefined ? Number((o.raw_response as Record<string, unknown>).unique_code) : undefined;
+  const rawAmountVal = o.rawAmount !== undefined ? Number(o.rawAmount) : (o.raw_response as Record<string, unknown> | undefined)?.amount !== undefined ? Number((o.raw_response as Record<string, unknown>).amount) : undefined;
+  const rawExpiresAt = (o.expiresAt || o.expires_at || (o.raw_response as Record<string, unknown> | undefined)?.expires_at) as string | undefined;
+  const rawLivemode = o.livemode !== undefined ? Boolean(o.livemode) : (o.raw_response as Record<string, unknown> | undefined)?.livemode !== undefined ? Boolean((o.raw_response as Record<string, unknown>).livemode) : undefined;
+
   const rawUuid = (o.uuid || (typeof o.id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(o.id) ? o.id : undefined)) as string | undefined;
 
   let normalizedMethod = normalizePaymentMethod(rawMethod);
-  if (rawGatewayProvider === "duitku" && normalizedMethod === "QRIS Statis") {
+  if ((rawGatewayProvider === "waroengpay" || rawGatewayProvider === "duitku") && normalizedMethod === "QRIS Statis") {
     normalizedMethod = "QRIS";
   }
   const normalizedStatus = normalizePaymentStatus(rawStatus, normalizedMethod);
@@ -188,6 +201,12 @@ export function normalizeOrder(order: unknown): Order {
     gatewayProvider: rawGatewayProvider || undefined,
     paymentUrl: rawPaymentUrl || undefined,
     duitkuReference: rawDuitkuRef || undefined,
+    waroengpayInvoiceId: rawWaroengPayId || undefined,
+    qrisPayload: rawQrisPayload || undefined,
+    uniqueCode: rawUniqueCode,
+    rawAmount: rawAmountVal,
+    expiresAt: rawExpiresAt || undefined,
+    livemode: rawLivemode,
     items: rawItems.map((item: unknown) => {
       const it = (item || {}) as Record<string, unknown>;
       const rawOptions = Array.isArray(it.selectedOptions) ? it.selectedOptions : [];
