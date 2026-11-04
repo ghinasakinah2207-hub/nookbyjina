@@ -60,8 +60,10 @@ assert(logoIndex !== -1 && qrImgIndex !== -1 && logoIndex < qrImgIndex, "Officia
 
 // --- TEST 2: QRIS Card Background & QR Container Styling ---
 console.log("\n--- TEST 2: QRIS Card Background & QR Container Styling ---");
-assert(paymentPageCode.includes("bg-[#FFF3E8]"), "QRIS card has subtle warm light orange background (#FFF3E8)");
-assert(paymentPageCode.includes("border-orange-200/50"), "QRIS card has soft orange border");
+assert(
+  paymentPageCode.includes("bg-white rounded-2xl p-4 sm:p-5 text-center space-y-3.5 shadow-xs border border-[#E5E5E5]/60"),
+  "QRIS card background is pure white (#FFFFFF) with neutral light gray border (#E5E5E5)"
+);
 assert(
   paymentPageCode.includes("bg-white border border-[#E5E5E5] rounded-2xl shadow-sm"),
   "QR code container maintains pure white background and border for reliable optical scanning"
@@ -93,6 +95,12 @@ assert(
 assert(
   paymentPageCode.includes("Pembayaran belum diterima. Silakan tunggu atau coba lagi."),
   "Displays subtle feedback message when payment is still pending"
+);
+const cekIndex = paymentPageCode.lastIndexOf("CEK TRANSAKSI");
+const caraBayarIndex = paymentPageCode.indexOf("Cara Bayar Menggunakan 1 HP");
+assert(
+  qrImgIndex < cekIndex && cekIndex < caraBayarIndex,
+  "CEK TRANSAKSI button is placed directly below QRIS card and above Cara Bayar accordion"
 );
 
 // Verify check route exists and is configured

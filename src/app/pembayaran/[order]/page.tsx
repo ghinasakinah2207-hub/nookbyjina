@@ -732,10 +732,10 @@ function PaymentContent() {
             ========================================================================= */}
         {!isPaid && !isExpired && (
           <div className="space-y-3">
-            {/* Real QRIS Code Card (subtle warm orange background) */}
-            <section className="bg-[#FFF3E8] rounded-2xl p-4 sm:p-5 text-center space-y-3.5 border border-orange-200/50 flex flex-col items-center">
+            {/* Real QRIS Code Card (White background) */}
+            <section className="bg-white rounded-2xl p-4 sm:p-5 text-center space-y-3.5 shadow-xs border border-[#E5E5E5]/60 flex flex-col items-center">
               <div className="space-y-0.5">
-                <p className="text-xs text-neutral-600">
+                <p className="text-xs text-[#737373]">
                   Mendukung GoPay, OVO, DANA, ShopeePay & seluruh Mobile Banking
                 </p>
               </div>
@@ -772,12 +772,12 @@ function PaymentContent() {
               </div>
 
               {/* WaroengPay NMID Display */}
-              <div className="text-xs font-mono font-medium text-neutral-600 text-center pt-0.5">
+              <div className="text-xs font-mono font-medium text-[#737373] text-center pt-0.5">
                 NMID: {actualNmid}
               </div>
 
               {/* Merchant Identity Notice */}
-              <div className="w-full max-w-sm p-2.5 sm:p-3 bg-white/90 border border-orange-200/60 rounded-xl text-left flex items-start gap-2 text-[11px] text-neutral-800 leading-relaxed shadow-2xs">
+              <div className="w-full max-w-sm p-2.5 sm:p-3 bg-sky-50/80 border border-sky-100 rounded-xl text-left flex items-start gap-2 text-[11px] text-sky-950 leading-relaxed shadow-2xs">
                 <Info className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
                 <p>
                   Di aplikasi pembayaran akan tertulis: <strong>WAROENGKU</strong> (penampung resmi resi payment Nook by Jina).
@@ -790,7 +790,7 @@ function PaymentContent() {
                   type="button"
                   onClick={handleDownloadQr}
                   disabled={!qrDataUrl}
-                  className="w-full min-h-[44px] px-3 py-2 bg-white hover:bg-orange-50 active:bg-orange-100 text-[#111111] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-orange-200/60 disabled:opacity-50"
+                  className="w-full min-h-[44px] px-3 py-2 bg-neutral-100 hover:bg-neutral-200 active:bg-neutral-300 text-[#111111] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   <Download className="w-4 h-4 shrink-0" />
                   <span>Unduh QRIS</span>
@@ -799,7 +799,7 @@ function PaymentContent() {
                   type="button"
                   onClick={handleShareQr}
                   disabled={!qrDataUrl}
-                  className="w-full min-h-[44px] px-3 py-2 bg-white hover:bg-orange-50 active:bg-orange-100 text-[#111111] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-orange-200/60 disabled:opacity-50"
+                  className="w-full min-h-[44px] px-3 py-2 bg-neutral-100 hover:bg-neutral-200 active:bg-neutral-300 text-[#111111] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   <Share2 className="w-4 h-4 shrink-0" />
                   <span>Bagikan</span>
@@ -810,6 +810,39 @@ function PaymentContent() {
                 <p className="text-[11px] text-emerald-600 font-semibold">{sharedStatus}</p>
               )}
             </section>
+
+            {/* CEK TRANSAKSI Button & Status Verification Feedback (Directly below QRIS card) */}
+            <div className="space-y-2 pt-0.5">
+              <button
+                type="button"
+                onClick={handleCheckTransaction}
+                disabled={isCheckingStatus}
+                className="w-full py-3.5 px-4 bg-[#0F172A] hover:bg-[#1E293B] active:bg-[#020617] text-white font-bold text-xs tracking-wider uppercase rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isCheckingStatus ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Memeriksa...</span>
+                  </>
+                ) : (
+                  <span>CEK TRANSAKSI</span>
+                )}
+              </button>
+
+              {checkFeedback && (
+                <div
+                  className={`p-2.5 rounded-xl text-xs text-center leading-relaxed animate-landing-fade ${
+                    checkFeedback.type === "error"
+                      ? "bg-red-50 text-red-700 border border-red-200"
+                      : checkFeedback.type === "success"
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : "bg-neutral-100 text-neutral-700 border border-neutral-200"
+                  }`}
+                >
+                  {checkFeedback.message}
+                </div>
+              )}
+            </div>
 
             {/* Instructions for Paying with Single Phone */}
             <section className="bg-white rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs border border-[#E5E5E5]/60 text-xs">
@@ -858,39 +891,6 @@ function PaymentContent() {
                 </li>
               </ol>
             </section>
-
-            {/* CEK TRANSAKSI Button & Status Verification Feedback */}
-            <div className="space-y-2 pt-1">
-              <button
-                type="button"
-                onClick={handleCheckTransaction}
-                disabled={isCheckingStatus}
-                className="w-full py-3.5 px-4 bg-[#0F172A] hover:bg-[#1E293B] active:bg-[#020617] text-white font-bold text-xs tracking-wider uppercase rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isCheckingStatus ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-white" />
-                    <span>Memeriksa...</span>
-                  </>
-                ) : (
-                  <span>CEK TRANSAKSI</span>
-                )}
-              </button>
-
-              {checkFeedback && (
-                <div
-                  className={`p-2.5 rounded-xl text-xs text-center leading-relaxed animate-landing-fade ${
-                    checkFeedback.type === "error"
-                      ? "bg-red-50 text-red-700 border border-red-200"
-                      : checkFeedback.type === "success"
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : "bg-neutral-100 text-neutral-700 border border-neutral-200"
-                  }`}
-                >
-                  {checkFeedback.message}
-                </div>
-              )}
-            </div>
           </div>
         )}
       </main>
