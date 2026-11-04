@@ -6,7 +6,6 @@ import { useParams, useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import {
   Clock,
-  CheckCircle2,
   Copy,
   ChevronRight,
   Info,
@@ -24,7 +23,6 @@ import { Header } from "@/components/layout/Header";
 import { StatusBadge } from "@/components/ui/Badge";
 import { useOrder } from "@/context/OrderContext";
 import { formatRupiah } from "@/data/dummy-data";
-import { StoreSettings } from "@/types";
 import { getOrderToken } from "@/lib/order-token-vault";
 import { isPendingQrisStatus, isPaidStatus } from "@/lib/order-normalizer";
 
@@ -34,10 +32,6 @@ function PaymentContent() {
   const orderId = decodeURIComponent((params?.order as string) || "");
 
   const { orders, getOrderById, updateOrderStatus, isHydrated, addOrder } = useOrder();
-
-  // Store settings loaded live from backend/API
-  const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
-  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
   // Authoritative server-time offset (serverTime - localTime) in ms
   const serverOffsetRef = useRef<number>(0);
@@ -85,32 +79,6 @@ function PaymentContent() {
         inFlightFallbackRef.current = false;
       });
   }, [isHydrated, orderId, addOrder]);
-
-  // Fetch live store settings
-  useEffect(() => {
-    let isMounted = true;
-    async function loadStoreSettings() {
-      try {
-        const res = await fetch("/api/store-settings", { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          if (isMounted && data.settings) {
-            setStoreSettings(data.settings);
-          }
-        }
-      } catch {
-        // Fall back gracefully
-      } finally {
-        if (isMounted) {
-          setIsLoadingSettings(false);
-        }
-      }
-    }
-    loadStoreSettings();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   // Sync server authoritative time
   useEffect(() => {
@@ -179,6 +147,30 @@ function PaymentContent() {
       });
   }, [order?.qrisPayload]);
 
+  // Success Animation Tracking:
+  // Trigger ONLY when payment status genuinely transitions from unpaid to paid in real-time.
+  // Avoid replaying on subsequent page refreshes.
+  const wasAlreadyPaidOnMount = useRef<boolean | null>(null);
+  const [isFreshlyPaid, setIsFreshlyPaid] = useState(false);
+  const prevPaymentStatusRef = useRef<string | undefined>(undefined);
+  const currentPaymentStatus = order?.paymentStatus;
+
+  useEffect(() => {
+    if (!currentPaymentStatus) return;
+
+    if (wasAlreadyPaidOnMount.current === null) {
+      wasAlreadyPaidOnMount.current = isPaidStatus(currentPaymentStatus);
+    } else if (
+      !wasAlreadyPaidOnMount.current &&
+      isPaidStatus(currentPaymentStatus) &&
+      !isPaidStatus(prevPaymentStatusRef.current || "")
+    ) {
+      setIsFreshlyPaid(true);
+    }
+
+    prevPaymentStatusRef.current = currentPaymentStatus;
+  }, [currentPaymentStatus]);
+
   // Polling for payment status (every 6 seconds while pending)
   useEffect(() => {
     if (!order || !resolvedToken) return;
@@ -214,7 +206,6 @@ function PaymentContent() {
 
   // Independent copy feedback states
   const [copiedOrderId, setCopiedOrderId] = useState(false);
-  const [copiedAmount, setCopiedAmount] = useState(false);
   const [sharedStatus, setSharedStatus] = useState<string | null>(null);
 
   // Simulation in progress state (Sandbox only)
@@ -248,8 +239,8 @@ function PaymentContent() {
     return () => clearInterval(interval);
   }, [order, updateOrderStatus]);
 
-  // Show loading skeleton while waiting for client hydration and settings
-  if (!isHydrated || isLoadingSettings) {
+  // Show loading skeleton while waiting for client hydration
+  if (!isHydrated) {
     return (
       <div className="min-h-screen pb-16 bg-[#F6F6F7]">
         <Header title="Pembayaran QRIS" showBack={true} backHref="/home" showCart={false} />
@@ -334,24 +325,6 @@ function PaymentContent() {
     }
   };
 
-  // Copy Payment Amount (Raw numeric without Rp/dots)
-  const handleCopyAmount = async (e?: React.MouseEvent) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    try {
-      const rawNumberString = String(Math.round(paymentAmount));
-      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(rawNumberString);
-      }
-      setCopiedAmount(true);
-      setTimeout(() => setCopiedAmount(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy amount:", err);
-    }
-  };
-
   // Download QRIS Image
   const handleDownloadQr = () => {
     if (!qrDataUrl) return;
@@ -365,7 +338,7 @@ function PaymentContent() {
 
   // Share QRIS
   const handleShareQr = async () => {
-    const shareText = `Halo! Berikut tagihan QRIS untuk pesanan Nook by Jina (${order.id}) sebesar ${formatRupiah(paymentAmount)}. Selesaikan pembayaran sebelum masa berlaku habis.`;
+    const shareText = `Halo! Berikut tagihan QRIS untuk pesanan (${order.id}) sebesar ${formatRupiah(paymentAmount)}. Selesaikan pembayaran sebelum masa berlaku habis.`;
 
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
@@ -375,7 +348,7 @@ function PaymentContent() {
           const file = new File([blob], `QRIS-${order.id}.png`, { type: "image/png" });
           if (navigator.canShare({ files: [file] })) {
             await navigator.share({
-              title: `QRIS Pesanan ${order.id} - Nook by Jina`,
+              title: `QRIS Pesanan ${order.id}`,
               text: shareText,
               files: [file],
             });
@@ -383,7 +356,7 @@ function PaymentContent() {
           }
         }
         await navigator.share({
-          title: `QRIS Pesanan ${order.id} - Nook by Jina`,
+          title: `QRIS Pesanan ${order.id}`,
           text: shareText,
           url: window.location.href,
         });
@@ -504,26 +477,7 @@ function PaymentContent() {
 
           {/* Amount to pay */}
           <div className="space-y-1">
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs text-[#737373]">Total yang Wajib Ditransfer:</span>
-              <button
-                type="button"
-                onClick={handleCopyAmount}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#F25B09] hover:underline cursor-pointer"
-              >
-                {copiedAmount ? (
-                  <>
-                    <Check className="w-3 h-3 text-emerald-600" />
-                    <span className="text-emerald-600">Disalin</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3 h-3" />
-                    <span>Salin Nominal</span>
-                  </>
-                )}
-              </button>
-            </div>
+            <span className="text-xs text-[#737373] block">Total yang Wajib Ditransfer:</span>
             <div className="text-2xl font-black text-[#111111] tracking-tight">
               {formatRupiah(paymentAmount)}
             </div>
@@ -564,25 +518,32 @@ function PaymentContent() {
         </section>
 
         {/* =========================================================================
-            STATE 1: PAID (LUNAS)
+            STATE 1: PAID (LUNAS) — SUBTLE SUCCESS ANIMATION
             ========================================================================= */}
         {isPaid && (
-          <section className="bg-white rounded-2xl p-6 text-center space-y-4 shadow-xs border border-emerald-100">
-            <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-xs">
-              <CheckCircle2 className="w-8 h-8" />
+          <section className="bg-white rounded-2xl p-6 text-center space-y-4 shadow-xs border border-emerald-100 animate-landing-fade">
+            {/* Small green checkmark in circular background with scale-in animation */}
+            <div
+              className={`w-14 h-14 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto border border-emerald-200/60 shadow-xs ${
+                isFreshlyPaid ? "animate-payment-success" : ""
+              }`}
+            >
+              <Check className={`w-7 h-7 stroke-[2.5] ${isFreshlyPaid ? "animate-checkmark-pop" : ""}`} />
             </div>
+
             <div className="space-y-1">
               <h2 className="text-base font-bold text-[#111111]">Pembayaran Berhasil!</h2>
               <p className="text-xs text-[#737373] leading-relaxed max-w-xs mx-auto">
-                Dana Anda telah diverifikasi otomatis oleh WaroengPay. Pesanan sedang disiapkan oleh tim dapur Nook by Jina.
+                Pembayaran kamu sudah terverifikasi.
               </p>
             </div>
+
             <div className="pt-2">
               <Link
                 href={resolvedToken ? `/pesanan/${resolvedToken}` : "/pesanan"}
-                className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-3 bg-[#F25B09] hover:bg-[#D94D06] text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
+                className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-3 bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#C2410C] text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
               >
-                <span>Pantau Status Pesanan</span>
+                <span>Lihat Detail Pesanan</span>
                 <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
@@ -620,14 +581,11 @@ function PaymentContent() {
             ========================================================================= */}
         {!isPaid && !isExpired && (
           <div className="space-y-3">
-            {/* Real QRIS Code Card */}
+            {/* Real QRIS Code Card (No Nook by Jina merchant title above QR) */}
             <section className="bg-white rounded-2xl p-4 sm:p-5 text-center space-y-3.5 shadow-xs border border-[#E5E5E5]/60 flex flex-col items-center">
-              <div className="space-y-1">
-                <h2 className="text-base font-bold text-[#111111]">
-                  {storeSettings?.qrisMerchantName || order.merchantName || "Nook by Jina"}
-                </h2>
+              <div className="space-y-0.5">
                 <p className="text-xs text-[#737373]">
-                  Mendukung GoPay, OVO, DANA, ShopeePay, BCA, Mandiri, BRI, BSI & seluruh m-Banking.
+                  Mendukung GoPay, OVO, DANA, ShopeePay & seluruh Mobile Banking
                 </p>
               </div>
 
@@ -680,8 +638,8 @@ function PaymentContent() {
               <div className="w-full p-2.5 bg-orange-50/70 border border-orange-200/80 rounded-xl text-left flex items-start gap-2">
                 <Info className="w-4 h-4 text-[#F25B09] shrink-0 mt-0.5" />
                 <p className="text-[11px] text-orange-950 leading-relaxed">
-                  <strong>PENTING:</strong> Transfer dengan nominal persis{" "}
-                  <strong className="text-[#F25B09] font-bold">{formatRupiah(paymentAmount)}</strong> hingga 3 digit terakhir. Nominal yang berbeda tidak dapat diverifikasi otomatis.
+                  <strong>PENTING:</strong> Nominal transfer wajib persis{" "}
+                  <strong className="text-[#F25B09] font-bold">{formatRupiah(paymentAmount)}</strong> (termasuk kode unik) agar transaksi otomatis diverifikasi dalam hitungan detik.
                 </p>
               </div>
             </section>

@@ -92,6 +92,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = React.useRef(false);
+  const [isNavigatingToPayment, setIsNavigatingToPayment] = useState(false);
 
   // Stable idempotency token for this checkout session to defend against duplicate orders on retry
   const [checkoutToken] = useState<string>(() => generateOrderToken());
@@ -201,6 +202,21 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
     selectedSubtotal,
     configuredAreaName,
   ]);
+
+  // Seamless transition screen while navigating directly to payment page after order creation
+  if (isNavigatingToPayment) {
+    return (
+      <div className="min-h-screen bg-[#F6F6F7] flex flex-col items-center justify-center p-6 text-center animate-landing-fade">
+        <div className="w-10 h-10 border-4 border-[#F25B09] border-t-transparent rounded-full animate-spin mb-4" />
+        <h1 className="text-sm font-semibold text-[#111111]">
+          Menyiapkan Halaman Pembayaran...
+        </h1>
+        <p className="text-xs text-[#737373] mt-1">
+          Mohon tunggu sebentar, pesanan Anda sedang dialihkan.
+        </p>
+      </div>
+    );
+  }
 
   // If no items are in checkout, render redirect prompt
   if (checkoutItems.length === 0) {
@@ -314,23 +330,27 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
       // Store server-validated order into client OrderContext for tracking & payments
       addOrder(data.order);
 
-      // Clean up purchased items: if Buy Now session, clear isolated item; if cart checkout, remove only checked items
+      // Suppress empty cart flash by enabling seamless payment transition state
+      setIsNavigatingToPayment(true);
+
+      // Clean up purchased items only after order is confirmed by server
       if (isBuyNow) {
         clearBuyNowItem();
       } else {
         selectedItems.forEach((item) => removeFromCart(item.id));
       }
 
-      // Navigate appropriately based on payment method
-      if (selectedPaymentMethod === "Cash") {
-        router.push(`/pesanan/${data.order.token}`);
-      } else {
-        // Direct customer to custom Nook QRIS payment interface (never external gateway redirect)
-        router.push(`/pembayaran/${data.order.id}`);
-      }
+      // Navigate directly via router.replace (not push) to avoid exposing empty checkout route on back
+      const targetUrl =
+        selectedPaymentMethod === "Cash"
+          ? `/pesanan/${data.order.token}`
+          : `/pembayaran/${data.order.id}`;
+
+      router.replace(targetUrl);
     } catch (err: unknown) {
       isSubmittingRef.current = false;
       setIsSubmitting(false);
+      setIsNavigatingToPayment(false);
       const msg =
         err instanceof Error
           ? err.message

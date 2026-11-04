@@ -85,8 +85,45 @@ html, body {
   animation: landingFadeIn 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Payment success scale-in and checkmark animation */
+@keyframes paymentSuccessScale {
+  0% {
+    opacity: 0;
+    transform: scale(0.75);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes checkmarkPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-payment-success {
+  animation: paymentSuccessScale 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-checkmark-pop {
+  animation: checkmarkPop 300ms 120ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-landing-fade {
+  .animate-landing-fade,
+  .animate-payment-success,
+  .animate-checkmark-pop {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
