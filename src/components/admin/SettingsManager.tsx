@@ -19,7 +19,11 @@ import {
   Trash2,
   Image as ImageIcon,
   Mail,
+  Bell,
 } from "lucide-react";
+import { useAdminNotification } from "@/context/AdminNotificationContext";
+import { AdminNotificationSoundToggle } from "@/components/admin/AdminNotificationSoundToggle";
+
 import { StoreSettings } from "@/types";
 import { formatRupiah } from "@/data/dummy-data";
 import { normalizeInstagramUrl } from "@/lib/instagram-url";
@@ -67,6 +71,9 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
   const isTogglingRef = React.useRef(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const { triggerTestNotification } = useAdminNotification();
+
+
 
   // Check for unsaved changes
   const isDirty =
@@ -1186,6 +1193,50 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
                 </span>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* =========================================================================
+            GROUP 6: NOTIFIKASI PESANAN BARU (REAL-TIME & SUARA)
+            ========================================================================= */}
+        <div className="bg-white border border-[#E5E5E5] rounded-2xl p-5 sm:p-6 space-y-5 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-neutral-100">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#F25B09] flex items-center justify-center flex-shrink-0">
+                <Bell className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <h3 className="text-xs sm:text-sm font-bold text-[#111111]">
+                  Pemberitahuan Pesanan Real-Time & Suara
+                </h3>
+                <p className="text-[11px] text-[#737373]">
+                  Bunyi denting audio dan notifikasi meluncur saat pesanan baru masuk
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => triggerTestNotification()}
+                className="px-3 py-1.5 rounded-xl border border-neutral-200 text-[11px] font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors cursor-pointer"
+              >
+                Uji Notifikasi & Suara
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between p-4 rounded-xl border border-neutral-100 bg-neutral-50/70">
+            <div className="space-y-0.5 pr-4">
+              <span className="text-xs font-bold text-[#111111] block">
+                Suara Peringatan Pesanan Masuk
+              </span>
+              <p className="text-[11px] text-[#737373]">
+                Memainkan nada dering saat pembeli menyelesaikan pesanan di storefront. Pengaturan disimpan di perangkat ini.
+              </p>
+            </div>
+
+            <AdminNotificationSoundToggle showLabel={true} />
           </div>
         </div>
 

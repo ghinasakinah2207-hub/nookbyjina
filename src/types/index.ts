@@ -202,3 +202,13 @@ export interface HomepageSectionWithProducts {
   viewAllUrl?: string | null;
   products: Product[];
 }
+
+export interface OrderNotificationData {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  itemCount: number;
+  total: number;
+  createdAt: string;
+}
+

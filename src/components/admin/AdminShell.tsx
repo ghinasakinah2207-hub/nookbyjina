@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { logoutAction } from "@/app/admin/actions";
 import { supabase } from "@/lib/supabase/client";
+import { AdminNotificationSoundToggle } from "@/components/admin/AdminNotificationSoundToggle";
 
 interface AdminShellProps {
   children: React.ReactNode;
@@ -250,13 +251,16 @@ export function AdminShell({
             </div>
           </Link>
 
-          <Link
-            href="/menu"
-            title="Lihat Tampilan Toko"
-            className="p-1.5 rounded-lg border border-[#E5E5E5] text-[#737373] hover:text-[#111111] hover:border-neutral-300 transition-colors"
-          >
-            <Store className="w-3.5 h-3.5" />
-          </Link>
+          <div className="flex items-center gap-1.5">
+            <AdminNotificationSoundToggle />
+            <Link
+              href="/menu"
+              title="Lihat Tampilan Toko"
+              className="p-1.5 rounded-lg border border-[#E5E5E5] text-[#737373] hover:text-[#111111] hover:border-neutral-300 transition-colors"
+            >
+              <Store className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
 
         {/* Navigation Section */}
@@ -373,6 +377,7 @@ export function AdminShell({
           </Link>
 
           <div className="flex items-center gap-2">
+            <AdminNotificationSoundToggle />
             <Link
               href="/menu"
               title="Lihat Tampilan Toko"

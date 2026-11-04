@@ -274,3 +274,39 @@ html, body {
 #thermal-receipt-print-root {
   display: none !important;
 }
+
+/* Order notification toast animations & elevation */
+.order-toast-shadow {
+  box-shadow: 0 10px 32px -4px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.08) !important;
+}
+
+@keyframes orderToastSlideDown {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -32px, 0) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes orderToastSlideUp {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -28px, 0) scale(0.96);
+  }
+}
+
+.animate-order-toast-in {
+  animation: orderToastSlideDown 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-order-toast-out {
+  animation: orderToastSlideUp 0.25s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+

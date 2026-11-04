@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useSearchParams } from "next/navigation";
 import {
   Search,
   CheckCircle2,
@@ -37,9 +38,38 @@ interface OrdersManagerProps {
 
 export function OrdersManager({ initialOrders }: OrdersManagerProps = {}) {
   const { orders, updateOrderStatus, fetchOrders } = useAdminOrders({ initialOrders });
+  const searchParams = useSearchParams();
+  const orderIdParam = searchParams.get("orderId");
   const [activeTab, setActiveTab] = useState<FilterTab>("semua");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+
+  // Auto-select and display order modal if orderId is provided in URL params
+  useEffect(() => {
+    if (!orderIdParam || orders.length === 0) return;
+    const found = orders.find(
+      (o) => o.id === orderIdParam || o.uuid === orderIdParam
+    );
+    if (found) {
+      const timer = setTimeout(() => {
+        setSelectedOrder((prev) => (prev?.id === found.id ? prev : found));
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [orderIdParam, orders]);
+
+
+  // Instantly refresh orders when a real-time new order event is detected
+  useEffect(() => {
+    const handleNewOrder = () => {
+      fetchOrders(false);
+    };
+    window.addEventListener("nook:new-order-received", handleNewOrder);
+    return () => {
+      window.removeEventListener("nook:new-order-received", handleNewOrder);
+    };
+  }, [fetchOrders]);
+
   const [confirmLunasOrder, setConfirmLunasOrder] = useState<Order | null>(null);
   const [confirmCashOrder, setConfirmCashOrder] = useState<Order | null>(null);
   const [confirmCashCompleteOrder, setConfirmCashCompleteOrder] = useState<Order | null>(null);
