@@ -87,30 +87,30 @@ export function AdminNotificationProvider({
       return;
     }
     seenOrderIdsRef.current.add(orderId);
+    if (rawOrder.order_number && String(rawOrder.order_number) !== orderId) {
+      seenOrderIdsRef.current.add(String(rawOrder.order_number));
+    }
 
-    // Safeguard: Check creation timestamp to ensure no historical orders are notified
+    // Safeguard: Check creation timestamp with generous tolerance for client/server clock skew
     const createdAtRaw = rawOrder.created_at;
     if (createdAtRaw && typeof createdAtRaw === "string") {
       const createdTime = new Date(createdAtRaw).getTime();
       const diffMs = subscriptionStartTimeRef.current - createdTime;
       console.log("[Admin Realtime Diagnostic] ⏱️ Timestamp evaluation:", {
         createdAtRaw,
-        createdTime,
-        subscriptionStartTime: subscriptionStartTimeRef.current,
-        diffSecondsFromSubStart: diffMs / 1000,
+        diffSecondsFromSubStart: Math.round(diffMs / 1000),
       });
 
-      // If created more than 15 seconds before the subscription was mounted, ignore as historical
-      if (createdTime < subscriptionStartTimeRef.current - 15000) {
-        console.warn("[Admin Realtime Diagnostic] ⚠️ Event REJECTED by timestamp check (historical order):", {
+      // 10-minute (600s) skew tolerance: never reject fresh orders due to clock differences
+      if (createdTime < subscriptionStartTimeRef.current - 600000) {
+        console.warn("[Admin Realtime Diagnostic] ⚠️ Event REJECTED by timestamp check (historical order older than 10m):", {
           orderId,
           createdAt: createdAtRaw,
-          createdTime,
-          thresholdTime: subscriptionStartTimeRef.current - 15000,
         });
         return;
       }
     }
+
 
     // Calculate item count safely from items_snapshot without querying database
     let itemCount = 1;
@@ -182,91 +182,121 @@ export function AdminNotificationProvider({
     if (typeof window === "undefined") return;
     if (channelRef.current || isSubscribingRef.current) return;
 
+    let isMounted = true;
     isSubscribingRef.current = true;
     subscriptionStartTimeRef.current = Date.now();
 
     const channelName = "admin-orders-realtime";
 
     console.log("[Admin Realtime Diagnostic] 🔌 Mounting Realtime subscriber at Admin Layout level");
-    console.log("[Admin Realtime Diagnostic] ⚙️ Supabase Project URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
 
-    // Diagnostic check for auth session before connecting
-    supabase.auth.getSession().then(({ data: { session }, error: sessionError }) => {
-      console.log("[Admin Realtime Diagnostic] 🔐 Auth Session Status:", {
-        hasSession: Boolean(session),
-        userId: session?.user?.id,
-        userEmail: session?.user?.email,
-        tokenLength: session?.access_token?.length,
-        sessionError: sessionError?.message,
-      });
+    const setupRealtime = async () => {
+      try {
+        // 1. Resolve auth session strictly BEFORE channel creation and subscribe()
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
 
-      if (session?.access_token) {
-        console.log("[Admin Realtime Diagnostic] 🔑 Realtime client setAuth called with admin access_token.");
-        supabase.realtime.setAuth(session.access_token);
-      } else {
-        console.warn("[Admin Realtime Diagnostic] ⚠️ No access_token in session! Realtime connecting as anon role.");
-      }
-    });
+        if (!isMounted) return;
 
-    try {
-      console.log(`[Admin Realtime Diagnostic] 📡 Registering channel "${channelName}" for table: public.orders (event: INSERT)...`);
-
-      const channel = supabase
-        .channel(channelName)
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "orders",
-          },
-          (payload) => {
-            console.log("[Admin Realtime Diagnostic] ⚡ postgres_changes event intercepted:", {
-              eventType: payload.eventType,
-              table: payload.table,
-              schema: payload.schema,
-              hasNew: Boolean(payload.new),
-              hasOld: Boolean(payload.old),
-              rawPayload: payload,
-            });
-
-            // Strictly handle INSERT events only; ignore updates/deletes
-            if (payload.eventType === "INSERT" && payload.new) {
-              handleIncomingNewOrder(payload.new as Record<string, unknown>);
-            } else {
-              console.log("[Admin Realtime Diagnostic] ℹ️ Ignoring non-INSERT or empty payload event:", payload.eventType);
-            }
-          }
-        )
-        .subscribe((status, error) => {
-          console.log(`[Admin Realtime Diagnostic] 📡 Channel status transition: ${status}`, error ? { error } : "");
-          if (status === "SUBSCRIBED") {
-            console.log("[Admin Realtime Diagnostic] ✅ SUBSCRIBED: Channel successfully joined and actively listening to public.orders INSERT!");
-          } else if (status === "CHANNEL_ERROR") {
-            console.error("[Admin Realtime Diagnostic] ❌ CHANNEL_ERROR:", error);
-          } else if (status === "TIMED_OUT") {
-            console.warn("[Admin Realtime Diagnostic] ⏱️ TIMED_OUT: Channel subscription timed out");
-          } else if (status === "CLOSED") {
-            console.log("[Admin Realtime Diagnostic] 🚪 Channel status: CLOSED");
-          }
+        console.log("[Admin Realtime Diagnostic] 🔐 Auth Session Status:", {
+          hasSession: Boolean(session),
+          isAuthenticated: Boolean(session?.user),
+          sessionError: sessionError ? sessionError.message : null,
         });
 
-      channelRef.current = channel;
-    } catch (err) {
-      console.error("[Admin Realtime Diagnostic] ❌ Failed to initialize realtime channel:", err);
-    } finally {
-      isSubscribingRef.current = false;
-    }
+        // 2. Set authentication token on Realtime socket if session exists
+        if (session?.access_token) {
+          console.log(
+            "[Admin Realtime Diagnostic] 🔑 Authenticating Realtime client with admin session..."
+          );
+          await supabase.realtime.setAuth(session.access_token);
+        } else {
+          console.warn(
+            "[Admin Realtime Diagnostic] ⚠️ No active session found; channel will connect unauthenticated."
+          );
+        }
+
+        if (!isMounted) return;
+        if (channelRef.current) return;
+
+        console.log(
+          `[Admin Realtime Diagnostic] 📡 Registering channel "${channelName}" for table: public.orders (event: INSERT)...`
+        );
+
+        const channel = supabase
+          .channel(channelName)
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "orders",
+            },
+            (payload) => {
+              console.log("[Admin Realtime Diagnostic] ⚡ postgres_changes event intercepted:", {
+                eventType: payload.eventType,
+                table: payload.table,
+                schema: payload.schema,
+                hasNew: Boolean(payload.new),
+                hasOld: Boolean(payload.old),
+              });
+
+              // Strictly handle INSERT events only; ignore updates/deletes
+              if (payload.eventType === "INSERT" && payload.new) {
+                handleIncomingNewOrder(payload.new as Record<string, unknown>);
+              } else {
+                console.log(
+                  "[Admin Realtime Diagnostic] ℹ️ Ignoring non-INSERT or empty payload event:",
+                  payload.eventType
+                );
+              }
+            }
+          )
+          .subscribe((status, error) => {
+            console.log(
+              `[Admin Realtime Diagnostic] 📡 Channel status transition: ${status}`,
+              error ? { error: (error as Error).message || String(error) } : ""
+            );
+            if (status === "SUBSCRIBED") {
+              console.log(
+                "[Admin Realtime Diagnostic] ✅ SUBSCRIBED: Channel successfully joined and actively listening to public.orders INSERT!"
+              );
+            } else if (status === "CHANNEL_ERROR") {
+              console.error("[Admin Realtime Diagnostic] ❌ CHANNEL_ERROR:", error);
+            } else if (status === "TIMED_OUT") {
+              console.warn("[Admin Realtime Diagnostic] ⏱️ TIMED_OUT: Channel subscription timed out");
+            } else if (status === "CLOSED") {
+              console.log("[Admin Realtime Diagnostic] 🚪 Channel status: CLOSED");
+            }
+          });
+
+        channelRef.current = channel;
+      } catch (err) {
+        console.error(
+          "[Admin Realtime Diagnostic] ❌ Failed to initialize realtime channel:",
+          err
+        );
+      } finally {
+        isSubscribingRef.current = false;
+      }
+    };
+
+    setupRealtime();
 
     // Cleanup: Remove channel ONLY when the Admin Layout unmounts
     return () => {
-      console.log("[Admin Realtime Diagnostic] 🧹 Cleaning up Realtime channel on Admin Layout unmount.");
+      isMounted = false;
+      isSubscribingRef.current = false;
       if (channelRef.current) {
+        console.log("[Admin Realtime Diagnostic] 🧹 Cleaning up Realtime channel on Admin Layout unmount.");
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
     };
   }, [handleIncomingNewOrder]);
+
 
 
   const activeNotification = queue.length > 0 ? queue[0] : null;

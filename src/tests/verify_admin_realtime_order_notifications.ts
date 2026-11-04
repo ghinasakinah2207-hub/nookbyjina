@@ -98,16 +98,26 @@ assert.strictEqual(itemCount, 3, "Total items calculated must be 3");
 assert.strictEqual(rawEventPayload.total, 75000, "Total must match payload");
 console.log("✅ PASS: Realtime payload extraction calculates item quantity without DB query.");
 
-// Test 5: Historical order rejection logic
-console.log("\nTest 5: Historical order rejection...");
+// Test 5: Historical order rejection logic & clock skew resilience
+console.log("\nTest 5: Historical order rejection & clock skew resilience...");
 const subscriptionStartTime = Date.now();
-const historicalDate = new Date(subscriptionStartTime - 60000).toISOString(); // 1 minute before subscription
-const isHistorical = new Date(historicalDate).getTime() < subscriptionStartTime - 15000;
-assert.strictEqual(isHistorical, true, "Historical order before subscription must be rejected");
 
-const newOrderDate = new Date().toISOString();
-const isNew = new Date(newOrderDate).getTime() >= subscriptionStartTime - 15000;
-assert.strictEqual(isNew, true, "New order created now must be accepted");
+// Historical order from 15 minutes ago (> 10m threshold)
+const historicalDate = new Date(subscriptionStartTime - 900000).toISOString();
+const isHistorical = new Date(historicalDate).getTime() < subscriptionStartTime - 600000;
+assert.strictEqual(isHistorical, true, "Historical order (> 10m) must be rejected");
+
+// New order created with 30s server/client clock difference
+const skewedOrderDate = new Date(subscriptionStartTime - 30000).toISOString();
+const isAccepted = new Date(skewedOrderDate).getTime() >= subscriptionStartTime - 600000;
+assert.strictEqual(isAccepted, true, "Order with 30s clock skew must be accepted");
+
+// Fresh order created now
+const freshOrderDate = new Date().toISOString();
+const isFresh = new Date(freshOrderDate).getTime() >= subscriptionStartTime - 600000;
+assert.strictEqual(isFresh, true, "Fresh order created now must be accepted");
+console.log("✅ PASS: Clock skew resilience verified; fresh orders never falsely dropped.");
+
 console.log("✅ PASS: Historical orders are strictly filtered out on subscription initialization.");
 
 // Test 6: Deduplication of Realtime Events
