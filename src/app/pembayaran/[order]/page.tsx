@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, Suspense, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import {
@@ -22,7 +23,6 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { StatusBadge } from "@/components/ui/Badge";
-import { QrisLogo } from "@/components/ui/QrisLogo";
 import { useOrder } from "@/context/OrderContext";
 import { formatRupiah, STORE_SETTINGS as DEFAULT_SETTINGS } from "@/data/dummy-data";
 import { getOrderToken } from "@/lib/order-token-vault";
@@ -231,6 +231,69 @@ function PaymentContent() {
   // Simulation in progress state (Sandbox only)
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulateSuccess, setSimulateSuccess] = useState(false);
+
+  // Manual transaction status check state
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [checkFeedback, setCheckFeedback] = useState<{
+    message: string;
+    type: "info" | "error" | "success";
+  } | null>(null);
+
+  // Manual payment status verification triggered by "CEK TRANSAKSI" button
+  const handleCheckTransaction = async () => {
+    if (isCheckingStatus || !resolvedToken) return;
+    setIsCheckingStatus(true);
+    setCheckFeedback(null);
+
+    try {
+      const res = await fetch("/api/payments/waroengpay/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: resolvedToken }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.success) {
+        setCheckFeedback({
+          type: "error",
+          message: data?.error || "Gagal memeriksa status pembayaran. Silakan coba lagi.",
+        });
+        return;
+      }
+
+      if (data.order) {
+        addOrder({ ...data.order, token: resolvedToken });
+      }
+
+      const status = data.status || data.order?.paymentStatus;
+
+      if (status === "paid" || data.order?.paymentStatus === "Lunas") {
+        setCheckFeedback({
+          type: "success",
+          message: "Pembayaran berhasil diverifikasi!",
+        });
+      } else if (status === "cancelled" || data.order?.paymentStatus === "Dibatalkan") {
+        setCheckFeedback({
+          type: "error",
+          message: "Batas waktu pembayaran telah habis atau pesanan telah dibatalkan.",
+        });
+      } else {
+        // Pending
+        setCheckFeedback({
+          type: "info",
+          message: "Pembayaran belum diterima. Silakan tunggu atau coba lagi.",
+        });
+      }
+    } catch {
+      setCheckFeedback({
+        type: "error",
+        message: "Terjadi gangguan jaringan saat memeriksa status. Silakan coba beberapa saat lagi.",
+      });
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
 
   // Countdown timer with WaroengPay 5-minute grace period enforcement
   useEffect(() => {
@@ -669,17 +732,24 @@ function PaymentContent() {
             ========================================================================= */}
         {!isPaid && !isExpired && (
           <div className="space-y-3">
-            {/* Real QRIS Code Card (No Nook by Jina merchant title above QR) */}
-            <section className="bg-white rounded-2xl p-4 sm:p-5 text-center space-y-3.5 shadow-xs border border-[#E5E5E5]/60 flex flex-col items-center">
+            {/* Real QRIS Code Card (subtle warm orange background) */}
+            <section className="bg-[#FFF3E8] rounded-2xl p-4 sm:p-5 text-center space-y-3.5 border border-orange-200/50 flex flex-col items-center">
               <div className="space-y-0.5">
-                <p className="text-xs text-[#737373]">
+                <p className="text-xs text-neutral-600">
                   Mendukung GoPay, OVO, DANA, ShopeePay & seluruh Mobile Banking
                 </p>
               </div>
 
-              {/* QRIS Official Logo Centered Above QR */}
+              {/* Official QRIS Logo Asset (public/QRISLogo.svg) */}
               <div className="pt-1 flex items-center justify-center">
-                <QrisLogo className="h-7 w-auto" />
+                <Image
+                  src="/QRISLogo.svg"
+                  alt="QRIS - Quick Response Code Indonesian Standard"
+                  width={106}
+                  height={40}
+                  className="h-8 w-auto object-contain"
+                  priority
+                />
               </div>
 
               {/* QR Image */}
@@ -702,12 +772,12 @@ function PaymentContent() {
               </div>
 
               {/* WaroengPay NMID Display */}
-              <div className="text-xs font-mono font-medium text-[#737373] text-center pt-0.5">
+              <div className="text-xs font-mono font-medium text-neutral-600 text-center pt-0.5">
                 NMID: {actualNmid}
               </div>
 
               {/* Merchant Identity Notice */}
-              <div className="w-full max-w-sm p-2.5 sm:p-3 bg-sky-50/80 border border-sky-100 rounded-xl text-left flex items-start gap-2 text-[11px] text-sky-950 leading-relaxed shadow-2xs">
+              <div className="w-full max-w-sm p-2.5 sm:p-3 bg-white/90 border border-orange-200/60 rounded-xl text-left flex items-start gap-2 text-[11px] text-neutral-800 leading-relaxed shadow-2xs">
                 <Info className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
                 <p>
                   Di aplikasi pembayaran akan tertulis: <strong>WAROENGKU</strong> (penampung resmi resi payment Nook by Jina).
@@ -720,7 +790,7 @@ function PaymentContent() {
                   type="button"
                   onClick={handleDownloadQr}
                   disabled={!qrDataUrl}
-                  className="w-full min-h-[44px] px-3 py-2 bg-neutral-100 hover:bg-neutral-200 active:bg-neutral-300 text-[#111111] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                  className="w-full min-h-[44px] px-3 py-2 bg-white hover:bg-orange-50 active:bg-orange-100 text-[#111111] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-orange-200/60 disabled:opacity-50"
                 >
                   <Download className="w-4 h-4 shrink-0" />
                   <span>Unduh QRIS</span>
@@ -729,7 +799,7 @@ function PaymentContent() {
                   type="button"
                   onClick={handleShareQr}
                   disabled={!qrDataUrl}
-                  className="w-full min-h-[44px] px-3 py-2 bg-neutral-100 hover:bg-neutral-200 active:bg-neutral-300 text-[#111111] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                  className="w-full min-h-[44px] px-3 py-2 bg-white hover:bg-orange-50 active:bg-orange-100 text-[#111111] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-orange-200/60 disabled:opacity-50"
                 >
                   <Share2 className="w-4 h-4 shrink-0" />
                   <span>Bagikan</span>
@@ -739,15 +809,6 @@ function PaymentContent() {
               {sharedStatus && (
                 <p className="text-[11px] text-emerald-600 font-semibold">{sharedStatus}</p>
               )}
-
-              {/* Exact nominal warning */}
-              <div className="w-full p-2.5 bg-orange-50/70 border border-orange-200/80 rounded-xl text-left flex items-start gap-2">
-                <Info className="w-4 h-4 text-[#F25B09] shrink-0 mt-0.5" />
-                <p className="text-[11px] text-orange-950 leading-relaxed">
-                  <strong>PENTING:</strong> Nominal transfer wajib persis{" "}
-                  <strong className="text-[#F25B09] font-bold">{formatRupiah(paymentAmount)}</strong> (termasuk kode unik) agar transaksi otomatis diverifikasi dalam hitungan detik.
-                </p>
-              </div>
             </section>
 
             {/* Instructions for Paying with Single Phone */}
@@ -797,6 +858,39 @@ function PaymentContent() {
                 </li>
               </ol>
             </section>
+
+            {/* CEK TRANSAKSI Button & Status Verification Feedback */}
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={handleCheckTransaction}
+                disabled={isCheckingStatus}
+                className="w-full py-3.5 px-4 bg-[#0F172A] hover:bg-[#1E293B] active:bg-[#020617] text-white font-bold text-xs tracking-wider uppercase rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isCheckingStatus ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Memeriksa...</span>
+                  </>
+                ) : (
+                  <span>CEK TRANSAKSI</span>
+                )}
+              </button>
+
+              {checkFeedback && (
+                <div
+                  className={`p-2.5 rounded-xl text-xs text-center leading-relaxed animate-landing-fade ${
+                    checkFeedback.type === "error"
+                      ? "bg-red-50 text-red-700 border border-red-200"
+                      : checkFeedback.type === "success"
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : "bg-neutral-100 text-neutral-700 border border-neutral-200"
+                  }`}
+                >
+                  {checkFeedback.message}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </main>
