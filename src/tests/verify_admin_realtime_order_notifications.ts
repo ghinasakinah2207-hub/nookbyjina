@@ -23,6 +23,7 @@ class MockLocalStorage {
   }
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Ensure window & localStorage are mocked in Node test environment
 if (typeof (global as any).window === "undefined") {
   (global as any).window = global;
@@ -30,6 +31,7 @@ if (typeof (global as any).window === "undefined") {
 (global as any).window.addEventListener = () => {};
 (global as any).window.removeEventListener = () => {};
 (global as any).localStorage = new MockLocalStorage();
+
 
 
 console.log("==================================================================");

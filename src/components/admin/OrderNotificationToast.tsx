@@ -100,6 +100,16 @@ export function OrderNotificationToast({
 
   if (!notification) return null;
 
+  console.log("[Admin Realtime Diagnostic] 🍞 Toast rendering active notification:", {
+    orderId: notification.id,
+    orderNumber: notification.orderNumber,
+    customerName: notification.customerName,
+    total: notification.total,
+    queueCount,
+    isExiting,
+    remainingMs,
+  });
+
   const progressPercent = Math.max(
     0,
     Math.min(100, (remainingMs / AUTO_DISMISS_MS) * 100)

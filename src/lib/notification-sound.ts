@@ -185,3 +185,4 @@ export function playSampleNotificationSound(): void {
   if (typeof window === "undefined") return;
   triggerSoundPlayback();
 }
+
