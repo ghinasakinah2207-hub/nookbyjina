@@ -28,6 +28,18 @@ export function OrderNotificationToast({
   const [relativeTime, setRelativeTime] = useState("Baru saja");
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const loggedNotificationIdRef = useRef<string | null>(null);
+
+  // Log exactly once per active order ID when notification activates
+  useEffect(() => {
+    if (!notification || loggedNotificationIdRef.current === notification.id) return;
+    loggedNotificationIdRef.current = notification.id;
+    console.log("[Admin Notification] 🍞 Toast displayed for order:", {
+      orderNumber: notification.orderNumber,
+      customerName: notification.customerName,
+      total: notification.total,
+    });
+  }, [notification]);
 
   const handleTriggerExit = useCallback(() => {
     setIsExiting(true);
@@ -99,16 +111,6 @@ export function OrderNotificationToast({
   }, [notification, isHovered, isExiting, handleTriggerExit]);
 
   if (!notification) return null;
-
-  console.log("[Admin Realtime Diagnostic] 🍞 Toast rendering active notification:", {
-    orderId: notification.id,
-    orderNumber: notification.orderNumber,
-    customerName: notification.customerName,
-    total: notification.total,
-    queueCount,
-    isExiting,
-    remainingMs,
-  });
 
   const progressPercent = Math.max(
     0,

@@ -69,21 +69,18 @@ export function AdminNotificationProvider({
 
   // Process incoming new order event (deduplicated & validated)
   const handleIncomingNewOrder = useCallback((rawOrder: Record<string, unknown>) => {
-    console.log("[Admin Realtime Diagnostic] 📥 Incoming rawOrder received in handler:", rawOrder);
     if (!rawOrder || typeof rawOrder !== "object") {
-      console.warn("[Admin Realtime Diagnostic] ⚠️ rawOrder is not a valid object:", rawOrder);
       return;
     }
 
     const orderId = String(rawOrder.id || rawOrder.order_number || "");
     if (!orderId) {
-      console.warn("[Admin Realtime Diagnostic] ⚠️ Order missing both id and order_number:", rawOrder);
       return;
     }
 
     // Deduplicate against already processed orders
     if (seenOrderIdsRef.current.has(orderId)) {
-      console.warn("[Admin Realtime Diagnostic] ⚠️ Event REJECTED by deduplication: Order ID already processed:", orderId);
+      console.warn("[Admin Notification] ⚠️ Duplicate order event skipped:", orderId);
       return;
     }
     seenOrderIdsRef.current.add(orderId);
@@ -95,22 +92,16 @@ export function AdminNotificationProvider({
     const createdAtRaw = rawOrder.created_at;
     if (createdAtRaw && typeof createdAtRaw === "string") {
       const createdTime = new Date(createdAtRaw).getTime();
-      const diffMs = subscriptionStartTimeRef.current - createdTime;
-      console.log("[Admin Realtime Diagnostic] ⏱️ Timestamp evaluation:", {
-        createdAtRaw,
-        diffSecondsFromSubStart: Math.round(diffMs / 1000),
-      });
 
       // 10-minute (600s) skew tolerance: never reject fresh orders due to clock differences
       if (createdTime < subscriptionStartTimeRef.current - 600000) {
-        console.warn("[Admin Realtime Diagnostic] ⚠️ Event REJECTED by timestamp check (historical order older than 10m):", {
+        console.warn("[Admin Notification] ⚠️ Historical order skipped (> 10m):", {
           orderId,
           createdAt: createdAtRaw,
         });
         return;
       }
     }
-
 
     // Calculate item count safely from items_snapshot without querying database
     let itemCount = 1;
@@ -133,17 +124,17 @@ export function AdminNotificationProvider({
       createdAt: typeof createdAtRaw === "string" ? createdAtRaw : new Date().toISOString(),
     };
 
-    console.log("[Admin Realtime Diagnostic] 🚀 Event ACCEPTED: Queuing notification item:", notificationItem);
+    console.log("[Admin Notification] 🔔 New order INSERT received:", {
+      orderNumber: notificationItem.orderNumber,
+      customerName: notificationItem.customerName,
+      total: notificationItem.total,
+    });
 
     // Play notification sound (will only play once per order and only if enabled)
     playOrderNotificationSound(orderId);
 
     // Add to notification queue
-    setQueue((prev) => {
-      const updated = [...prev, notificationItem];
-      console.log("[Admin Realtime Diagnostic] 📋 Queue updated. New length:", updated.length);
-      return updated;
-    });
+    setQueue((prev) => [...prev, notificationItem]);
 
     // Dispatch global event so active views (like OrdersManager) can refresh if mounted
     if (typeof window !== "undefined") {
@@ -188,8 +179,6 @@ export function AdminNotificationProvider({
 
     const channelName = "admin-orders-realtime";
 
-    console.log("[Admin Realtime Diagnostic] 🔌 Mounting Realtime subscriber at Admin Layout level");
-
     const setupRealtime = async () => {
       try {
         // 1. Resolve auth session strictly BEFORE channel creation and subscribe()
@@ -200,30 +189,17 @@ export function AdminNotificationProvider({
 
         if (!isMounted) return;
 
-        console.log("[Admin Realtime Diagnostic] 🔐 Auth Session Status:", {
-          hasSession: Boolean(session),
-          isAuthenticated: Boolean(session?.user),
-          sessionError: sessionError ? sessionError.message : null,
-        });
+        if (sessionError) {
+          console.warn("[Admin Notification] ⚠️ Auth session check warning:", sessionError.message);
+        }
 
         // 2. Set authentication token on Realtime socket if session exists
         if (session?.access_token) {
-          console.log(
-            "[Admin Realtime Diagnostic] 🔑 Authenticating Realtime client with admin session..."
-          );
           await supabase.realtime.setAuth(session.access_token);
-        } else {
-          console.warn(
-            "[Admin Realtime Diagnostic] ⚠️ No active session found; channel will connect unauthenticated."
-          );
         }
 
         if (!isMounted) return;
         if (channelRef.current) return;
-
-        console.log(
-          `[Admin Realtime Diagnostic] 📡 Registering channel "${channelName}" for table: public.orders (event: INSERT)...`
-        );
 
         const channel = supabase
           .channel(channelName)
@@ -235,53 +211,33 @@ export function AdminNotificationProvider({
               table: "orders",
             },
             (payload) => {
-              console.log("[Admin Realtime Diagnostic] ⚡ postgres_changes event intercepted:", {
-                eventType: payload.eventType,
-                table: payload.table,
-                schema: payload.schema,
-                hasNew: Boolean(payload.new),
-                hasOld: Boolean(payload.old),
-              });
-
               // Strictly handle INSERT events only; ignore updates/deletes
               if (payload.eventType === "INSERT" && payload.new) {
                 handleIncomingNewOrder(payload.new as Record<string, unknown>);
-              } else {
-                console.log(
-                  "[Admin Realtime Diagnostic] ℹ️ Ignoring non-INSERT or empty payload event:",
-                  payload.eventType
-                );
               }
             }
           )
           .subscribe((status, error) => {
-            console.log(
-              `[Admin Realtime Diagnostic] 📡 Channel status transition: ${status}`,
-              error ? { error: (error as Error).message || String(error) } : ""
-            );
             if (status === "SUBSCRIBED") {
-              console.log(
-                "[Admin Realtime Diagnostic] ✅ SUBSCRIBED: Channel successfully joined and actively listening to public.orders INSERT!"
-              );
+              console.log("[Admin Notification] ✅ Realtime channel SUBSCRIBED to public.orders (INSERT)");
             } else if (status === "CHANNEL_ERROR") {
-              console.error("[Admin Realtime Diagnostic] ❌ CHANNEL_ERROR:", error);
+              console.error("[Admin Notification] ❌ Channel error:", error);
             } else if (status === "TIMED_OUT") {
-              console.warn("[Admin Realtime Diagnostic] ⏱️ TIMED_OUT: Channel subscription timed out");
-            } else if (status === "CLOSED") {
-              console.log("[Admin Realtime Diagnostic] 🚪 Channel status: CLOSED");
+              console.warn("[Admin Notification] ⏱️ Channel subscription timed out");
             }
           });
 
         channelRef.current = channel;
       } catch (err) {
         console.error(
-          "[Admin Realtime Diagnostic] ❌ Failed to initialize realtime channel:",
+          "[Admin Notification] ❌ Failed to initialize realtime channel:",
           err
         );
       } finally {
         isSubscribingRef.current = false;
       }
     };
+
 
     setupRealtime();
 
@@ -290,10 +246,10 @@ export function AdminNotificationProvider({
       isMounted = false;
       isSubscribingRef.current = false;
       if (channelRef.current) {
-        console.log("[Admin Realtime Diagnostic] 🧹 Cleaning up Realtime channel on Admin Layout unmount.");
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
+
     };
   }, [handleIncomingNewOrder]);
 
