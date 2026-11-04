@@ -34,28 +34,44 @@ export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
     return null;
   }
 
-  // Hide bottom navigation on welcome page (/), checkout, payment, success, product detail, and admin screens
-  if (
-    !pathname ||
-    pathname === "/" ||
-    pathname.startsWith("/checkout") ||
-    pathname.startsWith("/pembayaran") ||
-    pathname.startsWith("/sukses") ||
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/produk")
-  ) {
-    return null;
-  }
-
-  // Explicit, intentional route-to-tab matching
-  // Normalizes trailing slashes so e.g. /home/ and /home both match
+  // Normalize trailing slashes so e.g. /home/ and /home both match
   const normalizedPath =
-    pathname.endsWith("/") && pathname !== "/"
+    pathname && pathname.endsWith("/") && pathname !== "/"
       ? pathname.slice(0, -1)
       : pathname;
 
+  // Explicitly hide on non-customer routes (admin, checkout, payment, success, product detail, welcome page)
+  const isExcludedRoute =
+    !pathname ||
+    pathname === "/" ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/checkout") ||
+    pathname.startsWith("/pembayaran") ||
+    pathname.startsWith("/sukses") ||
+    pathname.startsWith("/produk");
+
+  // Whitelist of valid customer navigation destinations: safe initial rendering
+  // prevents premature rendering by ensuring route is explicitly valid before rendering nav.
+  const isCustomerNavigationRoute = Boolean(
+    normalizedPath &&
+      !isExcludedRoute &&
+      (normalizedPath === "/home" ||
+        normalizedPath.startsWith("/home/") ||
+        normalizedPath === "/menu" ||
+        normalizedPath.startsWith("/menu/") ||
+        normalizedPath === "/keranjang" ||
+        normalizedPath.startsWith("/keranjang/") ||
+        normalizedPath === "/pesanan" ||
+        normalizedPath === "/favorit" ||
+        normalizedPath.startsWith("/favorit/"))
+  );
+
+  if (!isCustomerNavigationRoute) {
+    return null;
+  }
+
   const isHomeActive =
-    normalizedPath === "/home" || normalizedPath === "/";
+    normalizedPath === "/home" || normalizedPath.startsWith("/home/");
   const isMenuActive =
     normalizedPath === "/menu" || normalizedPath.startsWith("/menu/");
   const isCartActive =
