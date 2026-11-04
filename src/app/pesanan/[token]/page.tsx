@@ -6,7 +6,6 @@ import { useParams, useRouter } from "next/navigation";
 import {
   Clock,
   Copy,
-  Share2,
   AlertCircle,
   QrCode,
   MessageCircle,
@@ -422,16 +421,29 @@ Terima kasih telah memesan di Nook by Jina!`;
           </div>
         ) : null}
 
-        {/* Items Breakdown (Digital Receipt) */}
-        <section className="bg-white rounded-2xl p-4 space-y-3">
-          <h2 className="text-sm font-bold text-[#111111] flex items-center justify-between">
-            <span>Rincian Hidangan</span>
-            <span className="text-xs font-normal text-[#737373]">
-              {order.items.length} item
-            </span>
-          </h2>
+        {/* Unified E-Receipt: Ringkasan Pesanan Card */}
+        <section className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-[#E5E5E5]/60 space-y-3.5 text-xs">
+          {/* A. Order Header */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-[#111111]">Ringkasan Pesanan</h2>
+              <span className="text-xs font-normal text-[#737373]">
+                {order.items.length} item
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-[#737373] pt-0.5">
+              <span className="font-mono font-medium text-[#111111]">#{order.id}</span>
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3 text-[#737373]" />
+                {formattedDate}, {formattedTime}
+              </span>
+            </div>
+          </div>
 
-          <div className="divide-y divide-[#E5E5E5]/60 text-xs">
+          <div className="h-px bg-[#E5E5E5]/60" />
+
+          {/* B. Order Items */}
+          <div className="divide-y divide-[#E5E5E5]/60">
             {order.items.map((item) => (
               <div key={item.id} className="py-2.5 first:pt-0 last:pb-0 space-y-1">
                 <div className="flex justify-between items-start gap-2">
@@ -462,22 +474,21 @@ Terima kasih telah memesan di Nook by Jina!`;
 
                 {item.selectedAddons.length > 0 ? (
                   <p className="text-[11px] text-[#737373]">
-                    Ekstra:{" "}
-                    {item.selectedAddons.map((a) => a.addonName).join(", ")}
+                    Ekstra: {item.selectedAddons.map((a) => a.addonName).join(", ")}
                   </p>
                 ) : null}
 
                 {item.itemNote ? (
                   <p className="text-[11px] text-[#737373] italic">
-                    Catatan menu: {item.itemNote}
+                    Catatan: {item.itemNote}
                   </p>
                 ) : null}
               </div>
             ))}
           </div>
 
-          {/* Pricing Summary */}
-          <div className="pt-3 border-t border-[#E5E5E5] space-y-1.5 text-xs">
+          {/* C. Financial Summary */}
+          <div className="pt-3 border-t border-[#E5E5E5] space-y-1.5">
             <div className="flex justify-between text-[#737373]">
               <span>Subtotal Menu</span>
               <span className="font-medium text-[#111111]">
@@ -492,88 +503,123 @@ Terima kasih telah memesan di Nook by Jina!`;
               </span>
             </div>
 
-            <div className="pt-2 border-t border-[#E5E5E5] flex justify-between text-sm font-bold text-[#111111]">
+            {order.uniqueCode !== undefined && order.uniqueCode > 0 ? (
+              <div className="flex justify-between text-[#737373]">
+                <span>Kode Unik</span>
+                <span className="font-medium text-emerald-600">
+                  +{formatRupiah(order.uniqueCode)}
+                </span>
+              </div>
+            ) : null}
+
+            <div className="pt-2 border-t border-[#E5E5E5] flex justify-between items-center text-sm font-bold text-[#111111]">
               <span>Total Akhir</span>
               <span className="text-[#F25B09] font-extrabold text-base">
                 {formatRupiah(order.total)}
               </span>
             </div>
           </div>
-        </section>
 
-        {/* Fulfillment & Payment Method Info */}
-        <section className="bg-white rounded-2xl p-4 space-y-2 text-xs text-[#737373]">
-          <h2 className="text-sm font-bold text-[#111111]">
-            Informasi Pemenuhan & Pembayaran
-          </h2>
-          <div className="space-y-1 pt-1">
-            <p>
-              • <strong>Tipe Pemenuhan:</strong>{" "}
-              {order.fulfillmentType === "pickup"
-                ? "Ambil Sendiri di Dapur (Pickup)"
-                : `Delivery ke ${order.deliveryArea}`}
-            </p>
-            <p>
-              • <strong>Metode Pembayaran:</strong>{" "}
-              {order.paymentMethod === "Cash"
-                ? "Cash (Bayar Tunai)"
-                : (order.gatewayProvider === "waroengpay" || order.gatewayProvider === "duitku" || order.paymentMethod === "QRIS")
-                ? "QRIS (Pembayaran Otomatis)"
-                : `QRIS Merchant (${order.merchantName || "Nook by Jina"})`}
-            </p>
+          {/* D. Fulfillment and Payment Information (E-Receipt Metadata Section) */}
+          <div className="pt-3 border-t border-[#E5E5E5] space-y-2 text-[#737373]">
+            <div className="flex justify-between items-center py-0.5">
+              <span>Tipe Pemenuhan</span>
+              <span className="font-medium text-[#111111] text-right">
+                {order.fulfillmentType === "pickup"
+                  ? "Ambil Sendiri (Pickup)"
+                  : "Diantar (Delivery)"}
+              </span>
+            </div>
+
+            {order.fulfillmentType === "delivery" && (
+              <div className="flex justify-between items-center py-0.5">
+                <span>Lokasi Pengantaran</span>
+                <span className="font-medium text-[#111111] text-right">
+                  {order.deliveryArea}
+                </span>
+              </div>
+            )}
+
             {order.orderNote ? (
-              <p>
-                • <strong>Catatan Pesanan:</strong> {order.orderNote}
+              <div className="flex justify-between items-start py-0.5 gap-2">
+                <span className="shrink-0">Catatan Pesanan</span>
+                <span className="font-medium text-[#111111] text-right">
+                  {order.orderNote}
+                </span>
+              </div>
+            ) : null}
+
+            <div className="flex justify-between items-center py-0.5">
+              <span>Metode Pembayaran</span>
+              <span className="font-medium text-[#111111] text-right">
+                {order.paymentMethod === "Cash"
+                  ? "Cash (Bayar Tunai)"
+                  : (order.gatewayProvider === "waroengpay" || order.gatewayProvider === "duitku" || order.paymentMethod === "QRIS")
+                  ? "QRIS (Pembayaran Otomatis)"
+                  : `QRIS Merchant (${order.merchantName || "Nook by Jina"})`}
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center py-0.5">
+              <span>Status Pembayaran</span>
+              <span className="text-right">
+                <StatusBadge
+                  status={isOrderExpired(order) ? "Dibatalkan" : order.paymentStatus}
+                  type="payment"
+                />
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center py-0.5">
+              <span>Status Pesanan</span>
+              <span className="text-right">
+                <StatusBadge
+                  status={isOrderExpired(order) ? "Dibatalkan" : order.orderStatus}
+                  type="order"
+                />
+              </span>
+            </div>
+          </div>
+
+          {/* E. Action Buttons (Salin Tautan & Kirim Struk WA) */}
+          <div className="pt-3 border-t border-[#E5E5E5] space-y-2.5">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className="min-h-[44px] px-3 py-2 bg-neutral-50 hover:bg-neutral-100 border border-[#E5E5E5] text-[#111111] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Copy className="w-3.5 h-3.5 text-[#F25B09]" />
+                <span>{copyStatus === "success" ? "Tautan Tersalin!" : "Salin Tautan"}</span>
+              </button>
+
+              <a
+                href={waShareUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="min-h-[44px] px-3 py-2 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span>Kirim Struk WA</span>
+              </a>
+            </div>
+
+            {copyStatus === "success" ? (
+              <p className="text-[11px] text-[#18794E] text-center font-medium">
+                Tautan pesanan berhasil disalin ke clipboard!
+              </p>
+            ) : copyStatus === "failed" ? (
+              <p className="text-[11px] text-[#B42318] text-center">
+                Tautan belum tersalin. Silakan salin alamat dari bilah peramban secara manual.
               </p>
             ) : null}
-          </div>
-        </section>
 
-        {/* Share Token Link Box & Security Note */}
-        <section className="bg-white rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold text-[#111111] flex items-center gap-1.5">
-              <Share2 className="w-3.5 h-3.5 text-[#F25B09]" />
-              Bagikan Struk / Tautan Pesanan
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={handleCopyLink}
-              className="min-h-[44px] px-3 py-2 bg-neutral-50 hover:bg-neutral-100 border border-[#E5E5E5] text-[#111111] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              <span>{copyStatus === "success" ? "Tautan Tersalin!" : "Salin Tautan"}</span>
-            </button>
-
-            <a
-              href={waShareUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="min-h-[44px] px-3 py-2 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
-            >
-              <MessageCircle className="w-3.5 h-3.5" />
-              <span>Kirim Struk WA</span>
-            </a>
-          </div>
-
-          {copyStatus === "success" ? (
-            <p className="text-[11px] text-[#18794E]">
-              Tautan pesanan berhasil disalin.
-            </p>
-          ) : copyStatus === "failed" ? (
-            <p className="text-[11px] text-[#B42318]">
-              Tautan belum tersalin. Silakan salin alamat dari bilah peramban secara manual.
-            </p>
-          ) : null}
-
-          {/* Mandatory Privacy Reminder per PRD Section 14 */}
-          <div className="p-3 bg-neutral-50 rounded-xl border border-[#E5E5E5] text-[11px] text-[#737373] leading-relaxed">
-            <p>
-              <strong>Perhatian Privasi:</strong> Tautan ini dapat dibuka oleh siapa saja yang memilikinya. Nama dan nomor telepon Anda disembunyikan untuk menjaga privasi. Jangan bagikan tautan ini kepada pihak yang tidak berhak.
-            </p>
+            {/* Subtle Privacy Reminder */}
+            <div className="p-2.5 bg-neutral-50 rounded-xl border border-neutral-200/60 text-[10.5px] text-[#737373] leading-relaxed">
+              <p>
+                <strong className="text-neutral-800">Perhatian Privasi:</strong> Tautan struk ini dapat dibuka oleh siapa saja yang memilikinya. Nomor telepon disembunyikan untuk menjaga privasi Anda.
+              </p>
+            </div>
           </div>
         </section>
 
