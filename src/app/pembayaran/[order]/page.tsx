@@ -8,6 +8,7 @@ import {
   Clock,
   Copy,
   ChevronRight,
+  ChevronDown,
   Info,
   Loader2,
   HelpCircle,
@@ -21,10 +22,13 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { StatusBadge } from "@/components/ui/Badge";
+import { QrisLogo } from "@/components/ui/QrisLogo";
 import { useOrder } from "@/context/OrderContext";
-import { formatRupiah } from "@/data/dummy-data";
+import { formatRupiah, STORE_SETTINGS as DEFAULT_SETTINGS } from "@/data/dummy-data";
 import { getOrderToken } from "@/lib/order-token-vault";
 import { isPendingQrisStatus, isPaidStatus } from "@/lib/order-normalizer";
+import { extractNmidFromQris } from "@/lib/qris-nmid";
+import { StoreSettings } from "@/types";
 
 function PaymentContent() {
   const params = useParams();
@@ -208,6 +212,22 @@ function PaymentContent() {
   const [copiedOrderId, setCopiedOrderId] = useState(false);
   const [sharedStatus, setSharedStatus] = useState<string | null>(null);
 
+  // Order details dropdown state
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
+
+  // Load verified store settings for authoritative NMID configuration
+  useEffect(() => {
+    fetch("/api/store-settings")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.settings) {
+          setStoreSettings(data.settings);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Simulation in progress state (Sandbox only)
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulateSuccess, setSimulateSuccess] = useState(false);
@@ -238,6 +258,13 @@ function PaymentContent() {
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
   }, [order, updateOrderStatus]);
+
+  // Authoritative NMID: extracted from genuine QRIS payload if available, else verified merchant settings
+  const actualNmid = useMemo(() => {
+    const fromQris = extractNmidFromQris(order?.qrisPayload);
+    if (fromQris) return fromQris;
+    return storeSettings?.qrisNmid || DEFAULT_SETTINGS.qrisNmid || "ID1020038829101";
+  }, [order?.qrisPayload, storeSettings?.qrisNmid]);
 
   // Show loading skeleton while waiting for client hydration
   if (!isHydrated) {
@@ -475,17 +502,78 @@ function PaymentContent() {
 
           <div className="h-px bg-neutral-100" />
 
-          {/* Amount to pay */}
-          <div className="space-y-1">
+          {/* Amount to pay & Order Details Dropdown */}
+          <div className="space-y-1.5">
             <span className="text-xs text-[#737373] block">Total yang Wajib Ditransfer:</span>
-            <div className="text-2xl font-black text-[#111111] tracking-tight">
-              {formatRupiah(paymentAmount)}
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-2xl font-black text-[#111111] tracking-tight">
+                {formatRupiah(paymentAmount)}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDetailsOpen((prev) => !prev)}
+                aria-expanded={isDetailsOpen}
+                aria-controls="order-details-dropdown"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#F25B09] hover:bg-orange-50 active:bg-orange-100 transition-colors cursor-pointer shrink-0 border border-orange-200/60"
+              >
+                <span>Lihat Detail</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                    isDetailsOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
             </div>
             {uniqueCode !== undefined && uniqueCode > 0 ? (
               <p className="text-[11px] text-[#737373] leading-snug">
                 Termasuk kode unik <strong className="text-[#111111]">Rp {uniqueCode}</strong> untuk verifikasi instan otomatis.
               </p>
             ) : null}
+
+            {/* Order Details Accordion Content */}
+            {isDetailsOpen && (
+              <div
+                id="order-details-dropdown"
+                className="mt-2.5 p-3.5 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs space-y-2 animate-landing-fade"
+              >
+                <div className="flex justify-between items-center py-0.5">
+                  <span className="text-[#737373]">No. tagihan</span>
+                  <span className="font-mono font-medium text-[#111111]">{order.waroengpayInvoiceId || "-"}</span>
+                </div>
+                <div className="flex justify-between items-center py-0.5">
+                  <span className="text-[#737373]">No. pesanan</span>
+                  <span className="font-mono font-medium text-[#111111]">{order.id}</span>
+                </div>
+                <div className="flex justify-between items-start py-0.5 gap-2">
+                  <span className="text-[#737373] shrink-0">Keterangan</span>
+                  <span className="font-medium text-[#111111] text-right">
+                    Pesanan Nook by Jina #{order.id}
+                  </span>
+                </div>
+                <div className="h-px bg-neutral-200/60 my-1" />
+                <div className="flex justify-between items-center py-0.5">
+                  <span className="text-[#737373]">Subtotal</span>
+                  <span className="text-[#111111] font-medium">{formatRupiah(order.subtotal)}</span>
+                </div>
+                {order.shippingFee > 0 && (
+                  <div className="flex justify-between items-center py-0.5">
+                    <span className="text-[#737373]">Ongkos kirim</span>
+                    <span className="text-[#111111] font-medium">{formatRupiah(order.shippingFee)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center py-0.5">
+                  <span className="text-[#737373]">Kode unik</span>
+                  <span className="text-emerald-600 font-semibold">
+                    +{formatRupiah(order.uniqueCode || 0)}
+                  </span>
+                </div>
+                <div className="h-px bg-neutral-200/60 my-1" />
+                <div className="flex justify-between items-center py-0.5 font-bold text-sm text-[#111111]">
+                  <span>Total</span>
+                  <span className="text-[#F25B09]">{formatRupiah(paymentAmount)}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Countdown & Grace period indicator */}
@@ -589,6 +677,11 @@ function PaymentContent() {
                 </p>
               </div>
 
+              {/* QRIS Official Logo Centered Above QR */}
+              <div className="pt-1 flex items-center justify-center">
+                <QrisLogo className="h-7 w-auto" />
+              </div>
+
               {/* QR Image */}
               <div className="w-64 h-64 p-3 bg-white border border-[#E5E5E5] rounded-2xl shadow-sm flex items-center justify-center relative">
                 {qrDataUrl ? (
@@ -606,6 +699,19 @@ function PaymentContent() {
                     <span>Membuat kode QRIS...</span>
                   </div>
                 )}
+              </div>
+
+              {/* WaroengPay NMID Display */}
+              <div className="text-xs font-mono font-medium text-[#737373] text-center pt-0.5">
+                NMID: {actualNmid}
+              </div>
+
+              {/* Merchant Identity Notice */}
+              <div className="w-full max-w-sm p-2.5 sm:p-3 bg-sky-50/80 border border-sky-100 rounded-xl text-left flex items-start gap-2 text-[11px] text-sky-950 leading-relaxed shadow-2xs">
+                <Info className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                <p>
+                  Di aplikasi pembayaran akan tertulis: <strong>WAROENGKU</strong> (penampung resmi resi payment Nook by Jina).
+                </p>
               </div>
 
               {/* Action Buttons: Download & Share */}
