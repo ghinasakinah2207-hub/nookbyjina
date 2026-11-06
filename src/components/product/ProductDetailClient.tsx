@@ -24,6 +24,7 @@ import { ProductCard } from "@/components/product/ProductCard";
 import { getProductBySlugOrId, getRecommendedProducts } from "@/lib/supabase/catalog";
 import { QuickAddModal, QuickAddConfirmData } from "@/components/product/QuickAddModal";
 import { getProductType, getProductTypeConfig } from "@/lib/product-type";
+import { TicketBadge } from "@/components/ui/TicketBadge";
 
 interface ProductDetailClientProps {
   productId: string;
@@ -758,15 +759,12 @@ export default function ProductDetailClient({
             <div className="space-y-1.5 pt-0.5">
               <div className="flex items-start justify-between gap-2">
                 <h1 className="text-base sm:text-lg font-bold text-[#111111] leading-snug">
-                  <span
-                    className={`inline-flex items-center justify-center text-white text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-[3.5px] align-middle -translate-y-[1px] mr-1.5 leading-none tracking-wide select-none ${
-                      getProductType(product) === "ready"
-                        ? "bg-[#18794E]"
-                        : "bg-[#F25B09]"
-                    }`}
-                  >
-                    {getProductTypeConfig(product.productType).label}
-                  </span>
+                  <TicketBadge
+                    type={product.productType}
+                    label={getProductTypeConfig(product.productType).label}
+                    className="align-middle -translate-y-[1px] mr-1.5"
+                    size="md"
+                  />
                   {product.name}
                 </h1>
                 {!product.isAvailable && (

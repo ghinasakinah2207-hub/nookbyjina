@@ -52,27 +52,23 @@ const htmlReady = renderCard(readyProduct);
 const htmlPreorder = renderCard(preorderProduct);
 
 // -----------------------------------------------------------------------------
-// SECTION 1: Top-Left Frosted Glass Product Type Badges
+// SECTION 1: Top-Left Ticket-Style Product Type Badges
 // -----------------------------------------------------------------------------
-console.log("--- Section 1: Top-Left Frosted Glass Product Type Badges ---");
+console.log("--- Section 1: Top-Left Ticket-Style Product Type Badges ---");
 
 // READY product
 assert.ok(htmlReady.includes("READY"), "READY product renders READY badge");
-assert.ok(htmlReady.includes("bg-emerald-100/70 text-[#18794E]"), "READY badge has soft translucent green bg (70% opacity) and green text");
+assert.ok(htmlReady.includes("linear-gradient(135deg, #10B981 0%, #047857 100%)"), "READY badge has fresh green gradient");
 assert.ok(htmlReady.includes("top-1.5 left-1.5"), "READY badge is positioned at top-left of image");
-assert.ok(htmlReady.includes("backdrop-blur-md"), "READY badge has frosted glass backdrop blur");
-assert.ok(htmlReady.includes("rounded-full"), "READY badge has rounded pill shape");
-assert.ok(htmlReady.includes("border-emerald-300/40"), "READY badge has subtle translucent green border");
-console.log("  [PASS] Nasi Ayam Geprek + Es Teh Manis renders soft frosted green READY badge at top-left");
+assert.ok(htmlReady.includes("radial-gradient(circle 2.2px"), "READY badge has ticket notch cutouts");
+console.log("  [PASS] Nasi Ayam Geprek + Es Teh Manis renders ticket-style green READY badge at top-left");
 
 // PRE-ORDER product
 assert.ok(htmlPreorder.includes("PRE-ORDER"), "PRE-ORDER product renders PRE-ORDER badge");
-assert.ok(htmlPreorder.includes("bg-orange-100/70 text-[#C2410C]"), "PRE-ORDER badge has soft translucent warm orange bg (70% opacity) and orange text");
+assert.ok(htmlPreorder.includes("linear-gradient(135deg, #F97316 0%, #C2410C 100%)"), "PRE-ORDER badge has warm orange gradient");
 assert.ok(htmlPreorder.includes("top-1.5 left-1.5"), "PRE-ORDER badge is positioned at top-left of image");
-assert.ok(htmlPreorder.includes("backdrop-blur-md"), "PRE-ORDER badge has frosted glass backdrop blur");
-assert.ok(htmlPreorder.includes("rounded-full"), "PRE-ORDER badge has rounded pill shape");
-assert.ok(htmlPreorder.includes("border-orange-300/40"), "PRE-ORDER badge has subtle translucent orange border");
-console.log("  [PASS] Tortilla Roll Chicken Crispy renders soft frosted warm orange PRE-ORDER badge at top-left");
+assert.ok(htmlPreorder.includes("radial-gradient(circle 2.2px"), "PRE-ORDER badge has ticket notch cutouts");
+console.log("  [PASS] Tortilla Roll Chicken Crispy renders ticket-style warm orange PRE-ORDER badge at top-left");
 
 // -----------------------------------------------------------------------------
 // SECTION 2: Rating Badge Removal

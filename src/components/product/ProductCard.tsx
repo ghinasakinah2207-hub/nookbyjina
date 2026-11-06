@@ -8,6 +8,7 @@ import { Product } from "@/types";
 import { formatRupiah } from "@/data/dummy-data";
 import { useCart } from "@/context/CartContext";
 import { getProductTypeConfig } from "@/lib/product-type";
+import { TicketBadge } from "@/components/ui/TicketBadge";
 
 interface ProductCardProps {
   product: Product;
@@ -66,7 +67,6 @@ export function ProductCard({
   const imageSrc = product.images[0] || "/images/hero-food.webp";
   const shouldPrioritize = Boolean(preload || priority);
   const typeConfig = getProductTypeConfig(product.productType);
-  const isReady = typeConfig.type === "ready";
 
   return (
     <Link
@@ -88,16 +88,11 @@ export function ProductCard({
           sizes="(max-width: 640px) 160px, 220px"
         />
 
-        {/* 2. Top-Left: Soft Frosted Glass Product Type Badge (READY / PRE-ORDER) */}
-        <div
-          className={`absolute top-1.5 left-1.5 z-10 inline-flex items-center justify-center backdrop-blur-md rounded-full px-2 py-[2px] text-[8px] sm:text-[8.5px] font-bold tracking-tight select-none border shadow-xs ${
-            isReady
-              ? "bg-emerald-100/70 text-[#18794E] border-emerald-300/40"
-              : "bg-orange-100/70 text-[#C2410C] border-orange-300/40"
-          }`}
-        >
-          {typeConfig.label}
-        </div>
+        {/* 2. Top-Left: Ticket-Style Product Type Badge (READY / PRE-ORDER) */}
+        <TicketBadge
+          type={product.productType}
+          className="absolute top-1.5 left-1.5 z-10"
+        />
 
         {/* 3. Top-Right: Subtle Translucent Favorite Button */}
         <button
