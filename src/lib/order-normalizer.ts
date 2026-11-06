@@ -73,6 +73,54 @@ export function isPaidStatus(status?: unknown): boolean {
 export const ORDER_PAYMENT_DEADLINE_MS = 30 * 60 * 1000;
 
 /**
+ * Calculates the authoritative final total for an order, ensuring that any unique payment code
+ * is correctly accounted for without double-counting.
+ *
+ * Rule 1: If rawAmount (authoritative payment gateway invoice amount) is present and > 0, use it.
+ * Rule 2: If uniqueCode > 0:
+ *   - Base total is (subtotal + shippingFee).
+ *   - If order.total is already >= baseTotal + uniqueCode, order.total already includes the unique code.
+ *   - Otherwise, the authoritative final total is baseTotal + uniqueCode.
+ * Rule 3: Otherwise, use order.total || baseTotal.
+ */
+export function getOrderFinalTotal(order?: {
+  subtotal?: number | null;
+  shippingFee?: number | null;
+  delivery_fee?: number | null;
+  uniqueCode?: number | null;
+  rawAmount?: number | null;
+  total?: number | null;
+} | null): number {
+  if (!order) return 0;
+  const subtotal = Number(order.subtotal || 0);
+  const shippingFee = Number(
+    order.shippingFee !== undefined && order.shippingFee !== null
+      ? order.shippingFee
+      : (order.delivery_fee || 0)
+  );
+  const baseTotal = subtotal + shippingFee;
+  const uniqueCode = Number(order.uniqueCode || 0);
+  const rawAmount = Number(order.rawAmount || 0);
+  const storedTotal = Number(order.total || 0);
+
+  // 1. Authoritative stored transaction amount (e.g. from payment gateway)
+  if (rawAmount > 0) {
+    return rawAmount;
+  }
+
+  // 2. If unique code exists, ensure it is included without double-adding
+  if (uniqueCode > 0) {
+    if (storedTotal >= baseTotal + uniqueCode) {
+      return storedTotal;
+    }
+    return baseTotal + uniqueCode;
+  }
+
+  // 3. Fallback to stored total or baseTotal
+  return storedTotal > 0 ? storedTotal : baseTotal;
+}
+
+/**
  * Checks whether an order has exceeded its authoritative 30-minute QRIS payment window.
  *
  * Invariants:
@@ -190,6 +238,20 @@ export function normalizeOrder(order: unknown, productTypeMap?: Map<string, Prod
 
   const rawItems = Array.isArray(o.items) ? o.items : [];
 
+  const rawSubtotal = Number(o.subtotal || 0);
+  const rawShipping = Number(
+    o.shippingFee !== undefined && o.shippingFee !== null
+      ? o.shippingFee
+      : (o.delivery_fee || 0)
+  );
+  const finalTotal = getOrderFinalTotal({
+    subtotal: rawSubtotal,
+    shippingFee: rawShipping,
+    uniqueCode: rawUniqueCode,
+    rawAmount: rawAmountVal,
+    total: o.total !== undefined ? Number(o.total) : undefined,
+  });
+
   return {
     ...(o as unknown as Order),
     id: String(o.id || o.orderNumber || o.order_number || ""),
@@ -197,6 +259,9 @@ export function normalizeOrder(order: unknown, productTypeMap?: Map<string, Prod
     orderStatus: (o.orderStatus || o.order_status || "Pesanan baru") as OrderStatus,
     paymentStatus: normalizedStatus,
     paymentMethod: normalizedMethod,
+    subtotal: rawSubtotal,
+    shippingFee: rawShipping,
+    total: finalTotal,
     merchantName: String(o.merchantName || o.merchant_name || "Nook by Jina"),
     gatewayProvider: rawGatewayProvider || undefined,
     paymentUrl: rawPaymentUrl || undefined,

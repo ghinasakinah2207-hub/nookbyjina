@@ -17,7 +17,7 @@ import { OrderProgressTracker } from "@/components/orders/OrderProgressTracker";
 import { useOrder } from "@/context/OrderContext";
 import { formatRupiah, STORE_SETTINGS } from "@/data/dummy-data";
 import { saveOrderToken, getOrderToken } from "@/lib/order-token-vault";
-import { isPendingQrisStatus, isPendingCashStatus, isOrderExpired } from "@/lib/order-normalizer";
+import { isPendingQrisStatus, isPendingCashStatus, isOrderExpired, getOrderFinalTotal } from "@/lib/order-normalizer";
 import { getCartProductType } from "@/lib/product-type";
 import { Order } from "@/types";
 import { Suspense } from "react";
@@ -262,6 +262,8 @@ function OrderDetailContent() {
     minute: "2-digit",
   }) + " WIB";
 
+  const finalTotal = getOrderFinalTotal(order);
+
   // WhatsApp digital receipt share text
   const receiptItemsText = order.items
     .map(
@@ -282,8 +284,8 @@ ${receiptItemsText}
 Subtotal: ${formatRupiah(order.subtotal)}
 Ongkir (${order.deliveryArea}): ${
     order.shippingFee === 0 ? "Gratis" : formatRupiah(order.shippingFee)
-  }
-*TOTAL: ${formatRupiah(order.total)}*
+  }${order.uniqueCode !== undefined && order.uniqueCode > 0 ? `\nKode Unik: +${formatRupiah(order.uniqueCode)}` : ""}
+*TOTAL: ${formatRupiah(finalTotal)}*
 Metode: ${order.paymentMethod === "Cash" ? "Cash (Bayar Tunai)" : (order.gatewayProvider === "waroengpay" || order.gatewayProvider === "duitku" || order.paymentMethod === "QRIS") ? "QRIS" : `QRIS Statis (${order.merchantName || "Nook by Jina"})`}
 ------------------------------
 Pantau status pesanan: ${typeof window !== "undefined" ? window.location.href : ""}
@@ -515,7 +517,7 @@ Terima kasih telah memesan di Nook by Jina!`;
             <div className="pt-2 border-t border-[#E5E5E5] flex justify-between items-center text-sm font-bold text-[#111111]">
               <span>Total Akhir</span>
               <span className="text-[#F25B09] font-extrabold text-base">
-                {formatRupiah(order.total)}
+                {formatRupiah(finalTotal)}
               </span>
             </div>
           </div>
@@ -613,13 +615,6 @@ Terima kasih telah memesan di Nook by Jina!`;
                 Tautan belum tersalin. Silakan salin alamat dari bilah peramban secara manual.
               </p>
             ) : null}
-
-            {/* Subtle Privacy Reminder */}
-            <div className="p-2.5 bg-neutral-50 rounded-xl border border-neutral-200/60 text-[10.5px] text-[#737373] leading-relaxed">
-              <p>
-                <strong className="text-neutral-800">Perhatian Privasi:</strong> Tautan struk ini dapat dibuka oleh siapa saja yang memilikinya. Nomor telepon disembunyikan untuk menjaga privasi Anda.
-              </p>
-            </div>
           </div>
         </section>
 

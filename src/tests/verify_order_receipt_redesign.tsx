@@ -63,7 +63,7 @@ assert(pageCode.includes("Biaya Pengantaran"), "Delivery fee label present");
 assert(pageCode.includes("order.shippingFee === 0 ? \"Gratis\" : formatRupiah(order.shippingFee)"), "Delivery fee formatted or shows Gratis");
 assert(pageCode.includes("Kode Unik"), "Unique code row present for QRIS orders");
 assert(pageCode.includes("Total Akhir"), "Total Akhir label present");
-assert(pageCode.includes("formatRupiah(order.total)"), "Final total formatted and displayed prominently");
+assert(pageCode.includes("formatRupiah(finalTotal)"), "Final total formatted and displayed prominently");
 
 // --- TEST 4: Integrated Fulfillment & Payment Metadata Section ---
 console.log("\n--- TEST 4: Integrated Fulfillment & Payment Metadata Section ---");
@@ -86,7 +86,7 @@ assert(pageCode.includes("Kirim Struk WA"), "Kirim Struk WA button present");
 assert(pageCode.includes("href={waShareUrl}"), "WhatsApp link bound to prefilled waShareUrl");
 assert(pageCode.includes("bg-[#25D366]"), "WhatsApp button styled with official brand green");
 assert(pageCode.includes("text-[#F25B09]"), "Copy button icon uses Nook orange accent");
-assert(pageCode.includes("Perhatian Privasi:"), "Subtle privacy guidance retained below action buttons");
+assert(!pageCode.includes("Perhatian Privasi:"), "Privacy notice box removed per Task 2");
 
 // --- TEST 6: Removal of Redundant Standalone Cards ---
 console.log("\n--- TEST 6: Removal of Redundant Standalone Cards ---");

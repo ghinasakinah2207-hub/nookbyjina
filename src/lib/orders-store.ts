@@ -4,6 +4,7 @@ import { hashOrderToken, isValidTokenFormat } from "@/lib/token-security";
 import { normalizeProductType, ProductType } from "@/lib/product-type";
 import { SupabaseClient } from "@supabase/supabase-js";
 import {
+  getOrderFinalTotal,
   isOrderExpired,
   normalizeOrder,
   normalizePaymentMethod,
@@ -411,7 +412,7 @@ export async function getOrderByToken(token: string): Promise<Order | null> {
   }
 
   // Enrich with payments metadata if available
-  if (order && (!order.gatewayProvider || !order.paymentUrl)) {
+  if (order && (!order.gatewayProvider || !order.paymentUrl || order.uniqueCode === undefined || !order.rawAmount)) {
     try {
       let orderUuid = order.uuid;
       if (!orderUuid || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderUuid)) {
@@ -451,6 +452,10 @@ export async function getOrderByToken(token: string): Promise<Order | null> {
     } catch {
       // Graceful fallback if payments columns not yet queried
     }
+  }
+
+  if (order) {
+    order.total = getOrderFinalTotal(order);
   }
 
   if (order && isOrderExpired(order)) {
@@ -598,6 +603,7 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
                 if (rawResp.expires_at) o.expiresAt = String(rawResp.expires_at);
                 if (rawResp.livemode !== undefined) o.livemode = Boolean(rawResp.livemode);
               }
+              o.total = getOrderFinalTotal(o);
             }
           }
         }
