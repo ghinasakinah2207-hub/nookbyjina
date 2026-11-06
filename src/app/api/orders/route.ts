@@ -357,6 +357,7 @@ export async function POST(request: Request) {
         ...item,
         productId: canonicalProductId, // Store canonical database UUID
         productName: catalogProduct.name, // Authoritative product name
+        productType: catalogProduct.productType || "preorder",
         basePrice: productBasePrice, // Authoritative price
         unitPrice: authoritativeUnitPrice,
         itemTotal: authoritativeItemTotal,

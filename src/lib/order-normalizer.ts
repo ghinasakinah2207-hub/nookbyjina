@@ -1,5 +1,5 @@
 import { Order, OrderStatus, PaymentMethod, PaymentStatus } from "@/types";
-import { normalizeProductType } from "@/lib/product-type";
+import { normalizeProductType, ProductType } from "@/lib/product-type";
 
 /**
  * Normalizes payment status from raw database representations, RPC responses,
@@ -163,7 +163,7 @@ export function isOrderExpired(
 /**
  * Normalizes any Order object or raw RPC/row object to guarantee canonical field types.
  */
-export function normalizeOrder(order: unknown): Order {
+export function normalizeOrder(order: unknown, productTypeMap?: Map<string, ProductType>): Order {
   if (!order || typeof order !== "object") return order as Order;
 
   const o = order as Record<string, unknown>;
@@ -209,10 +209,22 @@ export function normalizeOrder(order: unknown): Order {
     livemode: rawLivemode,
     items: rawItems.map((item: unknown) => {
       const it = (item || {}) as Record<string, unknown>;
+      let resolvedType: ProductType | undefined = undefined;
+      if (it.productType) {
+        resolvedType = normalizeProductType(it.productType);
+      } else if (productTypeMap) {
+        if (it.productId) {
+          resolvedType = productTypeMap.get(String(it.productId).toLowerCase());
+        }
+        if (!resolvedType && it.productName) {
+          resolvedType = productTypeMap.get(String(it.productName).trim().toLowerCase());
+        }
+      }
+
       const rawOptions = Array.isArray(it.selectedOptions) ? it.selectedOptions : [];
       return {
         ...(it as unknown as Order["items"][number]),
-        productType: normalizeProductType(it.productType),
+        productType: resolvedType || normalizeProductType(it.productType),
         selectedOptions: rawOptions.map((opt: unknown) => {
           const op = (opt || {}) as Record<string, unknown>;
           return {

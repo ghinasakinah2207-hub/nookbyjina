@@ -1,7 +1,8 @@
 import { Order, OrderStatus, PaymentStatus } from "@/types";
 import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
 import { hashOrderToken, isValidTokenFormat } from "@/lib/token-security";
-import { normalizeProductType } from "@/lib/product-type";
+import { normalizeProductType, ProductType } from "@/lib/product-type";
+import { SupabaseClient } from "@supabase/supabase-js";
 import {
   isOrderExpired,
   normalizeOrder,
@@ -10,6 +11,43 @@ import {
 } from "./order-normalizer";
 
 export * from "./order-normalizer";
+
+// In-memory cache for catalog product types to enrich orders lacking items_snapshot.productType
+let productTypeCache: { data: Map<string, ProductType>; timestamp: number } | null = null;
+const PRODUCT_TYPE_CACHE_TTL_MS = 60 * 1000; // 1 minute
+
+export async function getProductTypesMap(client?: SupabaseClient | null): Promise<Map<string, ProductType>> {
+  const now = Date.now();
+  if (productTypeCache && now - productTypeCache.timestamp < PRODUCT_TYPE_CACHE_TTL_MS) {
+    return productTypeCache.data;
+  }
+
+  const map = new Map<string, ProductType>();
+  const activeClient = client || getServiceRoleSupabaseClient();
+  if (!activeClient) {
+    return map;
+  }
+
+  try {
+    const { data, error } = await activeClient
+      .from("products")
+      .select("id, slug, name, product_type");
+
+    if (!error && Array.isArray(data)) {
+      for (const row of data) {
+        const pType = normalizeProductType(row.product_type);
+        if (row.id) map.set(String(row.id).toLowerCase(), pType);
+        if (row.slug) map.set(String(row.slug).toLowerCase(), pType);
+        if (row.name) map.set(String(row.name).trim().toLowerCase(), pType);
+      }
+      productTypeCache = { data: map, timestamp: now };
+    }
+  } catch (err) {
+    console.error("[orders-store] Failed to fetch product types map:", err);
+  }
+
+  return map;
+}
 
 /**
  * Derives current date string in store-local Asia/Jakarta (WIB) timezone: 'YYMMDD'
@@ -73,7 +111,11 @@ export * from "./order-normalizer";
 /**
  * Maps a raw Supabase database row to the application's Order type.
  */
-function mapDatabaseRowToOrder(row: Record<string, unknown>, rawToken?: string): Order {
+function mapDatabaseRowToOrder(
+  row: Record<string, unknown>,
+  rawToken?: string,
+  productTypeMap?: Map<string, ProductType>
+): Order {
   const normalizedMethod = normalizePaymentMethod(row.payment_method);
   const normalizedPaymentStatus = normalizePaymentStatus(row.payment_status, normalizedMethod);
 
@@ -92,23 +134,37 @@ function mapDatabaseRowToOrder(row: Record<string, unknown>, rawToken?: string):
     deliveryArea: (row.delivery_area as string) || "Lhoksukon",
     orderNote: (row.customer_note as string) || "",
     items: Array.isArray(row.items_snapshot)
-      ? (row.items_snapshot as Order["items"]).map((item) => ({
-          ...item,
-          productType: normalizeProductType(item.productType),
-          selectedOptions: Array.isArray(item.selectedOptions)
-            ? item.selectedOptions.map((opt) => ({
-                ...opt,
-                groupId: opt.groupId || opt.optionName || "",
-                groupName: opt.groupName || opt.optionName || "",
-                optionName: opt.optionName || opt.groupName || "",
-                valueId: opt.valueId || opt.optionValueId || "",
-                valueName: opt.valueName || opt.optionValue || "",
-                optionValueId: opt.optionValueId || opt.valueId || "",
-                optionValue: opt.optionValue || opt.valueName || "",
-                priceDelta: Number(opt.priceDelta || 0),
-              }))
-            : [],
-        }))
+      ? (row.items_snapshot as Order["items"]).map((item) => {
+          let resolvedType: ProductType | undefined = undefined;
+          if (item.productType) {
+            resolvedType = normalizeProductType(item.productType);
+          } else if (productTypeMap) {
+            if (item.productId) {
+              resolvedType = productTypeMap.get(String(item.productId).toLowerCase());
+            }
+            if (!resolvedType && item.productName) {
+              resolvedType = productTypeMap.get(String(item.productName).trim().toLowerCase());
+            }
+          }
+
+          return {
+            ...item,
+            productType: resolvedType || normalizeProductType(item.productType),
+            selectedOptions: Array.isArray(item.selectedOptions)
+              ? item.selectedOptions.map((opt) => ({
+                  ...opt,
+                  groupId: opt.groupId || opt.optionName || "",
+                  groupName: opt.groupName || opt.optionName || "",
+                  optionName: opt.optionName || opt.groupName || "",
+                  valueId: opt.valueId || opt.optionValueId || "",
+                  valueName: opt.valueName || opt.optionValue || "",
+                  optionValueId: opt.optionValueId || opt.valueId || "",
+                  optionValue: opt.optionValue || opt.valueName || "",
+                  priceDelta: Number(opt.priceDelta || 0),
+                }))
+              : [],
+          };
+        })
       : [],
     subtotal: Number(row.subtotal || 0),
     shippingFee: Number(row.delivery_fee || 0),
@@ -207,9 +263,9 @@ export async function saveOrder(order: Order): Promise<Order> {
   if (!rpcErr && rpcResult && typeof rpcResult === "object") {
     const rawOrder = rpcResult as Order;
     const normalizedItems = Array.isArray(rawOrder.items)
-      ? rawOrder.items.map((item) => ({
+      ? rawOrder.items.map((item, idx) => ({
           ...item,
-          productType: normalizeProductType(item.productType),
+          productType: normalizeProductType(item.productType || order.items?.[idx]?.productType),
           selectedOptions: Array.isArray(item.selectedOptions)
             ? item.selectedOptions.map((opt) => ({
                 ...opt,
@@ -319,6 +375,7 @@ export async function getOrderByToken(token: string): Promise<Order | null> {
   }
 
   let order: Order | null = null;
+  const productTypeMap = await getProductTypesMap(client);
 
   // 1. Try lookup_order_by_token_hash RPC
   const { data: rpcResult, error: rpcErr } = await client.rpc(
@@ -330,7 +387,7 @@ export async function getOrderByToken(token: string): Promise<Order | null> {
     order = normalizeOrder({
       ...(rpcResult as Order),
       token: cleanToken,
-    });
+    }, productTypeMap);
   } else {
     // 2. Direct relational query fallback
     const { data: tokenRecord, error: tokenErr } = await client
@@ -348,7 +405,7 @@ export async function getOrderByToken(token: string): Promise<Order | null> {
         .maybeSingle();
 
       if (!orderErr && orderRecord) {
-        order = mapDatabaseRowToOrder(orderRecord as Record<string, unknown>, cleanToken);
+        order = mapDatabaseRowToOrder(orderRecord as Record<string, unknown>, cleanToken, productTypeMap);
       }
     }
   }
@@ -458,6 +515,7 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
   }
 
   let fetchedOrders: Order[] = [];
+  const productTypeMap = await getProductTypesMap(client);
 
   // 1. Try lookup_orders_by_token_hashes RPC
   const { data: rpcResult, error: rpcErr } = await client.rpc(
@@ -472,7 +530,7 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
       return normalizeOrder({
         ...o,
         token,
-      });
+      }, productTypeMap);
     });
   } else {
     // 2. Direct query fallback
@@ -506,7 +564,7 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
     }
 
     fetchedOrders = (orderRows as Record<string, unknown>[]).map((row) =>
-      mapDatabaseRowToOrder(row, orderIdToToken.get(String(row.id)))
+      mapDatabaseRowToOrder(row, orderIdToToken.get(String(row.id)), productTypeMap)
     );
   }
 
@@ -748,7 +806,8 @@ export async function updateOrderStatusServer(
   );
 
   if (!rpcErr && rpcResult && typeof rpcResult === "object") {
-    return normalizeOrder(rpcResult as Order);
+    const productTypeMap = await getProductTypesMap(client);
+    return normalizeOrder(rpcResult as Order, productTypeMap);
   }
 
   // RPC returned null → order not found
@@ -818,7 +877,7 @@ export async function getAdminOrdersServer(options?: GetAdminOrdersOptions): Pro
       }
     }
     return devOrders
-      .map(normalizeOrder)
+      .map((o) => normalizeOrder(o))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
@@ -852,6 +911,8 @@ export async function getAdminOrdersServer(options?: GetAdminOrdersOptions): Pro
     return [];
   }
 
+  const productTypeMap = await getProductTypesMap(client);
+
   // Resilient item resolution: if items_snapshot is not yet populated, join order_items
   const hasSnapshot = rows.some((r) => Array.isArray((r as Record<string, unknown>).items_snapshot));
   const itemsByOrderId = new Map<string, Order["items"]>();
@@ -874,6 +935,7 @@ export async function getAdminOrdersServer(options?: GetAdminOrdersOptions): Pro
             id: String(item.id),
             productId: String(item.product_id),
             productName: String(item.product_name),
+            productType: productTypeMap.get(String(item.product_id).toLowerCase()) || "preorder",
             productImage: "",
             basePrice: uPrice,
             selectedOptions: [],
@@ -893,11 +955,11 @@ export async function getAdminOrdersServer(options?: GetAdminOrdersOptions): Pro
   }
 
   adminOrders = (rows as Record<string, unknown>[]).map((row) => {
-    const mapped = mapDatabaseRowToOrder(row);
+    const mapped = mapDatabaseRowToOrder(row, undefined, productTypeMap);
     if ((!mapped.items || mapped.items.length === 0) && itemsByOrderId.has(String(row.id))) {
       mapped.items = itemsByOrderId.get(String(row.id)) || [];
     }
-    return normalizeOrder(mapped);
+    return normalizeOrder(mapped, productTypeMap);
   });
 
   // Include any in-memory dev/test orders ONLY when operating in non-database dev mode

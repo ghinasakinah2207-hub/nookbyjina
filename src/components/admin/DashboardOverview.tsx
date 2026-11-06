@@ -10,12 +10,10 @@ import {
   ShieldCheck,
   Store,
   ChevronRight,
-  Package,
   RefreshCw,
   AlertCircle,
   CheckCircle2,
   XCircle,
-  Settings,
 } from "lucide-react";
 import { Order } from "@/types";
 import { DashboardMetrics } from "@/lib/admin-reports";
@@ -308,70 +306,6 @@ export function DashboardOverview({
         </div>
       </div>
 
-      {/* =========================================================================
-          QUICK ACTIONS
-          ========================================================================= */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <Link
-          href="/admin/pesanan"
-          className="bg-white border border-[#E5E5E5] hover:border-neutral-400 p-3.5 rounded-2xl flex items-center gap-3 transition-colors group"
-        >
-          <div className="w-8 h-8 rounded-xl bg-neutral-100 group-hover:bg-[#111111] group-hover:text-white flex items-center justify-center text-[#111111] transition-colors">
-            <ShoppingBag className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-xs font-bold text-[#111111] block truncate">
-              Kelola Pesanan
-            </span>
-            <span className="text-[10px] text-[#737373] block truncate">Semua order</span>
-          </div>
-        </Link>
-
-        <Link
-          href="/admin/pengaturan"
-          className="bg-white border border-[#E5E5E5] hover:border-neutral-400 p-3.5 rounded-2xl flex items-center gap-3 transition-colors group"
-        >
-          <div className="w-8 h-8 rounded-xl bg-neutral-100 group-hover:bg-[#111111] group-hover:text-white flex items-center justify-center text-[#111111] transition-colors">
-            <Settings className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-xs font-bold text-[#111111] block truncate">
-              Pengaturan Toko
-            </span>
-            <span className="text-[10px] text-[#737373] block truncate">Buka-tutup & tarif</span>
-          </div>
-        </Link>
-
-        <Link
-          href="/admin/menu"
-          className="bg-white border border-[#E5E5E5] hover:border-neutral-400 p-3.5 rounded-2xl flex items-center gap-3 transition-colors group"
-        >
-          <div className="w-8 h-8 rounded-xl bg-neutral-100 group-hover:bg-[#111111] group-hover:text-white flex items-center justify-center text-[#111111] transition-colors">
-            <Package className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-xs font-bold text-[#111111] block truncate">
-              Katalog Menu
-            </span>
-            <span className="text-[10px] text-[#737373] block truncate">Atur HPP & harga</span>
-          </div>
-        </Link>
-
-        <Link
-          href="/admin/laporan"
-          className="bg-white border border-[#E5E5E5] hover:border-neutral-400 p-3.5 rounded-2xl flex items-center gap-3 transition-colors group"
-        >
-          <div className="w-8 h-8 rounded-xl bg-neutral-100 group-hover:bg-[#111111] group-hover:text-white flex items-center justify-center text-[#111111] transition-colors">
-            <DollarSign className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-xs font-bold text-[#111111] block truncate">
-              Laporan Keuangan
-            </span>
-            <span className="text-[10px] text-[#737373] block truncate">Omzet, HPP, grafik</span>
-          </div>
-        </Link>
-      </div>
 
       {/* =========================================================================
           RECENT ORDERS LIST (MOBILE-FIRST CARD ROWS)
