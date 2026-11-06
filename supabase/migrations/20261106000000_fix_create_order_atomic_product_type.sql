@@ -515,61 +515,71 @@ BEGIN
     END IF;
 
     -- Generate sequential daily order number TJ-YYMMDD-NNN
-    WITH counter_subquery AS (
-      INSERT INTO public.daily_order_counters (counter_date, last_value)
-      VALUES (timezone('Asia/Jakarta', v_created_at)::date, 1)
-      ON CONFLICT (counter_date)
-      DO UPDATE SET last_value = public.daily_order_counters.last_value + 1
-      RETURNING last_value AS next_val
+WITH counter_subquery AS (
+    INSERT INTO public.daily_order_counters (
+        order_date,
+        last_sequence
     )
-    SELECT 'TJ-' || to_char(timezone('Asia/Jakarta', v_created_at), 'YYMMDD') || '-' || lpad(next_val::text, 3, '0')
-    INTO v_order_number
-    FROM counter_subquery;
+    VALUES (
+        to_char(timezone('Asia/Jakarta', v_created_at), 'YYMMDD'),
+        1
+    )
+    ON CONFLICT (order_date)
+    DO UPDATE SET
+        last_sequence =
+            public.daily_order_counters.last_sequence + 1
+    RETURNING last_sequence AS next_val
+)
+SELECT
+    'TJ-' ||
+    to_char(timezone('Asia/Jakarta', v_created_at), 'YYMMDD') ||
+    '-' ||
+    lpad(next_val::text, 3, '0')
+INTO v_order_number
+FROM counter_subquery;
 
     BEGIN
       -- STEP 3a: INSERT INTO PUBLIC.ORDERS
       INSERT INTO public.orders (
-        id,
-        order_number,
-        customer_name,
-        customer_phone,
-        customer_whatsapp,
-        fulfillment_method,
-        delivery_area,
-        delivery_address,
-        customer_note,
-        subtotal,
-        delivery_fee,
-        total,
-        order_status,
-        payment_status,
-        payment_method,
-        payment_deadline,
-        items_snapshot,
-        merchant_name,
-        created_at,
-        updated_at
+    id,
+    order_number,
+    customer_name,
+    customer_whatsapp,
+    fulfillment_method,
+    delivery_area,
+    delivery_address,
+    customer_note,
+    subtotal,
+    delivery_fee,
+    total,
+    order_status,
+    payment_status,
+    payment_method,
+    payment_deadline,
+    items_snapshot,
+    merchant_name,
+    created_at,
+    updated_at
       ) VALUES (
-        v_order_id,
-        v_order_number,
-        trim(p_order->>'customerName'),
-        trim(p_order->>'customerWhatsapp'),
-        trim(p_order->>'customerWhatsapp'),
-        v_fulfillment_type,
-        v_delivery_area,
-        trim(COALESCE(p_order->>'deliveryAddress', '')),
-        trim(COALESCE(p_order->>'orderNote', '')),
-        v_calculated_subtotal,
-        v_shipping_fee,
-        v_total,
-        v_order_status,
-        v_payment_status,
-        v_payment_method,
-        v_deadline,
-        v_items_snapshot,
-        v_merchant_name,
-        v_created_at,
-        v_created_at
+    v_order_id,
+    v_order_number,
+    trim(p_order->>'customerName'),
+    trim(p_order->>'customerWhatsapp'),
+    v_fulfillment_type,
+    v_delivery_area,
+    trim(COALESCE(p_order->>'deliveryAddress', '')),
+    trim(COALESCE(p_order->>'orderNote', '')),
+    v_calculated_subtotal,
+    v_shipping_fee,
+    v_total,
+    v_order_status,
+    v_payment_status,
+    v_payment_method,
+    v_deadline,
+    v_items_snapshot,
+    v_merchant_name,
+    v_created_at,
+    v_created_at
       );
 
       -- STEP 4: INSERT PARENT PUBLIC.ORDER_ITEMS ROWS

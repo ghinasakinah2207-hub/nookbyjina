@@ -56,6 +56,7 @@ export interface Product {
   hpp?: number | null;
   isOptionsLoaded?: boolean;
   productType?: ProductType;
+  calories?: number | null;
 }
 
 export interface SelectedOption {

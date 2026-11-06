@@ -41,6 +41,7 @@ export const PRODUCTS: Product[] = [
     categoryId: "cat-makanan",
     categoryName: "Makanan",
     basePrice: 25000,
+    calories: 450,
     isAvailable: true,
     isHighlight: true,
     images: ["/images/hero-food.webp", "/images/banner-promo-1.webp"],

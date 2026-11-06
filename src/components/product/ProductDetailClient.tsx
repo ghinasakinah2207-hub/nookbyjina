@@ -16,6 +16,7 @@ import {
   Star,
   Truck,
   Clock,
+  Flame,
 } from "lucide-react";
 import { STORE_SETTINGS } from "@/data/dummy-data";
 import { useCart } from "@/context/CartContext";
@@ -774,21 +775,51 @@ export default function ProductDetailClient({
                 )}
               </div>
 
-              {/* Rating & Preparation Estimate */}
-              <div className="flex items-center gap-2 text-[11px] font-semibold text-[#111111] flex-wrap">
-                <div className="flex items-center gap-1">
-                  <Star className="w-3.5 h-3.5 text-[#FFC83D] fill-[#FFC83D]" />
-                  <span>4.9</span>
-                  <span className="text-[#737373] font-normal">(120+ ulasan)</span>
+              {/* Three Compact Information Cards (Rating, Estimasi, Kalori) */}
+              <div className="grid grid-cols-3 gap-2 pt-1" data-testid="product-info-cards">
+                {/* 1. Rating */}
+                <div
+                  className="bg-white border border-[#E5E5E5] rounded-xl sm:rounded-2xl py-2 px-1.5 flex flex-col items-center justify-center text-center select-none"
+                  title="Rating: 4.9 (120+ ulasan)"
+                >
+                  <div className="flex items-center justify-center gap-1 text-xs sm:text-[13px] font-bold text-[#111111]">
+                    <Star className="w-3.5 h-3.5 text-[#F59E0B] fill-[#F59E0B] shrink-0" />
+                    <span>4.9</span>
+                  </div>
+                  <span className="text-[10px] text-[#737373] mt-0.5">Rating</span>
                 </div>
 
-                <span className="text-[#D4D4D4] text-[8px] leading-none select-none">•</span>
+                {/* 2. Preparation Estimate */}
+                <div
+                  className="bg-white border border-[#E5E5E5] rounded-xl sm:rounded-2xl py-2 px-1.5 flex flex-col items-center justify-center text-center select-none"
+                  aria-label={`Estimasi persiapan: ${getProductTypeConfig(product.productType).estimate}`}
+                  title={`Estimasi persiapan: ${getProductTypeConfig(product.productType).estimate}`}
+                >
+                  <div className="flex items-center justify-center gap-1 text-xs sm:text-[13px] font-bold text-[#111111] max-w-full">
+                    <Clock className="w-3.5 h-3.5 text-[#737373] shrink-0" />
+                    <span className="truncate">{getProductTypeConfig(product.productType).estimate}</span>
+                  </div>
+                  <span className="text-[10px] text-[#737373] mt-0.5">Estimasi</span>
+                </div>
 
-                <div className="flex items-center gap-1 text-[#737373] font-normal">
-                  <Clock className="w-3 h-3 text-[#737373] flex-shrink-0" />
-                  <span>
-                    Estimasi persiapan: <strong className="font-semibold text-[#111111]">{getProductTypeConfig(product.productType).estimate}</strong>
-                  </span>
+                {/* 3. Calories */}
+                <div
+                  className="bg-white border border-[#E5E5E5] rounded-xl sm:rounded-2xl py-2 px-1.5 flex flex-col items-center justify-center text-center select-none"
+                  title={
+                    product.calories !== undefined && product.calories !== null && product.calories > 0
+                      ? `${product.calories} kcal`
+                      : "Kalori: Belum diisi"
+                  }
+                >
+                  <div className="flex items-center justify-center gap-1 text-xs sm:text-[13px] font-bold text-[#111111] max-w-full">
+                    <Flame className="w-3.5 h-3.5 text-[#F25B09] shrink-0" />
+                    <span className="truncate">
+                      {product.calories !== undefined && product.calories !== null && product.calories > 0
+                        ? `${product.calories} kcal`
+                        : "Belum diisi"}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-[#737373] mt-0.5">Kalori</span>
                 </div>
               </div>
             </div>

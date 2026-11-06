@@ -29,6 +29,7 @@ export interface DbProductRow {
   is_archived: boolean;
   is_highlight?: boolean;
   product_type?: string | null;
+  calories?: number | null;
   sort_order: number;
   category_id: string;
   tags?: string[] | null;
@@ -233,6 +234,10 @@ export function mapDbProductToUiProduct(row: DbProductRow): Product & { category
     hpp: row.hpp !== undefined && row.hpp !== null ? Number(row.hpp) : undefined,
     isOptionsLoaded,
     productType: normalizeProductType(row.product_type),
+    calories:
+      row.calories !== undefined && row.calories !== null
+        ? Number(row.calories)
+        : null,
   };
 }
 
@@ -330,6 +335,7 @@ export async function getVisibleProducts(bypassCache = false): Promise<Product[]
       is_archived,
       is_highlight,
       product_type,
+      calories,
       sort_order,
       category_id,
       tags,
@@ -463,6 +469,7 @@ export async function getAdminCatalogProducts(client: SupabaseClient): Promise<P
       is_archived,
       is_highlight,
       product_type,
+      calories,
       sort_order,
       category_id,
       tags,
@@ -530,6 +537,7 @@ export async function getRecommendedProducts(
       is_archived,
       is_highlight,
       product_type,
+      calories,
       sort_order,
       category_id,
       tags,
@@ -623,6 +631,7 @@ export async function getProductBySlugOrId(
       is_archived,
       is_highlight,
       product_type,
+      calories,
       sort_order,
       category_id,
       tags,

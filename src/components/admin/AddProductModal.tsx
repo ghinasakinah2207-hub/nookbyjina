@@ -115,6 +115,11 @@ function ProductFormModalContent({
       ? ""
       : "12000"
   );
+  const [calories, setCalories] = useState<string>(
+    initialProduct?.calories !== undefined && initialProduct?.calories !== null
+      ? String(initialProduct.calories)
+      : ""
+  );
 
   // Images state (defaults to existing images or empty for fresh upload)
   const [images, setImages] = useState<string[]>(
@@ -166,6 +171,11 @@ function ProductFormModalContent({
         setPrice(String(full.basePrice));
         if (full.hpp !== undefined && full.hpp !== null) {
           setHpp(String(full.hpp));
+        }
+        if (full.calories !== undefined && full.calories !== null) {
+          setCalories(String(full.calories));
+        } else {
+          setCalories("");
         }
         if (full.productType) {
           setProductType(normalizeProductType(full.productType));
@@ -379,6 +389,15 @@ function ProductFormModalContent({
       }
     }
 
+    let numCalories: number | null = null;
+    if (calories.trim() !== "") {
+      numCalories = Math.max(0, Math.floor(Number(calories)));
+      if (isNaN(numCalories) || numCalories < 0) {
+        setError("Kalori produk harus angka valid >= 0.");
+        return;
+      }
+    }
+
     if (images.length === 0) {
       setError("Unggah minimal satu foto produk.");
       return;
@@ -446,6 +465,7 @@ function ProductFormModalContent({
           description: description.trim(),
           price: numPrice,
           hpp: numHpp,
+          calories: numCalories,
           productType,
           images,
           optionGroups: optionGroups.map((g) => ({
@@ -491,6 +511,7 @@ function ProductFormModalContent({
           productType,
           images,
           hpp: numHpp,
+          calories: numCalories,
           optionGroups: optionGroups.map((g, idx) => ({
             id: `opt-${idx}`,
             name: g.name.trim(),
@@ -516,6 +537,7 @@ function ProductFormModalContent({
           description: description.trim(),
           price: numPrice,
           hpp: numHpp,
+          calories: numCalories,
           isAvailable: true,
           isHighlight: false,
           productType,
@@ -563,6 +585,7 @@ function ProductFormModalContent({
           productType,
           images,
           hpp: numHpp,
+          calories: numCalories,
           optionGroups: optionGroups.map((g, idx) => ({
             id: `opt-${idx}`,
             name: g.name.trim(),
@@ -712,6 +735,31 @@ function ProductFormModalContent({
                 placeholder="cth: Nasi bakar gurih beraroma daun pisang dengan isian suwiran ikan cakalang asap bumbu pedas khas Manado."
                 className="w-full px-3 py-2 bg-white border border-[#E5E5E5] rounded-xl text-xs text-[#111111] placeholder:text-[#737373] focus:border-[#111111] outline-none transition-colors resize-y leading-relaxed"
               />
+            </div>
+
+            {/* Kalori */}
+            <div>
+              <label htmlFor="product-calories" className="block font-semibold text-[#111111] mb-1">
+                Kalori <span className="text-[11px] text-[#737373] font-normal">(Opsional)</span>
+              </label>
+              <div className="relative">
+                <input
+                  id="product-calories"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={calories}
+                  onChange={(e) => setCalories(e.target.value.replace(/[^0-9]/g, ""))}
+                  placeholder="Contoh: 450"
+                  className="w-full px-3 py-2 pr-12 bg-white border border-[#E5E5E5] rounded-xl text-xs text-[#111111] placeholder:text-[#737373] focus:border-[#111111] outline-none"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#737373] pointer-events-none">
+                  kcal
+                </span>
+              </div>
+              <span className="text-[10px] text-[#737373] mt-0.5 block">
+                Estimasi energi per porsi produk.
+              </span>
             </div>
           </div>
 

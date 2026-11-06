@@ -41,6 +41,7 @@ export interface CreateProductInput {
   isAvailable?: boolean;
   isHighlight?: boolean;
   productType?: ProductType;
+  calories?: number | null;
   images: string[];
   optionGroups?: {
     name: string;
@@ -74,6 +75,7 @@ export interface UpdateProductInput {
   isAvailable?: boolean;
   isHighlight?: boolean;
   productType?: ProductType;
+  calories?: number | null;
   images: string[];
   optionGroups?: {
     name: string;
@@ -314,6 +316,10 @@ export async function createProductAction(
     const nextSortOrder = (maxSortData?.sort_order ?? 0) + 1;
     const productId = crypto.randomUUID();
     const finalProductType = normalizeProductType(input.productType);
+    const caloriesNum =
+      input.calories !== undefined && input.calories !== null && !isNaN(Number(input.calories))
+        ? Math.max(0, Math.floor(Number(input.calories)))
+        : null;
 
     // 5. Insert main product row into public.products with concurrency protection
     let insertSuccess = false;
@@ -330,6 +336,7 @@ export async function createProductAction(
           description: input.description?.trim() || null,
           price: priceNum,
           hpp: hppNum,
+          calories: caloriesNum,
           is_available: input.isAvailable !== undefined ? Boolean(input.isAvailable) : true,
           is_archived: false,
           is_highlight: input.isHighlight !== undefined ? Boolean(input.isHighlight) : false,
@@ -337,8 +344,8 @@ export async function createProductAction(
           product_type: finalProductType,
         });
 
-      if (insertProdErr && insertProdErr.message && insertProdErr.message.includes("product_type")) {
-        // Fallback if remote DB has not yet applied product_type migration
+      if (insertProdErr && insertProdErr.message && (insertProdErr.message.includes("product_type") || insertProdErr.message.includes("calories"))) {
+        // Fallback if remote DB has not yet applied migration
         const fallbackRes = await client
           .from("products")
           .insert({
@@ -568,7 +575,7 @@ export async function updateProductAction(
 
     // 3. Resolve existing product by ID or slug
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.id);
-    let findQuery = client.from("products").select("id, slug, name, is_available, is_highlight, hpp, description");
+    let findQuery = client.from("products").select("id, slug, name, is_available, is_highlight, hpp, description, calories");
     if (isUuid) {
       findQuery = findQuery.eq("id", input.id);
     } else {
@@ -628,6 +635,14 @@ export async function updateProductAction(
           ? normalizeProductType(input.productType)
           : "preorder";
 
+      // Preserve existing calories if input.calories was not passed (undefined)
+      const finalCalories =
+        input.calories !== undefined
+          ? (input.calories !== null && !isNaN(Number(input.calories)) ? Math.max(0, Math.floor(Number(input.calories))) : null)
+          : existingProd.calories !== undefined && existingProd.calories !== null
+          ? Number(existingProd.calories)
+          : null;
+
       // Update public.products
       let { error: updateErr } = await client
         .from("products")
@@ -638,6 +653,7 @@ export async function updateProductAction(
           description: finalDescription,
           price: priceNum,
           hpp: finalHpp,
+          calories: finalCalories,
           is_available: finalIsAvailable,
           is_highlight: finalIsHighlight,
           product_type: finalProductType,
@@ -645,7 +661,7 @@ export async function updateProductAction(
         })
         .eq("id", resolvedProductId);
 
-      if (updateErr && updateErr.message && updateErr.message.includes("product_type")) {
+      if (updateErr && updateErr.message && (updateErr.message.includes("product_type") || updateErr.message.includes("calories"))) {
         const fallbackRes = await client
           .from("products")
           .update({
@@ -695,6 +711,7 @@ export async function updateProductAction(
         description: input.description !== undefined ? (input.description?.trim() || null) : null,
         price: priceNum,
         hpp: input.hpp !== undefined ? hppNum : null,
+        calories: input.calories !== undefined && input.calories !== null && !isNaN(Number(input.calories)) ? Math.max(0, Math.floor(Number(input.calories))) : null,
         is_available: input.isAvailable !== undefined ? Boolean(input.isAvailable) : true,
         is_archived: false,
         is_highlight: input.isHighlight !== undefined ? Boolean(input.isHighlight) : false,
@@ -702,7 +719,7 @@ export async function updateProductAction(
         sort_order: nextSortOrder,
       });
 
-      if (insertErr && insertErr.message && insertErr.message.includes("product_type")) {
+      if (insertErr && insertErr.message && (insertErr.message.includes("product_type") || insertErr.message.includes("calories"))) {
         const fallbackRes = await client.from("products").insert({
           id: resolvedProductId,
           category_id: input.categoryId,
@@ -1508,20 +1525,26 @@ export async function getAdminProductForEditAction(
       }
     }
 
-    // 3. Fetch authoritative HPP directly from products table (authorized admins only)
+    // 3. Fetch authoritative HPP and calories directly from products table (authorized admins only)
     let fetchedHpp: number | null = null;
+    let fetchedCalories: number | null = null;
     try {
       const targetId = resolvedProduct.dbId || resolvedProduct.id;
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
-      let directQuery = client.from("products").select("id, slug, hpp");
+      let directQuery = client.from("products").select("id, slug, hpp, calories");
       if (isUuid) {
         directQuery = directQuery.eq("id", targetId);
       } else {
         directQuery = directQuery.eq("slug", resolvedProduct.slug || targetId);
       }
       const { data: directProd, error: directErr } = await directQuery.maybeSingle();
-      if (!directErr && directProd && directProd.hpp !== undefined && directProd.hpp !== null) {
-        fetchedHpp = Number(directProd.hpp);
+      if (!directErr && directProd) {
+        if (directProd.hpp !== undefined && directProd.hpp !== null) {
+          fetchedHpp = Number(directProd.hpp);
+        }
+        if (directProd.calories !== undefined && directProd.calories !== null) {
+          fetchedCalories = Number(directProd.calories);
+        }
       }
     } catch {
       // In dev or fallback mode, continue gracefully
@@ -1532,6 +1555,7 @@ export async function getAdminProductForEditAction(
       product: {
         ...resolvedProduct,
         hpp: fetchedHpp,
+        calories: fetchedCalories ?? resolvedProduct.calories ?? null,
       },
     };
   } catch (err: unknown) {
