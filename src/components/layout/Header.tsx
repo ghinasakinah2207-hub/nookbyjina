@@ -19,12 +19,14 @@ interface HeaderProps {
   rightAction?: React.ReactNode;
   showHamburger?: boolean;
   storeSettings?: StoreSettings;
+  onBack?: () => void;
 }
 
 export function Header({
   title,
   showBack = false,
   backHref,
+  onBack,
   showFavorite = true,
   showCart,
   subtitle,
@@ -42,7 +44,9 @@ export function Header({
   const isHamburgerVisible = showHamburger ?? (!showBack && !title);
 
   const handleBack = () => {
-    if (backHref) {
+    if (onBack) {
+      onBack();
+    } else if (backHref) {
       router.push(backHref);
     } else {
       router.back();

@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, Suspense, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, Suspense, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import QRCode from "qrcode";
 import {
   Clock,
@@ -25,20 +25,98 @@ import { Header } from "@/components/layout/Header";
 import { StatusBadge } from "@/components/ui/Badge";
 import { useOrder } from "@/context/OrderContext";
 import { formatRupiah, STORE_SETTINGS as DEFAULT_SETTINGS } from "@/data/dummy-data";
-import { getOrderToken } from "@/lib/order-token-vault";
+import { getOrderToken, saveOrderToken } from "@/lib/order-token-vault";
 import { isPendingQrisStatus, isPaidStatus } from "@/lib/order-normalizer";
 import { extractNmidFromQris } from "@/lib/qris-nmid";
+import { isValidTokenFormat } from "@/lib/token-security";
 import { StoreSettings } from "@/types";
 
 function PaymentContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const orderId = decodeURIComponent((params?.order as string) || "");
+  const orderId = decodeURIComponent((params?.order as string) || "").trim();
+  const queryToken = (searchParams?.get("token") || "").trim();
 
   const { orders, getOrderById, updateOrderStatus, isHydrated, addOrder } = useOrder();
 
   // Authoritative server-time offset (serverTime - localTime) in ms
   const serverOffsetRef = useRef<number>(0);
+
+  // Look up order safely by order ID or token
+  const order = useMemo(() => {
+    if (!isHydrated) return undefined;
+    return getOrderById(orderId) || orders.find((o) => o.token === orderId || (queryToken && o.token === queryToken));
+  }, [orderId, queryToken, orders, getOrderById, isHydrated]);
+
+  // Authoritatively resolve secure order token:
+  // 1. Valid query parameter ?token=...
+  // 2. Route param if it already meets token format (length >= 16 and not starting with TJ-)
+  // 3. Current order in state (order.token)
+  // 4. Token vault lookup by orderId (e.g. TJ-261106-001)
+  // 5. Token vault lookup by order.id
+  // 6. Matched order in OrderContext cache
+  const resolvedToken = useMemo(() => {
+    if (isValidTokenFormat(queryToken) && !queryToken.startsWith("TJ-")) return queryToken;
+    if (isValidTokenFormat(orderId) && !orderId.startsWith("TJ-")) return orderId;
+    if (order?.token && isValidTokenFormat(order.token) && !order.token.startsWith("TJ-")) return order.token;
+
+    if (orderId) {
+      const vaultTok = getOrderToken(orderId);
+      if (vaultTok && isValidTokenFormat(vaultTok) && !vaultTok.startsWith("TJ-")) return vaultTok;
+    }
+
+    if (order?.id && order.id !== orderId) {
+      const vaultTok = getOrderToken(order.id);
+      if (vaultTok && isValidTokenFormat(vaultTok) && !vaultTok.startsWith("TJ-")) return vaultTok;
+    }
+
+    const localMatch = orders.find((o) => o.id === orderId || o.token === orderId);
+    if (localMatch?.token && isValidTokenFormat(localMatch.token) && !localMatch.token.startsWith("TJ-")) {
+      return localMatch.token;
+    }
+
+    return "";
+  }, [queryToken, orderId, order, orders]);
+
+  // Status flags needed for early navigation hooks
+  const isPaid = isPaidStatus(order?.paymentStatus);
+
+  // Authoritative back navigation: always targets order detail page when token exists
+  const handleBackNavigation = useCallback(() => {
+    if (resolvedToken) {
+      router.push(`/pesanan/${encodeURIComponent(resolvedToken)}`);
+    } else {
+      router.push("/pesanan");
+    }
+  }, [resolvedToken, router]);
+
+  // When order is paid, intercept hardware/browser back or popstate
+  // to ensure navigation always lands directly on the order detail page
+  useEffect(() => {
+    if (!isPaid || !resolvedToken) return;
+
+    window.history.pushState({ page: "payment_success" }, "", window.location.href);
+
+    const handlePopState = () => {
+      router.replace(`/pesanan/${encodeURIComponent(resolvedToken)}`);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [isPaid, resolvedToken, router]);
+
+  // Persist resolved token back to vault whenever available
+  useEffect(() => {
+    if (resolvedToken) {
+      const targetId = order?.id || (orderId && orderId.startsWith("TJ-") ? orderId : "");
+      if (targetId) {
+        saveOrderToken(targetId, resolvedToken);
+      }
+    }
+  }, [resolvedToken, order?.id, orderId]);
 
   // Guard refs to prevent concurrent or infinite duplicate fetches
   const inFlightFallbackRef = useRef(false);
@@ -57,7 +135,9 @@ function PaymentContent() {
       return;
     }
 
-    const lookupToken = orderId.length >= 16 ? orderId : getOrderToken(orderId);
+    const lookupToken =
+      resolvedToken ||
+      (isValidTokenFormat(orderId) && !orderId.startsWith("TJ-") ? orderId : getOrderToken(orderId));
     if (!lookupToken) return;
 
     if (fetchedTokensRef.current.has(lookupToken) || inFlightFallbackRef.current) {
@@ -82,7 +162,7 @@ function PaymentContent() {
       .finally(() => {
         inFlightFallbackRef.current = false;
       });
-  }, [isHydrated, orderId, addOrder]);
+  }, [isHydrated, orderId, resolvedToken, addOrder]);
 
   // Sync server authoritative time
   useEffect(() => {
@@ -108,19 +188,10 @@ function PaymentContent() {
     };
   }, []);
 
-  // Look up order safely by order ID or token
-  const order = useMemo(() => {
-    if (!isHydrated) return undefined;
-    return getOrderById(orderId) || orders.find((o) => o.token === orderId);
-  }, [orderId, orders, getOrderById, isHydrated]);
-
-  // Resolve token for links and navigation
-  const resolvedToken = order?.token || (order?.id ? getOrderToken(order.id) : "") || "";
-
   // If order uses Cash method, redirect to order detail page immediately
   useEffect(() => {
     if (order && order.paymentMethod === "Cash") {
-      router.replace(resolvedToken ? `/pesanan/${resolvedToken}` : "/pesanan");
+      router.replace(resolvedToken ? `/pesanan/${encodeURIComponent(resolvedToken)}` : "/pesanan");
     }
   }, [order, resolvedToken, router]);
 
@@ -377,7 +448,6 @@ function PaymentContent() {
   }
 
   // Order status flags
-  const isPaid = isPaidStatus(order.paymentStatus);
   const isCancelled =
     order.paymentStatus === "Dibatalkan" ||
     order.orderStatus === "Dibatalkan" ||
@@ -497,7 +567,8 @@ function PaymentContent() {
       <Header
         title="Pembayaran QRIS"
         showBack={true}
-        backHref={resolvedToken ? `/pesanan/${resolvedToken}` : "/pesanan"}
+        backHref={resolvedToken ? `/pesanan/${encodeURIComponent(resolvedToken)}` : "/pesanan"}
+        onBack={handleBackNavigation}
         showCart={false}
       />
 
@@ -691,8 +762,14 @@ function PaymentContent() {
 
             <div className="pt-2">
               <Link
-                href={resolvedToken ? `/pesanan/${resolvedToken}` : "/pesanan"}
-                className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-3 bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#C2410C] text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
+                href={resolvedToken ? `/pesanan/${encodeURIComponent(resolvedToken)}` : "/pesanan"}
+                onClick={(e) => {
+                  if (resolvedToken) {
+                    e.preventDefault();
+                    router.push(`/pesanan/${encodeURIComponent(resolvedToken)}`);
+                  }
+                }}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-3 bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#C2410C] text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
               >
                 <span>Lihat Detail Pesanan</span>
                 <ChevronRight className="w-4 h-4" />

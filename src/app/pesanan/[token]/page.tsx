@@ -250,14 +250,15 @@ function OrderDetailContent() {
     );
   }
 
-  const dateObj = new Date(order.createdAt);
-  const formattedDate = dateObj.toLocaleDateString("id-ID", {
+  const dateObj = order.createdAt ? new Date(order.createdAt) : new Date();
+  const validDate = isNaN(dateObj.getTime()) ? new Date() : dateObj;
+  const formattedDate = validDate.toLocaleDateString("id-ID", {
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
   });
-  const formattedTime = dateObj.toLocaleTimeString("id-ID", {
+  const formattedTime = validDate.toLocaleTimeString("id-ID", {
     hour: "2-digit",
     minute: "2-digit",
   }) + " WIB";
@@ -265,11 +266,11 @@ function OrderDetailContent() {
   const finalTotal = getOrderFinalTotal(order);
 
   // WhatsApp digital receipt share text
-  const receiptItemsText = order.items
-    .map(
-      (item) =>
-        `• ${item.quantity}x ${item.productName} (${formatRupiah(item.itemTotal)})`
-    )
+  const receiptItemsText = (Array.isArray(order.items) ? order.items : [])
+    .map((item) => {
+      const lineTotal = item.itemTotal ?? ((item.unitPrice || 0) * (item.quantity || 1));
+      return `• ${item.quantity || 1}x ${item.productName || "Item"} (${formatRupiah(lineTotal)})`;
+    })
     .join("\n");
 
   const waShareReceiptText = `*STRUK DIGITAL PESANAN — Nook by Jina*
@@ -446,7 +447,7 @@ Terima kasih telah memesan di Nook by Jina!`;
 
           {/* B. Order Items */}
           <div className="divide-y divide-[#E5E5E5]/60">
-            {order.items.map((item) => (
+            {(Array.isArray(order.items) ? order.items : []).map((item) => (
               <div key={item.id} className="py-2.5 first:pt-0 last:pb-0 space-y-1">
                 <div className="flex justify-between items-start gap-2">
                   <span className="font-semibold text-[#111111] flex items-center gap-1.5 flex-wrap">
@@ -462,7 +463,7 @@ Terima kasih telah memesan di Nook by Jina!`;
                     </span>
                   </span>
                   <span className="font-bold text-[#111111] shrink-0">
-                    {formatRupiah(item.itemTotal)}
+                    {formatRupiah(item.itemTotal ?? ((item.unitPrice || 0) * (item.quantity || 1)))}
                   </span>
                 </div>
 

@@ -343,8 +343,8 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
       // Navigate directly via router.replace (not push) to avoid exposing empty checkout route on back
       const targetUrl =
         selectedPaymentMethod === "Cash"
-          ? `/pesanan/${data.order.token}`
-          : `/pembayaran/${data.order.id}`;
+          ? `/pesanan/${encodeURIComponent(data.order.token)}`
+          : `/pembayaran/${encodeURIComponent(data.order.id)}?token=${encodeURIComponent(data.order.token)}`;
 
       router.replace(targetUrl);
     } catch (err: unknown) {

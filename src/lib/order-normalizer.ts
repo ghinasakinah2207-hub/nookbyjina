@@ -287,8 +287,21 @@ export function normalizeOrder(order: unknown, productTypeMap?: Map<string, Prod
       }
 
       const rawOptions = Array.isArray(it.selectedOptions) ? it.selectedOptions : [];
+      const rawAddons = Array.isArray(it.selectedAddons) ? it.selectedAddons : [];
+      const unitPrice = Number(it.unitPrice ?? it.unit_price ?? it.basePrice ?? 0);
+      const quantity = Math.max(1, Number(it.quantity || 1));
+      const itemTotal = Number(
+        it.itemTotal !== undefined && it.itemTotal !== null
+          ? it.itemTotal
+          : (it.line_total !== undefined && it.line_total !== null ? it.line_total : unitPrice * quantity)
+      );
+
       return {
         ...(it as unknown as Order["items"][number]),
+        unitPrice,
+        quantity,
+        itemTotal,
+        itemNote: String(it.itemNote || it.note || ""),
         productType: resolvedType || normalizeProductType(it.productType),
         selectedOptions: rawOptions.map((opt: unknown) => {
           const op = (opt || {}) as Record<string, unknown>;
@@ -301,6 +314,14 @@ export function normalizeOrder(order: unknown, productTypeMap?: Map<string, Prod
             optionValueId: String(op.optionValueId || op.valueId || ""),
             optionValue: String(op.optionValue || op.valueName || ""),
             priceDelta: Number(op.priceDelta || 0),
+          };
+        }),
+        selectedAddons: rawAddons.map((addon: unknown) => {
+          const ad = (addon || {}) as Record<string, unknown>;
+          return {
+            addonId: String(ad.addonId || ad.id || ""),
+            addonName: String(ad.addonName || ad.name || "Add-on"),
+            price: Number(ad.price || 0),
           };
         }),
       };

@@ -148,8 +148,20 @@ function mapDatabaseRowToOrder(
             }
           }
 
+          const unitPrice = Number(item.unitPrice ?? item.basePrice ?? 0);
+          const quantity = Math.max(1, Number(item.quantity || 1));
+          const itemTotal = Number(
+            item.itemTotal !== undefined && item.itemTotal !== null
+              ? item.itemTotal
+              : unitPrice * quantity
+          );
+
           return {
             ...item,
+            unitPrice,
+            quantity,
+            itemTotal,
+            itemNote: String(item.itemNote || ""),
             productType: resolvedType || normalizeProductType(item.productType),
             selectedOptions: Array.isArray(item.selectedOptions)
               ? item.selectedOptions.map((opt) => ({
@@ -163,6 +175,16 @@ function mapDatabaseRowToOrder(
                   optionValue: opt.optionValue || opt.valueName || "",
                   priceDelta: Number(opt.priceDelta || 0),
                 }))
+              : [],
+            selectedAddons: Array.isArray(item.selectedAddons)
+              ? item.selectedAddons.map((rawAd) => {
+                  const ad = (rawAd || {}) as unknown as Record<string, unknown>;
+                  return {
+                    addonId: String(ad.addonId || ad.id || ""),
+                    addonName: String(ad.addonName || ad.name || "Add-on"),
+                    price: Number(ad.price || 0),
+                  };
+                })
               : [],
           };
         })

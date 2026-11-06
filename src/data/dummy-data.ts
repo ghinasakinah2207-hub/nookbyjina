@@ -271,8 +271,11 @@ export const BANNERS: Banner[] = [
 /**
  * Format angka ke format mata uang Rupiah Indonesia (misal: Rp25.000)
  */
-export function formatRupiah(amount: number): string {
-  return "Rp" + amount.toLocaleString("id-ID");
+export function formatRupiah(amount?: number | null): string {
+  if (amount === undefined || amount === null || isNaN(Number(amount))) {
+    return "Rp0";
+  }
+  return "Rp" + Math.round(Number(amount)).toLocaleString("id-ID");
 }
 
 /**
