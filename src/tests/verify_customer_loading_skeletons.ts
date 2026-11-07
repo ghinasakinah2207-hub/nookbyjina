@@ -53,8 +53,8 @@ function testSkeletonRendering() {
   const cartHtml = renderToStaticMarkup(React.createElement(CartSkeleton));
   assert(cartHtml.includes("animate-pulse"), "CartSkeleton missing animate-pulse");
   assert(
-    cartHtml.includes("calc(4.25rem + env(safe-area-inset-bottom, 0px))"),
-    "CartSkeleton checkout bar offset must match CartClient (calc(4.25rem + env(safe-area-inset-bottom, 0px)))"
+    cartHtml.includes("calc(55px + env(safe-area-inset-bottom, 0px))"),
+    "CartSkeleton checkout bar offset must match CartClient (calc(55px + env(safe-area-inset-bottom, 0px)))"
   );
 
   const cartEmbeddedHtml = renderToStaticMarkup(

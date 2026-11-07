@@ -1181,7 +1181,7 @@ export default function ProductDetailClient({
             className={`flex-1 min-h-[44px] h-11 px-2.5 py-2 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all border cursor-pointer ${
               !product.isAvailable || !storeOpen
                 ? "opacity-50 cursor-not-allowed bg-neutral-100 text-neutral-400 border-neutral-200"
-                : "bg-white hover:bg-orange-50/60 active:bg-orange-100 text-[#F25B09] border-[#F25B09] shadow-2xs"
+                : "bg-white hover:bg-orange-50/60 active:bg-orange-100 active:scale-[0.98] text-[#F25B09] border-[#F25B09] shadow-2xs"
             }`}
           >
             <ShoppingCart className="w-4 h-4 shrink-0 text-[#F25B09]" />
@@ -1197,7 +1197,7 @@ export default function ProductDetailClient({
             aria-label="Beli Sekarang"
             className={`flex-1 min-h-[44px] h-11 px-2.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs ${
               product.isAvailable && storeOpen
-                ? "bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white"
+                ? "bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] active:scale-[0.98] text-white"
                 : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
             }`}
           >

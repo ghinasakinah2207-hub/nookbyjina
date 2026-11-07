@@ -196,7 +196,7 @@ export function CartSkeleton({ showHeader = true }: SkeletonProps) {
       <div
         className="fixed left-0 right-0 z-30 bg-white border-t border-[#E5E5E5] shadow-[0_-4px_16px_rgba(0,0,0,0.04)]"
         style={{
-          bottom: "calc(4.25rem + env(safe-area-inset-bottom, 0px))",
+          bottom: "calc(55px + env(safe-area-inset-bottom, 0px))",
         }}
       >
         <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between gap-4">

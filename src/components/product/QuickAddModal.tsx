@@ -626,7 +626,7 @@ function QuickAddForm({
             type="button"
             disabled={isSubmitting}
             onClick={() => handleConfirmAction("configure")}
-            className="w-full min-h-[44px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-between bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white transition-colors cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full min-h-[44px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-between bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] active:scale-[0.98] text-white transition-all cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting && submittingIntent === "configure" ? (
               <div className="flex items-center justify-center gap-2 w-full">
@@ -658,7 +658,7 @@ function QuickAddForm({
               disabled={isLoadingOptions || isSubmitting}
               onClick={() => handleConfirmAction("cart")}
               aria-label="Tambah ke Keranjang"
-              className="w-full min-h-[44px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full min-h-[44px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] active:scale-[0.98] text-white shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting && (submittingIntent === "cart" || submittingIntent === "add_to_cart") ? (
                 <div className="flex items-center justify-center gap-1.5">
@@ -691,7 +691,7 @@ function QuickAddForm({
               disabled={isLoadingOptions || isSubmitting}
               onClick={() => handleConfirmAction("buynow")}
               aria-label="Beli Sekarang"
-              className="w-full min-h-[44px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full min-h-[44px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] active:scale-[0.98] text-white shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting && (submittingIntent === "buynow" || submittingIntent === "buy_now") ? (
                 <div className="flex items-center justify-center gap-1.5">
@@ -723,7 +723,7 @@ function QuickAddForm({
                 disabled={isLoadingOptions || isSubmitting}
                 onClick={() => handleConfirmAction("cart")}
                 aria-label="Tambah ke Keranjang"
-                className="flex-1 min-h-[44px] px-3 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all bg-orange-50/80 hover:bg-orange-100/90 active:bg-orange-100 text-[#F25B09] border border-orange-200/90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
+                className="flex-1 min-h-[44px] px-3 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all bg-orange-50/80 hover:bg-orange-100/90 active:bg-orange-100 active:scale-[0.98] text-[#F25B09] border border-orange-200/90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
               >
                 {isSubmitting && (submittingIntent === "cart" || submittingIntent === "add_to_cart") ? (
                   <div className="flex items-center justify-center gap-1.5">
@@ -745,7 +745,7 @@ function QuickAddForm({
                 disabled={isLoadingOptions || isSubmitting}
                 onClick={() => handleConfirmAction("buynow")}
                 aria-label="Beli Sekarang"
-                className="flex-1 min-h-[44px] px-3 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 min-h-[44px] px-3 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] active:scale-[0.98] text-white shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting && (submittingIntent === "buynow" || submittingIntent === "buy_now") ? (
                   <div className="flex items-center justify-center gap-1.5">

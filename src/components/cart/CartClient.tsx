@@ -480,7 +480,7 @@ export default function CartClient({
         <div
           className="fixed left-0 right-0 z-30 bg-white border-t border-[#E5E5E5] shadow-[0_-4px_16px_rgba(0,0,0,0.04)]"
           style={{
-            bottom: "calc(4.25rem + env(safe-area-inset-bottom, 0px))",
+            bottom: "calc(55px + env(safe-area-inset-bottom, 0px))",
           }}
         >
           <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between gap-4">
@@ -497,7 +497,7 @@ export default function CartClient({
               type="button"
               disabled={noneSelected || hasSoldOutSelected || !storeOpen}
               onClick={handleProceedToCheckout}
-              className={`min-h-[48px] px-6 py-3 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center transition-colors ${
+              className={`min-h-[48px] px-6 py-3 rounded-xl font-bold text-sm sm:text-base flex items-center justify-center transition-colors ${
                 !noneSelected && !hasSoldOutSelected && storeOpen
                   ? "bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white"
                   : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
