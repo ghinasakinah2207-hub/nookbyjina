@@ -88,10 +88,14 @@ console.log("  [PASS] Product description rendered with clean heading");
 console.log("\n--- Section 4: Sticky Bottom Action Bar ---");
 
 // 11. Three actions: WhatsApp Chat, Add to Cart, Beli Sekarang
-assert(productDetailSrc.includes("sellerChatUrl") && productDetailSrc.includes("MessageCircle"), "Action 1: WhatsApp chat with seller (icon only)");
+assert(
+  productDetailSrc.includes("sellerChatUrl") &&
+    (productDetailSrc.includes("WhatsAppIcon") || productDetailSrc.includes("MessageCircle")),
+  "Action 1: WhatsApp chat with seller (icon only)"
+);
 assert(
   productDetailSrc.includes("handleAddToCart") &&
-    (productDetailSrc.includes("ShoppingCartPlus") || productDetailSrc.includes("ShoppingBag")),
+    (productDetailSrc.includes("ShoppingCart") || productDetailSrc.includes("ShoppingCartPlus") || productDetailSrc.includes("ShoppingBag")),
   "Action 2: Add to cart (icon only)"
 );
 assert(productDetailSrc.includes("handleDirectBuyNow") && productDetailSrc.includes("Beli Sekarang"), "Action 3: Beli Sekarang (prominent orange button)");

@@ -2,13 +2,45 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Image from "next/image";
-import { X, Plus, Minus, Check, AlertCircle, Loader2 } from "lucide-react";
-import { Product, SelectedOption, SelectedAddon } from "@/types";
+import { useRouter } from "next/navigation";
+import { X, Plus, Minus, Check, AlertCircle, Loader2, ShoppingCart } from "lucide-react";
+import { Product, SelectedOption, SelectedAddon, CartItem } from "@/types";
 import { formatRupiah } from "@/data/dummy-data";
 import { parseOptionLabel } from "@/lib/option-utils";
 import { useCartSafe } from "@/context/CartContext";
+import { getProductType } from "@/lib/product-type";
 
-export type QuickAddIntent = "cart" | "buynow" | "configure";
+export type QuickAddIntent =
+  | "cart"
+  | "buynow"
+  | "configure"
+  | "dual"
+  | "add_to_cart"
+  | "buy_now";
+
+export function isCartIntent(intent?: QuickAddIntent): boolean {
+  return intent === "cart" || intent === "add_to_cart";
+}
+
+export function isBuyNowIntent(intent?: QuickAddIntent): boolean {
+  return intent === "buynow" || intent === "buy_now";
+}
+
+export function isConfigureIntent(intent?: QuickAddIntent): boolean {
+  return intent === "configure";
+}
+
+export function isDualIntent(intent?: QuickAddIntent): boolean {
+  return (
+    intent === "dual" ||
+    (!intent &&
+      intent !== "configure" &&
+      intent !== "cart" &&
+      intent !== "buynow" &&
+      intent !== "add_to_cart" &&
+      intent !== "buy_now")
+  );
+}
 
 export interface QuickAddConfirmData {
   product: Product;
@@ -33,10 +65,18 @@ interface QuickAddFormProps {
   onConfirm?: (data: QuickAddConfirmData) => void;
 }
 
+function useSafeRouter() {
+  try {
+    return useRouter();
+  } catch {
+    return null;
+  }
+}
+
 function QuickAddForm({
   product,
   isLoadingOptions = false,
-  intent = "cart",
+  intent = "dual",
   initialOptions,
   initialAddonIds,
   initialQuantity,
@@ -44,6 +84,7 @@ function QuickAddForm({
   onClose,
   onConfirm,
 }: QuickAddFormProps) {
+  const router = useSafeRouter();
   const cart = useCartSafe();
   const optionGroups = useMemo(() => product.optionGroups || [], [product.optionGroups]);
   const addons = useMemo(() => product.addons || [], [product.addons]);
@@ -96,6 +137,8 @@ function QuickAddForm({
   const [itemNote, setItemNote] = useState(initialItemNote || "");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingIntent, setSubmittingIntent] = useState<QuickAddIntent | null>(null);
+  const isSubmittingRef = useRef(false);
 
   // Option selection handler
   const handleSelectOption = (groupId: string, valueId: string) => {
@@ -119,6 +162,7 @@ function QuickAddForm({
       }
       return next;
     });
+    if (validationError) setValidationError(null);
   };
 
   // Dynamic price calculation
@@ -166,17 +210,9 @@ function QuickAddForm({
     };
   }, [product.basePrice, optionGroups, addons, selectedOptions, selectedAddonIds, quantity]);
 
-  // Dynamic button label based on intent
-  const confirmButtonLabel = useMemo(() => {
-    if (!product.isAvailable) return "Menu Habis";
-    if (intent === "buynow") return "Beli Sekarang";
-    if (intent === "configure") return "Konfirmasi Pilihan";
-    return "Tambah ke Keranjang";
-  }, [product.isAvailable, intent]);
-
-  // Confirm and execute action (Add to Cart or Buy Now)
-  const handleConfirmAction = () => {
-    if (!product.isAvailable || isLoadingOptions || isSubmitting) return;
+  // Confirm and execute action (Add to Cart, Buy Now, or Configure)
+  const handleConfirmAction = (actionIntent?: QuickAddIntent) => {
+    if (!product.isAvailable || isLoadingOptions || isSubmitting || isSubmittingRef.current) return;
 
     // 1. Validate all required option groups
     for (const group of optionGroups) {
@@ -186,7 +222,20 @@ function QuickAddForm({
       }
     }
 
+    const resolvedActionIntent: QuickAddIntent =
+      actionIntent ||
+      (isCartIntent(intent)
+        ? "cart"
+        : isBuyNowIntent(intent)
+        ? "buynow"
+        : isConfigureIntent(intent)
+        ? "configure"
+        : "cart");
+
+    setValidationError(null);
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
+    setSubmittingIntent(resolvedActionIntent);
 
     try {
       if (onConfirm) {
@@ -198,28 +247,62 @@ function QuickAddForm({
           quantity,
           unitPrice: totalPrice / quantity,
           totalPrice,
-          intent: intent || "cart",
+          intent: resolvedActionIntent,
         });
-        // When intent is "buynow", we skip history.back() because we are navigating forward
-        onClose(intent === "buynow");
+        // When intent is Buy Now, skip history.back() because we are navigating forward
+        onClose(isBuyNowIntent(resolvedActionIntent));
       } else {
-        // 2. Add to cart (triggers the Lottie success animation in CartContext)
-        if (cart?.addToCart) {
-          cart.addToCart(
-            product,
-            resolvedOptions,
-            resolvedAddons,
-            itemNote,
-            quantity
-          );
-        }
+        if (isBuyNowIntent(resolvedActionIntent)) {
+          // Direct Buy Now flow without separate onConfirm handler
+          const primaryImage =
+            product.images && product.images.length > 0
+              ? product.images[0]
+              : "/images/hero-food.webp";
 
-        // 3. Initiate smooth modal exit transition
-        onClose(false);
+          const buyNowItemData: CartItem = {
+            id: `buynow-${product.id}-${Date.now()}`,
+            productId: product.id,
+            productName: product.name,
+            productImage: primaryImage,
+            basePrice: product.basePrice,
+            selectedOptions: resolvedOptions,
+            selectedAddons: resolvedAddons,
+            itemNote: itemNote.trim(),
+            quantity: Math.max(1, quantity),
+            unitPrice: totalPrice / quantity,
+            itemTotal: totalPrice,
+            isAvailable: product.isAvailable,
+            productType: getProductType(product),
+          };
+
+          if (cart?.setBuyNowItem) {
+            cart.setBuyNowItem(buyNowItemData);
+          }
+          onClose(true);
+          if (router?.push) {
+            router.push("/checkout?buyNow=1");
+          }
+        } else {
+          // 2. Add to cart (triggers cart animation in CartContext)
+          if (cart?.addToCart) {
+            cart.addToCart(
+              product,
+              resolvedOptions,
+              resolvedAddons,
+              itemNote,
+              quantity
+            );
+          }
+
+          // 3. Initiate smooth modal exit transition
+          onClose(false);
+        }
       }
     } catch (err) {
-      console.error("Gagal memproses aksi variasi:", err);
+      console.error("Gagal menambahkan menu:", err);
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
+      setSubmittingIntent(null);
     }
   };
 
@@ -441,8 +524,39 @@ function QuickAddForm({
           </>
         )}
 
+        {/* Quantity Controls Section */}
+        <div className="pt-2 flex items-center justify-between border-t border-[#F5F5F5]">
+          <div>
+            <span className="text-xs font-bold text-[#111111]">Jumlah</span>
+            <p className="text-[10px] text-[#737373]">Atur jumlah pesanan menu ini</p>
+          </div>
+          <div className="flex items-center border border-[#E5E5E5] rounded-xl p-0.5 bg-neutral-50 flex-shrink-0">
+            <button
+              type="button"
+              disabled={quantity <= 1 || isLoadingOptions}
+              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+              aria-label="Kurangi kuantitas"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-[#111111] disabled:opacity-30 min-h-[32px] min-w-[32px] hover:bg-neutral-100 transition-colors cursor-pointer disabled:cursor-not-allowed"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <span className="w-8 text-center text-xs font-bold text-[#111111] select-none">
+              {quantity}
+            </span>
+            <button
+              type="button"
+              disabled={isLoadingOptions}
+              onClick={() => setQuantity((q) => q + 1)}
+              aria-label="Tambah kuantitas"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-[#111111] disabled:opacity-30 min-h-[32px] min-w-[32px] hover:bg-neutral-100 transition-colors cursor-pointer disabled:cursor-not-allowed"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
         {/* 3. Seller Note Field */}
-        <div className="pt-3 space-y-1.5">
+        <div className="pt-1 space-y-1.5">
           <div className="flex items-center justify-between">
             <label
               htmlFor="quickAddNote"
@@ -474,61 +588,177 @@ function QuickAddForm({
         ) : null}
       </div>
 
-      {/* Bottom Action Bar */}
-      <div className="p-3 sm:p-4 border-t border-[#E5E5E5] bg-white flex items-center justify-between gap-3 flex-shrink-0">
-        {/* Quantity Controls */}
-        <div className="flex items-center border border-[#E5E5E5] rounded-xl p-0.5 bg-neutral-50 flex-shrink-0">
-          <button
-            type="button"
-            disabled={quantity <= 1 || isLoadingOptions}
-            onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-            aria-label="Kurangi kuantitas"
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-[#111111] disabled:opacity-30 min-h-[32px] min-w-[32px] hover:bg-neutral-100 transition-colors cursor-pointer disabled:cursor-not-allowed"
-          >
-            <Minus className="w-3.5 h-3.5" />
-          </button>
-          <span className="w-7 text-center text-xs font-bold text-[#111111]">
-            {quantity}
-          </span>
-          <button
-            type="button"
-            disabled={isLoadingOptions}
-            onClick={() => setQuantity((q) => q + 1)}
-            aria-label="Tambah kuantitas"
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-[#111111] disabled:opacity-30 min-h-[32px] min-w-[32px] hover:bg-neutral-100 transition-colors cursor-pointer disabled:cursor-not-allowed"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-        </div>
+      {/* Bottom Action Area */}
+      <div
+        className="p-3 sm:p-4 border-t border-[#E5E5E5] bg-white flex flex-col flex-shrink-0"
+        style={{ paddingBottom: "max(0.75rem, calc(0.75rem + env(safe-area-inset-bottom, 0px)))" }}
+      >
+        {validationError ? (
+          <div className="mb-2.5 p-2 bg-red-50 border border-red-200 rounded-xl text-xs text-[#B42318] flex items-center gap-1.5 animate-in fade-in duration-150">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="truncate">{validationError}</span>
+          </div>
+        ) : null}
 
-        {/* Action Button */}
-        <button
-          type="button"
-          disabled={isLoadingOptions || !product.isAvailable || isSubmitting}
-          onClick={handleConfirmAction}
-          aria-busy={isLoadingOptions}
-          className={`flex-1 min-h-[42px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-between transition-colors shadow-sm ${
-            isLoadingOptions || isSubmitting
-              ? "bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-not-allowed justify-center"
-              : product.isAvailable
-              ? "bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white cursor-pointer"
-              : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
-          }`}
-        >
-          {isLoadingOptions || isSubmitting ? (
+        {!product.isAvailable ? (
+          <button
+            type="button"
+            disabled
+            className="w-full min-h-[44px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center bg-neutral-200 text-neutral-400 cursor-not-allowed select-none"
+          >
+            Menu Habis
+          </button>
+        ) : isLoadingOptions ? (
+          <button
+            type="button"
+            disabled
+            aria-busy="true"
+            className="w-full min-h-[44px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-not-allowed"
+          >
             <div className="flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin text-[#F25B09]" />
-              <span className="text-neutral-500 font-medium">
-                {isSubmitting ? "Memproses..." : "Memuat Pilihan..."}
+              <span className="text-neutral-500 font-medium">Memuat Pilihan...</span>
+            </div>
+          </button>
+        ) : isConfigureIntent(intent) ? (
+          /* Single Button when editing cart item */
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => handleConfirmAction("configure")}
+            className="w-full min-h-[44px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-between bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white transition-colors cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting && submittingIntent === "configure" ? (
+              <div className="flex items-center justify-center gap-2 w-full">
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <span>Menyimpan...</span>
+              </div>
+            ) : (
+              <>
+                <span>Konfirmasi Pilihan</span>
+                <span className="font-extrabold">{formatRupiah(totalPrice)}</span>
+              </>
+            )}
+          </button>
+        ) : isCartIntent(intent) ? (
+          /* Single Button when opened with + Keranjang intent */
+          <div className="space-y-2">
+            {/* Total Price Row */}
+            <div className="flex items-center justify-between px-0.5">
+              <span className="text-xs text-[#737373] font-medium">Total Harga</span>
+              <span className="text-sm sm:text-base font-extrabold text-[#F25B09]">
+                {formatRupiah(totalPrice)}
               </span>
             </div>
-          ) : (
-            <>
-              <span>{confirmButtonLabel}</span>
-              <span>{formatRupiah(totalPrice)}</span>
-            </>
-          )}
-        </button>
+
+            {/* Single CTA: + Keranjang */}
+            <button
+              type="button"
+              data-testid="modal-add-to-cart"
+              disabled={isLoadingOptions || isSubmitting}
+              onClick={() => handleConfirmAction("cart")}
+              aria-label="Tambah ke Keranjang"
+              className="w-full min-h-[44px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting && (submittingIntent === "cart" || submittingIntent === "add_to_cart") ? (
+                <div className="flex items-center justify-center gap-1.5">
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Menambahkan...</span>
+                </div>
+              ) : (
+                <>
+                  <ShoppingCart className="w-4 h-4 shrink-0 text-white" />
+                  <span>+ Keranjang</span>
+                </>
+              )}
+            </button>
+          </div>
+        ) : isBuyNowIntent(intent) ? (
+          /* Single Button when opened with Beli Sekarang intent */
+          <div className="space-y-2">
+            {/* Total Price Row */}
+            <div className="flex items-center justify-between px-0.5">
+              <span className="text-xs text-[#737373] font-medium">Total Harga</span>
+              <span className="text-sm sm:text-base font-extrabold text-[#F25B09]">
+                {formatRupiah(totalPrice)}
+              </span>
+            </div>
+
+            {/* Single CTA: Beli Sekarang */}
+            <button
+              type="button"
+              data-testid="modal-buy-now"
+              disabled={isLoadingOptions || isSubmitting}
+              onClick={() => handleConfirmAction("buynow")}
+              aria-label="Beli Sekarang"
+              className="w-full min-h-[44px] px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting && (submittingIntent === "buynow" || submittingIntent === "buy_now") ? (
+                <div className="flex items-center justify-center gap-1.5">
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Mengarahkan...</span>
+                </div>
+              ) : (
+                <span>Beli Sekarang</span>
+              )}
+            </button>
+          </div>
+        ) : (
+          /* Dual Action Buttons for Storefront Product Card & "Pilih Variasi" section */
+          <div className="space-y-2">
+            {/* Total Price Row */}
+            <div className="flex items-center justify-between px-0.5">
+              <span className="text-xs text-[#737373] font-medium">Total Harga</span>
+              <span className="text-sm sm:text-base font-extrabold text-[#F25B09]">
+                {formatRupiah(totalPrice)}
+              </span>
+            </div>
+
+            {/* Side-by-Side Dual Buttons */}
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              {/* Left: + Keranjang */}
+              <button
+                type="button"
+                data-testid="modal-add-to-cart"
+                disabled={isLoadingOptions || isSubmitting}
+                onClick={() => handleConfirmAction("cart")}
+                aria-label="Tambah ke Keranjang"
+                className="flex-1 min-h-[44px] px-3 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all bg-orange-50/80 hover:bg-orange-100/90 active:bg-orange-100 text-[#F25B09] border border-orange-200/90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
+              >
+                {isSubmitting && (submittingIntent === "cart" || submittingIntent === "add_to_cart") ? (
+                  <div className="flex items-center justify-center gap-1.5">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#F25B09]" />
+                    <span>Menambahkan...</span>
+                  </div>
+                ) : (
+                  <>
+                    <ShoppingCart className="w-4 h-4 shrink-0" />
+                    <span>+ Keranjang</span>
+                  </>
+                )}
+              </button>
+
+              {/* Right: Beli Sekarang */}
+              <button
+                type="button"
+                data-testid="modal-buy-now"
+                disabled={isLoadingOptions || isSubmitting}
+                onClick={() => handleConfirmAction("buynow")}
+                aria-label="Beli Sekarang"
+                className="flex-1 min-h-[44px] px-3 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting && (submittingIntent === "buynow" || submittingIntent === "buy_now") ? (
+                  <div className="flex items-center justify-center gap-1.5">
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Mengarahkan...</span>
+                  </div>
+                ) : (
+                  <span>Beli Sekarang</span>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
@@ -553,7 +783,7 @@ export function QuickAddModal({
   product,
   isOpen,
   onClose,
-  intent = "cart",
+  intent = "dual",
   modalKey,
   initialOptions,
   initialAddonIds,

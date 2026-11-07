@@ -9,8 +9,6 @@ import {
   ChevronRight,
   Share2,
   ShoppingCart,
-  ShoppingCartPlus,
-  MessageCircle,
   Check,
   AlertCircle,
   Star,
@@ -18,12 +16,13 @@ import {
   Clock,
   Flame,
 } from "lucide-react";
+import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
 import { STORE_SETTINGS } from "@/data/dummy-data";
 import { useCart } from "@/context/CartContext";
 import { CartItem, SelectedOption, SelectedAddon, Product } from "@/types";
 import { ProductCard } from "@/components/product/ProductCard";
 import { getProductBySlugOrId, getRecommendedProducts } from "@/lib/supabase/catalog";
-import { QuickAddModal, QuickAddConfirmData } from "@/components/product/QuickAddModal";
+import { QuickAddModal, QuickAddConfirmData, QuickAddIntent } from "@/components/product/QuickAddModal";
 import { getProductType, getProductTypeConfig } from "@/lib/product-type";
 import { TicketBadge } from "@/components/ui/TicketBadge";
 
@@ -102,9 +101,7 @@ export default function ProductDetailClient({
 
   // Bottom-sheet variation modal state
   const [isVariationModalOpen, setIsVariationModalOpen] = useState(false);
-  const [modalTargetAction, setModalTargetAction] = useState<"cart" | "buynow" | "configure">(
-    "configure"
-  );
+  const [modalTargetAction, setModalTargetAction] = useState<QuickAddIntent>("dual");
 
   // Fetch product, store settings, and recommendations on mount / ID change if not pre-populated
   useEffect(() => {
@@ -444,7 +441,7 @@ export default function ProductDetailClient({
       setQuantity(data.quantity);
       setItemNote(data.itemNote);
 
-      if (data.intent === "buynow") {
+      if (data.intent === "buynow" || data.intent === "buy_now") {
         const primaryImage =
           data.product.images && data.product.images.length > 0
             ? data.product.images[0]
@@ -468,7 +465,7 @@ export default function ProductDetailClient({
         setBuyNowItem(buyNowItemData);
         setIsVariationModalOpen(false);
         router.push("/checkout?buyNow=1");
-      } else if (data.intent === "cart") {
+      } else if (data.intent === "cart" || data.intent === "add_to_cart") {
         addToCart(
           data.product,
           data.selectedOptions,
@@ -840,7 +837,7 @@ export default function ProductDetailClient({
               type="button"
               disabled={!product.isAvailable || !storeOpen}
               onClick={() => {
-                setModalTargetAction("configure");
+                setModalTargetAction("dual");
                 setIsVariationModalOpen(true);
               }}
               className="w-full bg-white rounded-2xl p-3.5 border border-[#E5E5E5] hover:border-neutral-300 transition-colors text-left flex items-center justify-between gap-3 group cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
@@ -930,36 +927,40 @@ export default function ProductDetailClient({
             aria-label="Chat Penjual via WhatsApp"
             className="w-11 h-11 rounded-xl border border-[#E5E5E5] hover:border-neutral-300 hover:bg-neutral-50 flex items-center justify-center text-[#111111] transition-colors shrink-0 cursor-pointer"
           >
-            <MessageCircle className="w-5 h-5 text-[#111111]" />
+            <WhatsAppIcon className="w-5 h-5 text-[#111111]" />
           </a>
 
-          {/* Action 2: Add to Cart (Icon Only) */}
+          {/* Action 2: + Keranjang (50% Balanced Width CTA) */}
           <button
             type="button"
+            data-testid="bottom-bar-add-to-cart"
             disabled={!product.isAvailable || !storeOpen}
             onClick={handleAddToCart}
             aria-label="Tambah ke Keranjang"
-            className={`w-11 h-11 rounded-xl border border-[#E5E5E5] hover:border-neutral-300 flex items-center justify-center text-[#111111] transition-colors shrink-0 cursor-pointer ${
+            className={`flex-1 min-h-[44px] h-11 px-2.5 py-2 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all border cursor-pointer ${
               !product.isAvailable || !storeOpen
-                ? "opacity-50 cursor-not-allowed bg-neutral-100"
-                : "hover:bg-neutral-50 active:bg-neutral-100"
+                ? "opacity-50 cursor-not-allowed bg-neutral-100 text-neutral-400 border-neutral-200"
+                : "bg-white hover:bg-orange-50/60 active:bg-orange-100 text-[#F25B09] border-[#F25B09] shadow-2xs"
             }`}
           >
-            <ShoppingCartPlus className="w-5 h-5 text-[#111111]" />
+            <ShoppingCart className="w-4 h-4 shrink-0 text-[#F25B09]" />
+            <span className="truncate">+ Keranjang</span>
           </button>
 
-          {/* Action 3: Beli Sekarang (Prominent Orange Button) */}
+          {/* Action 3: Beli Sekarang (50% Balanced Width CTA) */}
           <button
             type="button"
+            data-testid="bottom-bar-buy-now"
             disabled={!product.isAvailable || !storeOpen}
             onClick={handleDirectBuyNow}
-            className={`flex-1 min-h-[44px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer ${
+            aria-label="Beli Sekarang"
+            className={`flex-1 min-h-[44px] h-11 px-2.5 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs ${
               product.isAvailable && storeOpen
-                ? "bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white shadow-xs"
+                ? "bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white"
                 : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
             }`}
           >
-            <span>
+            <span className="truncate">
               {!storeOpen
                 ? "Toko Tutup Order"
                 : product.isAvailable
