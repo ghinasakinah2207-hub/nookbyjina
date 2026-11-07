@@ -73,8 +73,8 @@ async function run() {
   );
   assert(
     floatingCartSrc.includes("safe-area-inset-bottom") &&
-      floatingCartSrc.includes("56px"),
-    "FloatingCartBar is placed exactly 2px above bottom navigation with safe-area support (56px)"
+      (floatingCartSrc.includes("64px") || floatingCartSrc.includes("--floating-cart-bottom")),
+    "FloatingCartBar is placed directly above bottom navigation with safe-area support and coordinated layout (64px / --floating-cart-bottom)"
   );
   assert(
     floatingCartSrc.includes("transition-all duration-200"),

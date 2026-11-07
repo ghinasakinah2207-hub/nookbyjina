@@ -55,7 +55,8 @@ export function FloatingCartBar() {
           : "opacity-0 translate-y-3 pointer-events-none"
       }`}
       style={{
-        bottom: "calc(56px + env(safe-area-inset-bottom, 0px))",
+        bottom:
+          "var(--floating-cart-bottom, calc(64px + env(safe-area-inset-bottom, 0px)))",
       }}
     >
       <Link

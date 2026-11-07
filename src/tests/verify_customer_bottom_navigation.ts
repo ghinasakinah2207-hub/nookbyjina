@@ -85,8 +85,9 @@ function verifyCustomerBottomNavigation() {
     "Outer container is a floating centered softly rounded container (rounded-2xl)"
   );
   assert(
-    content.includes("bg-white/60") && content.includes("backdrop-blur-md"),
-    "Container has 60% opacity white background (bg-white/60) with backdrop-blur-md"
+    (content.includes("bg-white/80") || content.includes("bg-white/60")) &&
+      content.includes("backdrop-blur-md"),
+    "Container has translucent white background (bg-white/80 or bg-white/60) with backdrop-blur-md"
   );
   assert(
     content.includes("border border-neutral-200/80") || content.includes("border border-[#E5E5E5]"),

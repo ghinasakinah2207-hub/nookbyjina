@@ -8,6 +8,15 @@ import { useCart } from "@/context/CartContext";
 
 export const BottomNavContext = React.createContext<boolean>(false);
 
+export const BOTTOM_NAV_LAYOUT = {
+  bottomOffset: 2, // px from viewport bottom
+  barHeight: 58, // px total height (increased by 6px from previous 52px)
+  innerContentHeight: 48, // px
+  outerPadding: 4, // p-1 (4px top, 4px bottom)
+  floatingCartGap: 4, // px visual gap between nav and floating cart (3-5px spec)
+  floatingCartBottom: 64, // 2px + 58px + 4px = 64px (+ safe-area)
+} as const;
+
 export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
   const isInsideRootNav = useContext(BottomNavContext);
   const pathname = usePathname();
@@ -121,12 +130,13 @@ export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
   return (
     <nav
       aria-label="Navigasi Utama Pelanggan"
-      className="fixed left-1/2 -translate-x-1/2 z-40 bg-white/60 backdrop-blur-md border border-neutral-200/80 rounded-2xl p-1 floating-pill-shadow select-none print:hidden"
+      className="fixed left-1/2 -translate-x-1/2 z-40 bg-white/80 backdrop-blur-md border border-neutral-200/80 rounded-2xl p-1 floating-pill-shadow select-none print:hidden"
       style={{
-        bottom: "max(2px, calc(env(safe-area-inset-bottom, 0px) + 2px))",
+        bottom:
+          "max(var(--bottom-nav-bottom-offset, 2px), calc(env(safe-area-inset-bottom, 0px) + var(--bottom-nav-bottom-offset, 2px)))",
       }}
     >
-      <div className="relative flex items-center w-[256px] h-[42px]">
+      <div className="relative flex items-center w-[256px] h-[48px]">
         {/* Shared sliding active indicator with hardware-accelerated compositor transform */}
         <div
           aria-hidden="true"
@@ -158,7 +168,7 @@ export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
               aria-label={item.label}
               aria-current={isSelected ? "page" : undefined}
               title={item.label}
-              className={`group relative z-10 w-1/4 h-full flex flex-col items-center justify-center py-0.5 rounded-xl transition-colors duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none select-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-neutral-400 ${
+              className={`group relative z-10 w-1/4 h-full flex flex-col items-center justify-center py-1 rounded-xl transition-colors duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none select-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-neutral-400 ${
                 isSelected
                   ? "text-white"
                   : "text-[#737373] hover:text-[#111111]"

@@ -48,8 +48,11 @@ async function run() {
   );
 
   assert(
-    bottomNavSrc.includes("h-[42px]") || bottomNavSrc.includes("h-[44px]"),
-    "Main container height is reduced to 42-44px for a shorter, sleeker bar"
+    bottomNavSrc.includes("h-[48px]") ||
+      bottomNavSrc.includes("h-[46px]") ||
+      bottomNavSrc.includes("h-[44px]") ||
+      bottomNavSrc.includes("h-[42px]"),
+    "Main container height is balanced (46-48px for increased comfort or 42-44px)"
   );
 
   assert(
