@@ -146,6 +146,8 @@ export interface Order {
   livemode?: boolean;
   duitkuReference?: string;
   paymentUrl?: string;
+  serverConfirmed?: boolean;
+  syncStatus?: "confirmed" | "not_found" | "pending";
 }
 
 export interface Banner {

@@ -394,7 +394,12 @@ export async function getOrderByToken(token: string): Promise<Order | null> {
       devOrder.paymentStatus = "Dibatalkan";
       devOrdersById.set(devOrder.id, devOrder);
     }
-    return { ...devOrder, token: cleanToken };
+    return {
+      ...devOrder,
+      token: cleanToken,
+      serverConfirmed: true,
+      syncStatus: "confirmed",
+    };
   }
 
   let order: Order | null = null;
@@ -477,6 +482,8 @@ export async function getOrderByToken(token: string): Promise<Order | null> {
   }
 
   if (order) {
+    order.serverConfirmed = true;
+    order.syncStatus = "confirmed";
     order.total = getOrderFinalTotal(order);
   }
 
@@ -535,7 +542,12 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
           devOrder.paymentStatus = "Dibatalkan";
           devOrdersById.set(devOrder.id, devOrder);
         }
-        results.push({ ...devOrder, token: tokenHashMap.get(h) || "" });
+        results.push({
+          ...devOrder,
+          token: tokenHashMap.get(h) || "",
+          serverConfirmed: true,
+          syncStatus: "confirmed",
+        });
       }
     }
     return results;
@@ -551,12 +563,31 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
   );
 
   if (!rpcErr && Array.isArray(rpcResult)) {
+    // Map token hashes to raw tokens via anonymous_order_tokens order_id (UUID)
+    const { data: tokenRecords } = await client
+      .from("anonymous_order_tokens")
+      .select("order_id, token_hash")
+      .in("token_hash", hashes)
+      .is("revoked_at", null);
+
+    const uuidToTokenMap = new Map<string, string>();
+    if (tokenRecords && Array.isArray(tokenRecords)) {
+      for (const record of tokenRecords) {
+        const rawToken = tokenHashMap.get(record.token_hash);
+        if (rawToken && record.order_id) {
+          uuidToTokenMap.set(String(record.order_id), rawToken);
+        }
+      }
+    }
+
     fetchedOrders = (rpcResult as Order[]).map((o) => {
-      // Restore client's own token for matching
-      const token = validTokens.find((t) => hashOrderToken(t) === o.id) || "";
+      // Restore client's own token using verified order UUID mapping
+      const token = (o.uuid ? uuidToTokenMap.get(String(o.uuid)) : undefined) || "";
       return normalizeOrder({
         ...o,
         token,
+        serverConfirmed: true,
+        syncStatus: "confirmed",
       }, productTypeMap);
     });
   } else {
@@ -590,9 +621,14 @@ export async function getOrdersByTokens(tokens: string[]): Promise<Order[]> {
       return [];
     }
 
-    fetchedOrders = (orderRows as Record<string, unknown>[]).map((row) =>
-      mapDatabaseRowToOrder(row, orderIdToToken.get(String(row.id)), productTypeMap)
-    );
+    fetchedOrders = (orderRows as Record<string, unknown>[]).map((row) => {
+      const order = mapDatabaseRowToOrder(row, orderIdToToken.get(String(row.id)), productTypeMap);
+      return {
+        ...order,
+        serverConfirmed: true,
+        syncStatus: "confirmed",
+      };
+    });
   }
 
   // Enrich fetched orders with payments metadata

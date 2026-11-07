@@ -36,15 +36,23 @@ interface OrderContextType {
   ) => Promise<{ success: boolean; error?: string; order?: Order }>;
 }
 
-const OrderContext = createContext<OrderContextType | undefined>(undefined);
+export const OrderContext = createContext<OrderContextType | undefined>(undefined);
 
 const ORDERS_STORAGE_KEY = "temu_customer_orders_v1";
 
-export function OrderProvider({ children }: { children: React.ReactNode }) {
+export function OrderProvider({
+  children,
+  initialOrders,
+  initialHydrated,
+}: {
+  children: React.ReactNode;
+  initialOrders?: Order[];
+  initialHydrated?: boolean;
+}) {
   // Initialize with hydration-safe empty array so SSR and initial client render match
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isHydrated, setIsHydrated] = useState(false);
-  const isHydratedRef = React.useRef(false);
+  const [orders, setOrders] = useState<Order[]>(initialOrders || []);
+  const [isHydrated, setIsHydrated] = useState(initialHydrated ?? false);
+  const isHydratedRef = React.useRef(initialHydrated ?? false);
 
   // Restore persisted customer orders after mounting and sync with backend
   useEffect(() => {
@@ -91,6 +99,8 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
             ).filter((t: string) => typeof t === "string" && t.length >= 8);
 
             if (allTokens.length > 0) {
+              const requestedTokensSet = new Set(allTokens);
+
               fetch("/api/orders/history", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -98,31 +108,54 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
               })
                 .then((res) => (res.ok ? res.json() : null))
                 .then((data) => {
-                  if (data && data.success && Array.isArray(data.orders) && data.orders.length > 0) {
+                  if (data && data.success && Array.isArray(data.orders)) {
+                    const remoteOrders = data.orders as Order[];
+
                     setOrders((prev) => {
                       const updated = prev.map((local) => {
-                        const remote = data.orders.find(
-                          (r: Order) => r.token === local.token || r.id === local.id
+                        const localToken = local.token || getOrderToken(local.id) || "";
+                        const wasChecked = requestedTokensSet.has(localToken);
+
+                        const remote = remoteOrders.find(
+                          (r: Order) => (r.token && r.token === localToken) || r.id === local.id
                         );
-                        if (!remote) return local;
-                        return {
-                          ...local,
-                          orderStatus: remote.orderStatus,
-                          paymentStatus: remote.paymentStatus,
-                          paymentMethod: remote.paymentMethod || local.paymentMethod,
-                          paymentDeadline: remote.paymentDeadline,
-                          gatewayProvider: remote.gatewayProvider || local.gatewayProvider,
-                          paymentUrl: remote.paymentUrl || local.paymentUrl,
-                          waroengpayInvoiceId: remote.waroengpayInvoiceId || local.waroengpayInvoiceId,
-                          qrisPayload: remote.qrisPayload || local.qrisPayload,
-                          uniqueCode: remote.uniqueCode ?? local.uniqueCode,
-                          rawAmount: remote.rawAmount ?? local.rawAmount,
-                          expiresAt: remote.expiresAt || local.expiresAt,
-                          livemode: remote.livemode ?? local.livemode,
-                          duitkuReference: remote.duitkuReference || local.duitkuReference,
-                          token: local.token || getOrderToken(local.id) || "",
-                        };
+
+                        if (remote) {
+                          // Order is confirmed by server! Replace with server-confirmed data
+                          return {
+                            ...local,
+                            orderStatus: remote.orderStatus,
+                            paymentStatus: remote.paymentStatus,
+                            paymentMethod: remote.paymentMethod || local.paymentMethod,
+                            paymentDeadline: remote.paymentDeadline,
+                            gatewayProvider: remote.gatewayProvider || local.gatewayProvider,
+                            paymentUrl: remote.paymentUrl || local.paymentUrl,
+                            waroengpayInvoiceId: remote.waroengpayInvoiceId || local.waroengpayInvoiceId,
+                            qrisPayload: remote.qrisPayload || local.qrisPayload,
+                            uniqueCode: remote.uniqueCode ?? local.uniqueCode,
+                            rawAmount: remote.rawAmount ?? local.rawAmount,
+                            expiresAt: remote.expiresAt || local.expiresAt,
+                            livemode: remote.livemode ?? local.livemode,
+                            duitkuReference: remote.duitkuReference || local.duitkuReference,
+                            token: localToken,
+                            serverConfirmed: true,
+                            syncStatus: "confirmed" as const,
+                          };
+                        }
+
+                        if (wasChecked) {
+                          // Token was specifically checked with the server and confirmed NOT FOUND in database
+                          return {
+                            ...local,
+                            serverConfirmed: false,
+                            syncStatus: "not_found" as const,
+                          };
+                        }
+
+                        // Order token was not in the checked batch (ambiguous / not tested). Preserve untouched.
+                        return local;
                       });
+
                       try {
                         localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(updated));
                       } catch {
@@ -133,7 +166,7 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
                   }
                 })
                 .catch(() => {
-                  // Ignore background sync errors
+                  // Network failure or error: NEVER delete or corrupt local records!
                 });
             }
           }
@@ -173,26 +206,66 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tokens }),
       });
+      if (!res.ok) return; // Do not alter state on HTTP error
       const data = await res.json();
       if (data && data.success && Array.isArray(data.orders)) {
-        setOrders((prev) =>
-          prev.map((local) => {
-            const remote = data.orders.find(
-              (r: Order) => r.token === local.token || r.id === local.id
+        const requestedTokensSet = new Set(tokens);
+        const remoteOrders = data.orders as Order[];
+
+        setOrders((prev) => {
+          const updated = prev.map((local) => {
+            const localToken = local.token || getOrderToken(local.id) || "";
+            const wasChecked = requestedTokensSet.has(localToken);
+
+            const remote = remoteOrders.find(
+              (r: Order) => (r.token && r.token === localToken) || r.id === local.id
             );
-            if (!remote) return local;
-            return {
-              ...local,
-              orderStatus: remote.orderStatus,
-              paymentStatus: remote.paymentStatus,
-              paymentDeadline: remote.paymentDeadline,
-              token: local.token || getOrderToken(local.id) || "",
-            };
-          })
-        );
+
+            if (remote) {
+              return {
+                ...local,
+                orderStatus: remote.orderStatus,
+                paymentStatus: remote.paymentStatus,
+                paymentMethod: remote.paymentMethod || local.paymentMethod,
+                paymentDeadline: remote.paymentDeadline,
+                gatewayProvider: remote.gatewayProvider || local.gatewayProvider,
+                paymentUrl: remote.paymentUrl || local.paymentUrl,
+                waroengpayInvoiceId: remote.waroengpayInvoiceId || local.waroengpayInvoiceId,
+                qrisPayload: remote.qrisPayload || local.qrisPayload,
+                uniqueCode: remote.uniqueCode ?? local.uniqueCode,
+                rawAmount: remote.rawAmount ?? local.rawAmount,
+                expiresAt: remote.expiresAt || local.expiresAt,
+                livemode: remote.livemode ?? local.livemode,
+                duitkuReference: remote.duitkuReference || local.duitkuReference,
+                token: localToken,
+                serverConfirmed: true,
+                syncStatus: "confirmed" as const,
+              };
+            }
+
+            if (wasChecked) {
+              // Token was specifically checked with the server and confirmed NOT FOUND in database
+              return {
+                ...local,
+                serverConfirmed: false,
+                syncStatus: "not_found" as const,
+              };
+            }
+
+            // Order token was not in the checked batch (ambiguous / not tested). Preserve untouched.
+            return local;
+          });
+
+          try {
+            localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(updated));
+          } catch {
+            // Ignore
+          }
+          return updated;
+        });
       }
     } catch {
-      // Ignore network failures
+      // Ignore network failures — never corrupt or wipe local records
     }
   };
 
@@ -202,6 +275,18 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch(`/api/orders/${encodeURIComponent(token)}`, {
         cache: "no-store",
       });
+      if (res.status === 404) {
+        // Confirmed missing from server
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.token === token || getOrderToken(o.id) === token
+              ? { ...o, serverConfirmed: false, syncStatus: "not_found" as const }
+              : o
+          )
+        );
+        return null;
+      }
+      if (!res.ok) return null;
       const data = await res.json();
       if (data && data.success && data.order) {
         const remoteOrder = data.order as Order;
@@ -215,6 +300,8 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
               paymentStatus: remoteOrder.paymentStatus,
               paymentDeadline: remoteOrder.paymentDeadline,
               token: copy[index].token || getOrderToken(copy[index].id) || token,
+              serverConfirmed: true,
+              syncStatus: "confirmed" as const,
             };
             return copy;
           }
@@ -223,7 +310,7 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
         return remoteOrder;
       }
     } catch {
-      // Return null on failure
+      // Return null on failure — preserve local records
     }
     return null;
   };
@@ -256,6 +343,8 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
       paymentMethod: isCash ? "Cash" : "QRIS Statis",
       paymentDeadline: isCash ? "" : deadline.toISOString(),
       merchantName: STORE_SETTINGS.qrisMerchantName,
+      serverConfirmed: false,
+      syncStatus: "pending",
     };
 
     saveOrderToken(orderId, token);
@@ -273,6 +362,8 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
       const mergedOrder: Order = {
         ...order,
         token: resolvedToken,
+        serverConfirmed: order.serverConfirmed ?? true,
+        syncStatus: order.syncStatus ?? "confirmed",
       };
       return [mergedOrder, ...prev.filter((o) => o.id !== order.id)];
     });

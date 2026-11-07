@@ -8,6 +8,7 @@ import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { HomeFooter } from "@/components/home/HomeFooter";
 import { ProductCard } from "@/components/product/ProductCard";
 import { PromoCarousel } from "@/components/home/PromoCarousel";
+import { ActiveOrderProgressCard } from "@/components/home/ActiveOrderProgressCard";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { BANNERS, CATEGORIES, PRODUCTS } from "@/data/dummy-data";
@@ -254,6 +255,9 @@ export default function ShoppingHomeClient({
           onChange={setSearchQuery}
           placeholder="Mau order apa, bestie..."
         />
+
+        {/* Active Order Progress Card (only renders when customer has active order) */}
+        <ActiveOrderProgressCard />
 
         {/* 4. Category Shortcuts */}
         <section aria-label="Kategori Menu" className="space-y-2">
