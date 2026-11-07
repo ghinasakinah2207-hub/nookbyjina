@@ -97,8 +97,8 @@ function verifyCustomerBottomNavigation() {
     "Container applies soft floating shadow class"
   );
   assert(
-    (content.includes("px-3.5") || content.includes("px-3") || content.includes("px-2.5")) && content.includes("py-1.5"),
-    "Outer container has comfortable horizontal padding (px-3.5 or px-3) with py-1.5"
+    content.includes("p-1") || content.includes("py-1") || content.includes("py-1.5"),
+    "Outer container has compact padding (p-1 or py-1)"
   );
   assert(
     content.includes("safe-area-inset-bottom"),
@@ -118,8 +118,8 @@ function verifyCustomerBottomNavigation() {
   assert(
     content.includes("from-[#F25B09]") &&
       content.includes("to-[#FF8A45]") &&
-      content.includes("rounded-2xl"),
-    "Active tab indicator uses softly rounded NOOK orange gradient pill (rounded-2xl from-[#F25B09] to-[#FF8A45])"
+      (content.includes("rounded-xl") || content.includes("rounded-2xl")),
+    "Active tab indicator uses softly rounded NOOK orange gradient pill (rounded-xl or rounded-2xl from-[#F25B09] to-[#FF8A45])"
   );
   assert(
     content.includes("from-white/") && content.includes("to-transparent"),
@@ -134,12 +134,12 @@ function verifyCustomerBottomNavigation() {
     "Inactive tabs use muted neutral gray (#737373)"
   );
   assert(
-    content.includes("px-3.5") || content.includes("px-4"),
-    "Tabs use comfortable horizontal padding (px-3.5 / px-4) for breathing room"
+    content.includes("py-0.5") || content.includes("py-1") || content.includes("px-3.5"),
+    "Tabs use comfortable padding for breathing room"
   );
   assert(
-    content.includes("mt-1"),
-    "Tabs maintain a balanced 4-6px gap (mt-1) between icon and label"
+    content.includes("mt-0.5") || content.includes("mt-1"),
+    "Tabs maintain a balanced gap (mt-0.5 or mt-1) between icon and label"
   );
   assert(
     content.includes('aria-current={isSelected ? "page" : undefined}') ||
@@ -161,6 +161,10 @@ function verifyCustomerBottomNavigation() {
   assert(
     content.includes("badgeCount") && content.includes("itemCount"),
     "Cart badge count is preserved and rendered on Keranjang tab"
+  );
+  assert(
+    !content.includes("border-2 border-white") && content.includes("badgeCount"),
+    "Cart badge removes white stroke/outline for cleaner visual"
   );
   assert(
     content.includes('pathname.startsWith("/admin")') &&

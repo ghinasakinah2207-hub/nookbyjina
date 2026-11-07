@@ -121,16 +121,16 @@ export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
   return (
     <nav
       aria-label="Navigasi Utama Pelanggan"
-      className="fixed left-1/2 -translate-x-1/2 z-40 bg-white/60 backdrop-blur-md border border-neutral-200/80 rounded-2xl px-3.5 py-1.5 floating-pill-shadow select-none print:hidden"
+      className="fixed left-1/2 -translate-x-1/2 z-40 bg-white/60 backdrop-blur-md border border-neutral-200/80 rounded-2xl p-1 floating-pill-shadow select-none print:hidden"
       style={{
         bottom: "max(2px, calc(env(safe-area-inset-bottom, 0px) + 2px))",
       }}
     >
-      <div className="relative flex items-center w-[264px] h-[50px]">
+      <div className="relative flex items-center w-[256px] h-[42px]">
         {/* Shared sliding active indicator with hardware-accelerated compositor transform */}
         <div
           aria-hidden="true"
-          className={`absolute top-0 bottom-0 left-0 w-1/4 rounded-2xl bg-gradient-to-r from-[#F25B09] to-[#FF8A45] shadow-xs shadow-orange-950/10 pointer-events-none overflow-hidden motion-reduce:transition-none ${
+          className={`absolute top-0 bottom-0 left-0 w-1/4 rounded-xl bg-gradient-to-r from-[#F25B09] to-[#FF8A45] shadow-xs shadow-orange-950/10 pointer-events-none overflow-hidden motion-reduce:transition-none ${
             mounted
               ? "transition-[transform,opacity] duration-400 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
               : "transition-none"
@@ -158,21 +158,23 @@ export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
               aria-label={item.label}
               aria-current={isSelected ? "page" : undefined}
               title={item.label}
-              className={`group relative z-10 w-1/4 h-full flex flex-col items-center justify-center px-3.5 py-1 rounded-2xl transition-colors duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none select-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-neutral-400 ${
+              className={`group relative z-10 w-1/4 h-full flex flex-col items-center justify-center py-0.5 rounded-xl transition-colors duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none select-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-neutral-400 ${
                 isSelected
                   ? "text-white"
                   : "text-[#737373] hover:text-[#111111]"
               }`}
             >
-              <div className="relative flex items-center justify-center w-5 h-5 flex-shrink-0">
+              <div className="relative flex items-center justify-center w-[18px] h-[18px] flex-shrink-0">
                 <IconComponent
-                  className="w-5 h-5 transition-transform duration-200 motion-reduce:transition-none"
+                  className="w-[18px] h-[18px] transition-transform duration-200 motion-reduce:transition-none"
                   strokeWidth={isSelected ? 2.2 : 1.8}
                   aria-hidden="true"
                 />
                 {item.badgeCount !== undefined && item.badgeCount > 0 ? (
                   <span
-                    className="absolute -top-1.5 -right-2.5 bg-[#F25B09] text-white text-[9px] font-bold h-3.5 min-w-[14px] px-1 rounded-full flex items-center justify-center border-2 border-white z-20 pointer-events-none shadow-xs"
+                    className={`absolute -top-1.5 -right-2.5 ${
+                      isSelected ? "bg-white text-[#F25B09]" : "bg-[#F25B09] text-white"
+                    } text-[9px] font-bold h-3.5 min-w-[14px] px-1 rounded-full flex items-center justify-center z-20 pointer-events-none shadow-xs leading-none`}
                     aria-label={`${item.badgeCount} item di keranjang`}
                   >
                     {item.badgeCount > 99 ? "99+" : item.badgeCount}
@@ -181,7 +183,7 @@ export function BottomNavigation({ isRoot }: { isRoot?: boolean } = {}) {
               </div>
 
               <span
-                className={`text-[10px] leading-tight mt-1 whitespace-nowrap transition-colors duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+                className={`text-[9px] leading-tight mt-0.5 whitespace-nowrap transition-colors duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
                   isSelected
                     ? "font-semibold text-white"
                     : "font-medium text-[#737373] group-hover:text-[#111111]"

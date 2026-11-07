@@ -32,6 +32,7 @@ interface ProductDetailClientProps {
   initialRecommended?: Product[];
   initialStoreOpen?: boolean;
   recommendedSlot?: React.ReactNode;
+  initialIsScrolled?: boolean;
 }
 
 function useSafeRouter() {
@@ -55,6 +56,7 @@ export default function ProductDetailClient({
   initialRecommended,
   initialStoreOpen = true,
   recommendedSlot,
+  initialIsScrolled,
 }: ProductDetailClientProps) {
   const router = useSafeRouter();
 
@@ -64,6 +66,93 @@ export default function ProductDetailClient({
   );
   const [loading, setLoading] = useState<boolean>(!initialProduct);
   const [error, setError] = useState<string | null>(null);
+
+  // Scroll-aware sticky top header state & ref
+  const headerRef = useRef<HTMLElement>(null);
+  const [isScrolled, setIsScrolled] = useState<boolean>(Boolean(initialIsScrolled));
+
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+
+    const updateHeader = (scrollY: number) => {
+      // Progress p linearly from 0 (at 0px) to 1 (at 120px)
+      const p = Math.min(1, Math.max(0, scrollY / 120));
+
+      // 1. Header Background & Border & Shadow (gradual fade from transparent to solid white)
+      const headerBg = `rgba(255, 255, 255, ${p.toFixed(3)})`;
+      const headerBorder = `rgba(238, 238, 238, ${p.toFixed(3)})`;
+      const headerShadow =
+        p > 0.05 ? `0 1px 2px 0 rgba(0, 0, 0, ${(0.04 * p).toFixed(3)})` : "none";
+
+      // 2. Circular Buttons: Morph smoothly between semi-transparent dark circle and #EAEAEA
+      // At p = 0: rgba(0, 0, 0, 0.45)
+      // At p = 1: #EAEAEA (rgb 234, 234, 234)
+      const btnBgR = Math.round(234 * p);
+      const btnBgA = (0.45 * (1 - p) + p).toFixed(3);
+      const btnBg =
+        p === 1
+          ? "#EAEAEA"
+          : p === 0
+          ? "rgba(0, 0, 0, 0.45)"
+          : `rgba(${btnBgR}, ${btnBgR}, ${btnBgR}, ${btnBgA})`;
+
+      // Button Border: Morph between rgba(255, 255, 255, 0.2) and #EEEEEE (rgb 238, 238, 238)
+      const borderR = Math.round(255 - 17 * p);
+      const borderA = (0.2 * (1 - p) + p).toFixed(3);
+      const btnBorder =
+        p === 1
+          ? "#EEEEEE"
+          : p === 0
+          ? "rgba(255, 255, 255, 0.2)"
+          : `rgba(${borderR}, ${borderR}, ${borderR}, ${borderA})`;
+
+      // Button Icon Color: Morph between White (#FFFFFF) and Nook Orange (#F25B09, rgb(242, 91, 9))
+      const iconR = Math.round(255 - 13 * p);
+      const iconG = Math.round(255 - 164 * p);
+      const iconB = Math.round(255 - 246 * p);
+      const iconColor =
+        p === 1 ? "#F25B09" : p === 0 ? "#FFFFFF" : `rgb(${iconR}, ${iconG}, ${iconB})`;
+
+      // Apply CSS variables directly to the header element (Zero React re-render overhead)
+      header.style.setProperty("--hdr-bg", headerBg);
+      header.style.setProperty("--hdr-border", headerBorder);
+      header.style.setProperty("--hdr-shadow", headerShadow);
+      header.style.setProperty("--btn-bg", btnBg);
+      header.style.setProperty("--btn-border", btnBorder);
+      header.style.setProperty("--btn-color", iconColor);
+
+      // Block pointer events on header backdrop when solid white
+      if (p > 0.5) {
+        header.style.pointerEvents = "auto";
+      } else {
+        header.style.pointerEvents = "none";
+      }
+
+      // Update binary state for accessibility and automated test indicators without unnecessary renders
+      const scrolled = p >= 0.5;
+      setIsScrolled((prev) => (prev !== scrolled ? scrolled : prev));
+    };
+
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          updateHeader(window.scrollY);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    // Immediate check on mount
+    updateHeader(window.scrollY);
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
 
   const { addToCart, itemCount, setBuyNowItem } = useCart();
 
@@ -641,6 +730,118 @@ export default function ProductDetailClient({
         </div>
       )}
 
+      {/* Sticky Top Action Bar (Scroll-Progress Aware) */}
+      <header
+        ref={headerRef}
+        data-testid="sticky-product-header"
+        data-scrolled={isScrolled ? "true" : "false"}
+        className="fixed top-0 left-0 right-0 z-30 border-b pointer-events-none"
+        style={{
+          backgroundColor:
+            "var(--hdr-bg, " +
+            (initialIsScrolled ? "#FFFFFF" : "rgba(255, 255, 255, 0)") +
+            ")",
+          borderColor:
+            "var(--hdr-border, " +
+            (initialIsScrolled ? "#EEEEEE" : "rgba(238, 238, 238, 0)") +
+            ")",
+          boxShadow:
+            "var(--hdr-shadow, " +
+            (initialIsScrolled ? "0 1px 2px 0 rgba(0, 0, 0, 0.04)" : "none") +
+            ")",
+        }}
+      >
+        <div
+          className="max-w-md mx-auto px-3.5 py-2.5 flex items-center justify-between"
+          style={{
+            paddingTop: "calc(0.625rem + env(safe-area-inset-top, 0px))",
+          }}
+        >
+          {/* Top-Left: Back Button */}
+          <button
+            type="button"
+            onClick={() => router.back()}
+            aria-label="Kembali"
+            className="w-8 h-8 rounded-full border flex items-center justify-center min-h-[34px] min-w-[34px] cursor-pointer pointer-events-auto transition-transform active:scale-95 shadow-2xs"
+            style={{
+              backgroundColor:
+                "var(--btn-bg, " +
+                (initialIsScrolled ? "#EAEAEA" : "rgba(0, 0, 0, 0.45)") +
+                ")",
+              borderColor:
+                "var(--btn-border, " +
+                (initialIsScrolled ? "#EEEEEE" : "rgba(255, 255, 255, 0.2)") +
+                ")",
+              color:
+                "var(--btn-color, " +
+                (initialIsScrolled ? "#F25B09" : "#FFFFFF") +
+                ")",
+            }}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          {/* Top-Right: Share and Shopping Cart Buttons */}
+          <div className="flex items-center gap-1.5 pointer-events-auto">
+            {/* Share Button */}
+            <button
+              type="button"
+              onClick={handleShare}
+              aria-label="Bagikan Menu"
+              className="w-8 h-8 rounded-full border flex items-center justify-center min-h-[34px] min-w-[34px] cursor-pointer transition-transform active:scale-95 shadow-2xs"
+              style={{
+                backgroundColor:
+                  "var(--btn-bg, " +
+                  (initialIsScrolled ? "#EAEAEA" : "rgba(0, 0, 0, 0.45)") +
+                  ")",
+                borderColor:
+                  "var(--btn-border, " +
+                  (initialIsScrolled
+                    ? "#EEEEEE"
+                    : "rgba(255, 255, 255, 0.2)") +
+                  ")",
+                color:
+                  "var(--btn-color, " +
+                  (initialIsScrolled ? "#F25B09" : "#FFFFFF") +
+                  ")",
+              }}
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+
+            {/* Shopping Cart Button with Badge */}
+            <Link
+              href="/keranjang"
+              aria-label="Lihat Keranjang Belanja"
+              className="relative w-8 h-8 rounded-full border flex items-center justify-center min-h-[34px] min-w-[34px] cursor-pointer transition-transform active:scale-95 shadow-2xs"
+              style={{
+                backgroundColor:
+                  "var(--btn-bg, " +
+                  (initialIsScrolled ? "#EAEAEA" : "rgba(0, 0, 0, 0.45)") +
+                  ")",
+                borderColor:
+                  "var(--btn-border, " +
+                  (initialIsScrolled
+                    ? "#EEEEEE"
+                    : "rgba(255, 255, 255, 0.2)") +
+                  ")",
+                color:
+                  "var(--btn-color, " +
+                  (initialIsScrolled ? "#F25B09" : "#FFFFFF") +
+                  ")",
+              }}
+            >
+              <ShoppingCart className="w-4 h-4" />
+              {itemCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-[#F25B09] text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center border-2 border-white leading-none">
+                  {itemCount > 99 ? "99+" : itemCount}
+                </span>
+              )}
+            </Link>
+          </div>
+        </div>
+      </header>
+
       <main className="max-w-md mx-auto bg-white">
         {/* 1. Full-bleed Hero Product Photography Section */}
         <section
@@ -692,43 +893,6 @@ export default function ProductDetailClient({
                 </div>
               );
             })}
-          </div>
-
-          {/* Top-Left: Back Button */}
-          <button
-            type="button"
-            onClick={() => router.back()}
-            aria-label="Kembali"
-            className="absolute top-3 left-3 z-20 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-[#111111] backdrop-blur-xs flex items-center justify-center transition-colors min-h-[34px] min-w-[34px] shadow-xs cursor-pointer"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-
-          {/* Top-Right: Share and Shopping Cart Buttons */}
-          <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
-            {/* Share Button */}
-            <button
-              type="button"
-              onClick={handleShare}
-              aria-label="Bagikan Menu"
-              className="w-8 h-8 rounded-full bg-white/80 hover:bg-white text-[#111111] backdrop-blur-xs flex items-center justify-center transition-colors min-h-[34px] min-w-[34px] shadow-xs cursor-pointer"
-            >
-              <Share2 className="w-4 h-4" />
-            </button>
-
-            {/* Shopping Cart Button with Badge */}
-            <Link
-              href="/keranjang"
-              aria-label="Lihat Keranjang Belanja"
-              className="relative w-8 h-8 rounded-full bg-white/80 hover:bg-white text-[#111111] backdrop-blur-xs flex items-center justify-center transition-colors min-h-[34px] min-w-[34px] shadow-xs cursor-pointer"
-            >
-              <ShoppingCart className="w-4 h-4" />
-              {itemCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-[#F25B09] text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center border-2 border-white leading-none">
-                  {itemCount > 99 ? "99+" : itemCount}
-                </span>
-              )}
-            </Link>
           </div>
 
           {/* Desktop Left/Right Navigation Arrows */}
