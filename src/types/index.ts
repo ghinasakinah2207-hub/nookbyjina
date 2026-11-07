@@ -47,6 +47,8 @@ export interface Product {
   categoryNames?: string[];
   tags?: string[];
   basePrice: number;
+  originalPrice?: number | null;
+  discountPercent?: number | null;
   isAvailable: boolean; // true = Tersedia, false = Habis
   isArchived?: boolean;
   images: string[];

@@ -47,13 +47,19 @@ console.log("  [PASS] Full-bleed product photography layout confirmed");
 
 console.log("\n--- Section 2: Price & Title Hierarchy ---");
 
-// 6. Smaller 'Rp' + large bold numeric price
+// 6. Smaller 'Rp' + large bold numeric price in white inside gradient panel
 assert(
-  productDetailSrc.includes("text-xs sm:text-sm font-semibold text-[#F25B09]") &&
-  productDetailSrc.includes("text-2xl sm:text-3xl font-extrabold text-[#F25B09]"),
-  "Price hierarchy must separate smaller 'Rp' from prominent numeric amount"
+  productDetailSrc.includes("text-xs sm:text-sm font-semibold text-white/90") &&
+  productDetailSrc.includes("text-2xl sm:text-3xl font-extrabold text-white tracking-tight"),
+  "Price hierarchy must separate smaller 'Rp' from prominent numeric amount in white"
 );
-console.log("  [PASS] Price hierarchy separates smaller 'Rp' from prominent numeric price");
+assert(
+  productDetailSrc.includes("from-[#21100C]") &&
+    productDetailSrc.includes("via-[#35170E]") &&
+    productDetailSrc.includes("to-[#54220F]"),
+  "Price and title must be wrapped in compact dark horizontal gradient panel (#21100C -> #35170E -> #54220F)"
+);
+console.log("  [PASS] Price hierarchy separates smaller 'Rp' from prominent numeric price inside gradient panel");
 
 // 7. Category label removed, title with NOOK badge & rating preserved
 assert(!productDetailSrc.includes("product.categoryName || \"Menu Pilihan\""), "Category label 'PAKET'/'Menu Pilihan' removed from product header");

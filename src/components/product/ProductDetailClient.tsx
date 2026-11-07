@@ -34,6 +34,21 @@ interface ProductDetailClientProps {
   recommendedSlot?: React.ReactNode;
 }
 
+function useSafeRouter() {
+  try {
+    return useRouter();
+  } catch {
+    return {
+      push: () => {},
+      back: () => {},
+      forward: () => {},
+      refresh: () => {},
+      replace: () => {},
+      prefetch: () => {},
+    };
+  }
+}
+
 export default function ProductDetailClient({
   productId,
   initialProduct,
@@ -41,7 +56,7 @@ export default function ProductDetailClient({
   initialStoreOpen = true,
   recommendedSlot,
 }: ProductDetailClientProps) {
-  const router = useRouter();
+  const router = useSafeRouter();
 
   const [product, setProduct] = useState<Product | null>(initialProduct ?? null);
   const [recommendedProducts, setRecommendedProducts] = useState<Product[]>(
@@ -364,6 +379,14 @@ export default function ProductDetailClient({
     };
   }, [product, selectedOptions, selectedAddonIds]);
 
+  // Original price and discount calculation (if available)
+  const originalPrice = product?.originalPrice ?? (product as { compareAtPrice?: number | null })?.compareAtPrice ?? null;
+  const discountPercent =
+    product?.discountPercent ??
+    (originalPrice && originalPrice > unitPrice
+      ? Math.round(((originalPrice - unitPrice) / originalPrice) * 100)
+      : null);
+
   // Validate required options
   const validateRequiredOptions = useCallback((): { isValid: boolean; missingGroup?: string } => {
     if (!product) return { isValid: false };
@@ -505,8 +528,8 @@ export default function ProductDetailClient({
   // Loading State: Skeleton matching product detail layout
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F6F6F7] pb-28">
-        <main className="max-w-md mx-auto">
+      <div className="min-h-screen bg-white pb-28">
+        <main className="max-w-md mx-auto bg-white">
           {/* Skeleton Hero Image (Full-bleed) */}
           <div className="relative aspect-[4/3] w-full bg-neutral-200 overflow-hidden animate-pulse">
             <div className="absolute top-3 left-3 w-8 h-8 rounded-full bg-white/70" />
@@ -516,28 +539,47 @@ export default function ProductDetailClient({
             </div>
           </div>
 
-          <div className="px-3.5 pt-3 space-y-2.5">
+          <div className="w-full divide-y divide-[#EAEAEA]">
             {/* Skeleton Info */}
-            <div className="px-0.5 pt-0.5 space-y-2">
+            <div className="p-3.5 space-y-2">
               <div className="h-6 bg-neutral-200 rounded w-1/3 animate-pulse" />
               <div className="h-5 bg-neutral-200 rounded w-3/4 animate-pulse" />
               <div className="h-4 bg-neutral-100 rounded w-1/2 animate-pulse mt-1" />
             </div>
 
             {/* Skeleton Variation Card */}
-            <div className="bg-white rounded-2xl p-4 space-y-2 border border-[#E5E5E5]">
+            <div className="p-3.5 space-y-2">
               <div className="h-4 bg-neutral-200 rounded w-1/4 animate-pulse" />
               <div className="h-3 bg-neutral-100 rounded w-1/2 animate-pulse" />
             </div>
 
             {/* Skeleton Description */}
-            <div className="bg-white rounded-2xl p-4 space-y-2 border border-[#E5E5E5]">
+            <div className="p-3.5 space-y-2">
               <div className="h-4 bg-neutral-200 rounded w-1/3 animate-pulse" />
               <div className="h-3 bg-neutral-100 rounded w-full animate-pulse" />
               <div className="h-3 bg-neutral-100 rounded w-4/5 animate-pulse" />
             </div>
           </div>
         </main>
+
+        {/* Skeleton Recommendations */}
+        <div className="w-full bg-[#F6F6F7] border-t border-[#E5E5E5] py-4">
+          <div className="max-w-md mx-auto px-3.5 sm:px-4 space-y-2.5">
+            <div className="h-3.5 w-36 bg-neutral-200 rounded animate-pulse" />
+            <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+              <div className="bg-white rounded-2xl p-2 space-y-2">
+                <div className="aspect-[4/3] w-full bg-neutral-200 rounded-xl animate-pulse" />
+                <div className="h-3 bg-neutral-200 rounded w-3/4 animate-pulse" />
+                <div className="h-3 bg-neutral-100 rounded w-1/2 animate-pulse" />
+              </div>
+              <div className="bg-white rounded-2xl p-2 space-y-2">
+                <div className="aspect-[4/3] w-full bg-neutral-200 rounded-xl animate-pulse" />
+                <div className="h-3 bg-neutral-200 rounded w-3/4 animate-pulse" />
+                <div className="h-3 bg-neutral-100 rounded w-1/2 animate-pulse" />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -545,7 +587,7 @@ export default function ProductDetailClient({
   // Error State
   if (error) {
     return (
-      <div className="min-h-screen bg-[#F6F6F7] flex flex-col items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center">
         <div className="w-12 h-12 mx-auto rounded-full bg-orange-50 flex items-center justify-center text-[#F25B09] mb-3">
           <AlertCircle className="w-6 h-6" />
         </div>
@@ -572,7 +614,7 @@ export default function ProductDetailClient({
   // Missing Product State
   if (!product) {
     return (
-      <div className="min-h-screen bg-[#F6F6F7] flex flex-col items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center">
         <h1 className="text-base font-bold text-[#111111]">Produk Tidak Ditemukan</h1>
         <p className="text-xs text-[#737373] mt-2 mb-6">
           Menu yang Anda cari mungkin telah dihapus atau URL tidak valid.
@@ -590,7 +632,7 @@ export default function ProductDetailClient({
   const images = product.images.length > 0 ? product.images : ["/images/hero-food.webp"];
 
   return (
-    <div className="min-h-screen bg-[#F6F6F7] pb-28">
+    <div className="min-h-screen bg-white pb-28">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-[#111111] text-white px-4 py-2 rounded-full text-xs font-medium shadow-lg animate-landing-fade flex items-center gap-2">
@@ -599,7 +641,7 @@ export default function ProductDetailClient({
         </div>
       )}
 
-      <main className="max-w-md mx-auto">
+      <main className="max-w-md mx-auto bg-white">
         {/* 1. Full-bleed Hero Product Photography Section */}
         <section
           className="relative aspect-[4/3] w-full bg-neutral-100 overflow-hidden select-none group"
@@ -732,10 +774,64 @@ export default function ProductDetailClient({
           ) : null}
         </section>
 
-        <div className="px-3.5 pt-3 space-y-2.5">
+        {/* 2. Full-Width Edge-to-Edge Compact Dark Gradient Price & Product Title Section */}
+        <section
+          data-testid="product-price-title-panel"
+          className="w-full bg-gradient-to-r from-[#21100C] via-[#35170E] to-[#54220F] py-2 sm:py-2.5 px-3.5 sm:px-4 text-white shadow-xs space-y-1"
+        >
+          {/* Price & Discount Row */}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              {/* Price: Smaller 'Rp' + Prominent Large White Numeric Amount */}
+              <div className="flex items-baseline gap-1">
+                <span className="text-xs sm:text-sm font-semibold text-white/90">Rp</span>
+                <span className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-none">
+                  {new Intl.NumberFormat("id-ID").format(unitPrice)}
+                </span>
+              </div>
+
+              {/* Strikethrough Original Price & Discount Badge (if available) */}
+              {originalPrice && originalPrice > unitPrice ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs line-through text-white/60 font-medium">
+                    Rp{new Intl.NumberFormat("id-ID").format(originalPrice)}
+                  </span>
+                  {discountPercent ? (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black bg-white text-[#F25B09] shadow-2xs leading-none">
+                      {`-${discountPercent}%`}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            {/* Status 'Habis' pill when product is unavailable */}
+            {!product.isAvailable && (
+              <span className="inline-flex items-center text-[10px] font-bold text-[#B42318] bg-white/95 border border-red-100 px-2 py-0.5 rounded-full shrink-0 shadow-2xs">
+                Habis
+              </span>
+            )}
+          </div>
+
+          {/* Product Title & Ticket-Style Status Badge */}
+          <div>
+            <h1 className="text-sm sm:text-base font-semibold text-white leading-tight">
+              <TicketBadge
+                type={product.productType}
+                label={getProductTypeConfig(product.productType).label}
+                className="align-middle -translate-y-[1px] mr-1.5"
+                size="md"
+              />
+              {product.name}
+            </h1>
+          </div>
+        </section>
+
+        {/* Full-White Borderless Content Sections */}
+        <div className="w-full bg-white divide-y divide-[#EAEAEA]">
           {/* Store Closed Warning Banner */}
           {!storeOpen && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2.5 text-xs text-[#B42318] animate-landing-fade">
+            <div className="p-3 bg-red-50 text-xs text-[#B42318] flex items-center gap-2.5 animate-landing-fade">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span className="font-medium">
                 Toko sedang close order. Pemesanan menu belum dapat dilakukan saat ini.
@@ -743,173 +839,154 @@ export default function ProductDetailClient({
             </div>
           )}
 
-          {/* 2. Product Price and Title Hierarchy */}
-          <section className="px-0.5 space-y-1">
-            {/* Price Row: Smaller 'Rp' + Prominent Large Numeric Amount */}
-            <div className="flex items-baseline gap-1">
-              <span className="text-xs sm:text-sm font-semibold text-[#F25B09]">Rp</span>
-              <span className="text-2xl sm:text-3xl font-extrabold text-[#F25B09] tracking-tight">
-                {new Intl.NumberFormat("id-ID").format(unitPrice)}
-              </span>
-            </div>
-
-            {/* Title & Rating */}
-            <div className="space-y-1.5 pt-0.5">
-              <div className="flex items-start justify-between gap-2">
-                <h1 className="text-base sm:text-lg font-bold text-[#111111] leading-snug">
-                  <TicketBadge
-                    type={product.productType}
-                    label={getProductTypeConfig(product.productType).label}
-                    className="align-middle -translate-y-[1px] mr-1.5"
-                    size="md"
-                  />
-                  {product.name}
-                </h1>
-                {!product.isAvailable && (
-                  <span className="inline-flex items-center text-[10px] font-bold text-[#B42318] bg-red-50 border border-red-200 px-2 py-0.5 rounded-full shrink-0">
-                    Habis
-                  </span>
-                )}
-              </div>
-
-              {/* Three Compact Information Cards (Rating, Estimasi, Kalori) */}
-              <div className="grid grid-cols-3 gap-2 pt-1" data-testid="product-info-cards">
-                {/* 1. Rating */}
-                <div
-                  className="bg-white border border-[#E5E5E5] rounded-xl sm:rounded-2xl py-2 px-1.5 flex flex-col items-center justify-center text-center select-none"
-                  title="Rating: 4.9 (120+ ulasan)"
-                >
-                  <div className="flex items-center justify-center gap-1 text-xs sm:text-[13px] font-bold text-[#111111]">
-                    <Star className="w-3.5 h-3.5 text-[#F59E0B] fill-[#F59E0B] shrink-0" />
-                    <span>4.9</span>
-                  </div>
-                  <span className="text-[10px] text-[#737373] mt-0.5">Rating</span>
-                </div>
-
-                {/* 2. Preparation Estimate */}
-                <div
-                  className="bg-white border border-[#E5E5E5] rounded-xl sm:rounded-2xl py-2 px-1.5 flex flex-col items-center justify-center text-center select-none"
-                  aria-label={`Estimasi persiapan: ${getProductTypeConfig(product.productType).estimate}`}
-                  title={`Estimasi persiapan: ${getProductTypeConfig(product.productType).estimate}`}
-                >
-                  <div className="flex items-center justify-center gap-1 text-xs sm:text-[13px] font-bold text-[#111111] max-w-full">
-                    <Clock className="w-3.5 h-3.5 text-[#737373] shrink-0" />
-                    <span className="truncate">{getProductTypeConfig(product.productType).estimate}</span>
-                  </div>
-                  <span className="text-[10px] text-[#737373] mt-0.5">Estimasi</span>
-                </div>
-
-                {/* 3. Calories */}
-                <div
-                  className="bg-white border border-[#E5E5E5] rounded-xl sm:rounded-2xl py-2 px-1.5 flex flex-col items-center justify-center text-center select-none"
-                  title={
-                    product.calories !== undefined && product.calories !== null && product.calories > 0
-                      ? `${product.calories} kcal`
-                      : "Kalori: Belum diisi"
-                  }
-                >
-                  <div className="flex items-center justify-center gap-1 text-xs sm:text-[13px] font-bold text-[#111111] max-w-full">
-                    <Flame className="w-3.5 h-3.5 text-[#F25B09] shrink-0" />
-                    <span className="truncate">
-                      {product.calories !== undefined && product.calories !== null && product.calories > 0
-                        ? `${product.calories} kcal`
-                        : "Belum diisi"}
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-[#737373] mt-0.5">Kalori</span>
-                </div>
-              </div>
-            </div>
-          </section>
-
-        {/* 3. Compact Free-delivery Information */}
-        <section className="flex items-center gap-2 p-2.5 bg-emerald-50/70 border border-emerald-100 rounded-xl text-xs text-emerald-800">
-          <Truck className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span className="font-medium text-[11.5px] leading-tight">
-            Diskon gratis ongkir untuk pesanan di atas Rp50.000
-          </span>
-        </section>
-
-        {/* 4. Product Variation Card */}
-        {(product.optionGroups.length > 0 || product.addons.length > 0) && (
-          <section>
-            <button
-              type="button"
-              disabled={!product.isAvailable || !storeOpen}
-              onClick={() => {
-                setModalTargetAction("dual");
-                setIsVariationModalOpen(true);
-              }}
-              className="w-full bg-white rounded-2xl p-3.5 border border-[#E5E5E5] hover:border-neutral-300 transition-colors text-left flex items-center justify-between gap-3 group cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          {/* 1. Rating, Estimasi & Kalori - Single Horizontal Row with Hairline Vertical Dividers */}
+          <div
+            data-testid="product-info-cards"
+            className="grid grid-cols-3 py-2.5 px-3.5 sm:px-4 select-none bg-white"
+          >
+            {/* 1. Rating */}
+            <div
+              className="flex flex-col items-center justify-center text-center border-r border-[#EAEAEA] pr-2"
+              title="Rating: 4.9 (120+ ulasan)"
             >
-              <div className="space-y-1 min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-[#111111]">Pilih Variasi</span>
-                  {product.optionGroups.some((g) => g.required) && (
-                    <span className="text-[9.5px] font-semibold text-[#F25B09] bg-orange-50 border border-orange-100 px-1.5 py-0.5 rounded">
-                      {validateRequiredOptions().isValid ? "Lengkap" : "Wajib"}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-[#737373] truncate">
-                  {variationSummaryText}
-                </p>
+              <div className="flex items-center justify-center gap-1 text-xs sm:text-[13px] font-bold text-[#111111]">
+                <Star className="w-3.5 h-3.5 text-[#F59E0B] fill-[#F59E0B] shrink-0" />
+                <span>4.9</span>
               </div>
-              <ChevronRight className="w-4 h-4 text-[#737373] group-hover:text-[#111111] transition-colors shrink-0" />
-            </button>
-          </section>
-        )}
+              <span className="text-[10px] text-[#737373] mt-0.5">Rating</span>
+            </div>
 
-        {/* 5. Product Description Card */}
-        <section className="bg-white rounded-2xl p-3.5 border border-[#E5E5E5] space-y-1.5">
-          <h2 className="text-xs font-bold text-[#111111]">Deskripsi Produk</h2>
-          <p className="text-xs text-[#737373] leading-relaxed whitespace-pre-line">
-            {product.description ||
-              "Menu lezat khas Nook by Jina yang disajikan segar dengan bahan-bahan pilihan berkualitas tinggi."}
-          </p>
-        </section>
+            {/* 2. Preparation Estimate */}
+            <div
+              className="flex flex-col items-center justify-center text-center border-r border-[#EAEAEA] px-2"
+              aria-label={`Estimasi persiapan: ${getProductTypeConfig(product.productType).estimate}`}
+              title={`Estimasi persiapan: ${getProductTypeConfig(product.productType).estimate}`}
+            >
+              <div className="flex items-center justify-center gap-1 text-xs sm:text-[13px] font-bold text-[#111111] max-w-full">
+                <Clock className="w-3.5 h-3.5 text-[#737373] shrink-0" />
+                <span className="truncate">{getProductTypeConfig(product.productType).estimate}</span>
+              </div>
+              <span className="text-[10px] text-[#737373] mt-0.5">Estimasi</span>
+            </div>
 
-        {/* 6. Special Note for Kitchen */}
-        <section className="bg-white rounded-2xl p-3.5 border border-[#E5E5E5] space-y-1.5">
-          <label htmlFor="item-note-input" className="text-xs font-bold text-[#111111] block">
-            Catatan Khusus (Opsional)
-          </label>
-          <input
-            id="item-note-input"
-            name="itemNote"
-            type="text"
-            disabled={!product.isAvailable || !storeOpen}
-            value={itemNote}
-            onChange={(e) => setItemNote(e.target.value.slice(0, 100))}
-            placeholder="Contoh: Sambal dipisah, jangan terlalu pedas..."
-            className={`w-full text-xs px-3 py-2 rounded-xl border border-[#E5E5E5] text-[#111111] focus:outline-hidden focus:border-[#F25B09] transition-colors ${
-              !product.isAvailable || !storeOpen
-                ? "bg-neutral-100 opacity-60 cursor-not-allowed"
-                : "bg-[#F6F6F7]"
-            }`}
-          />
-          <div className="text-right text-[9.5px] text-[#737373]">
-            {itemNote.length}/100
+            {/* 3. Calories */}
+            <div
+              className="flex flex-col items-center justify-center text-center pl-2"
+              title={
+                product.calories !== undefined && product.calories !== null && product.calories > 0
+                  ? `${product.calories} kcal`
+                  : "Kalori: Belum diisi"
+              }
+            >
+              <div className="flex items-center justify-center gap-1 text-xs sm:text-[13px] font-bold text-[#111111] max-w-full">
+                <Flame className="w-3.5 h-3.5 text-[#F25B09] shrink-0" />
+                <span className="truncate">
+                  {product.calories !== undefined && product.calories !== null && product.calories > 0
+                    ? `${product.calories} kcal`
+                    : "Belum diisi"}
+                </span>
+              </div>
+              <span className="text-[10px] text-[#737373] mt-0.5">Kalori</span>
+            </div>
           </div>
-        </section>
 
-        {/* 7. Recommended Companion Products */}
-        {recommendedSlot !== undefined ? (
-          recommendedSlot
-        ) : recommendedProducts.length > 0 ? (
-          <section className="space-y-2 pt-2">
-            <h2 className="text-xs font-bold text-[#111111] px-0.5">
-              Menu Rekomendasi Lainnya
-            </h2>
-            <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
-              {recommendedProducts.map((p) => (
-                <ProductCard key={p.id} product={p} />
-              ))}
+          {/* 2. Compact Free-delivery Information - Borderless, Subtle Light Green */}
+          <section className="flex items-center gap-2 py-2 px-3.5 sm:px-4 bg-emerald-50/60 text-xs text-emerald-800">
+            <Truck className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="font-medium text-[11.5px] leading-tight">
+              Diskon gratis ongkir untuk pesanan di atas Rp50.000
+            </span>
+          </section>
+
+          {/* 3. Product Variation Section - Borderless Full-Width */}
+          {(product.optionGroups.length > 0 || product.addons.length > 0) && (
+            <section>
+              <button
+                type="button"
+                disabled={!product.isAvailable || !storeOpen}
+                onClick={() => {
+                  setModalTargetAction("dual");
+                  setIsVariationModalOpen(true);
+                }}
+                className="w-full py-3 px-3.5 sm:px-4 hover:bg-neutral-50/80 transition-colors text-left flex items-center justify-between gap-3 group cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed bg-white"
+              >
+                <div className="space-y-0.5 min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-[#111111]">Pilih Variasi</span>
+                    {product.optionGroups.some((g) => g.required) && (
+                      <span className="text-[9.5px] font-semibold text-[#F25B09] bg-orange-50 border border-orange-100 px-1.5 py-0.5 rounded">
+                        {validateRequiredOptions().isValid ? "Lengkap" : "Wajib"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-[#737373] truncate">
+                    {variationSummaryText}
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-[#737373] group-hover:text-[#111111] transition-colors shrink-0" />
+              </button>
+            </section>
+          )}
+
+          {/* 4. Product Description Section - Clean on Solid White */}
+          <section className="py-3 px-3.5 sm:px-4 space-y-1 bg-white">
+            <h2 className="text-xs font-bold text-[#111111]">Deskripsi Produk</h2>
+            <p className="text-xs text-[#737373] leading-relaxed whitespace-pre-line">
+              {product.description ||
+                "Menu lezat khas Nook by Jina yang disajikan segar dengan bahan-bahan pilihan berkualitas tinggi."}
+            </p>
+          </section>
+
+          {/* 5. Special Note for Kitchen - Borderless Card with Thin Textarea Border */}
+          <section className="py-3 px-3.5 sm:px-4 space-y-1.5 bg-white">
+            <label htmlFor="item-note-input" className="text-xs font-bold text-[#111111] block">
+              Catatan Khusus (Opsional)
+            </label>
+            <textarea
+              id="item-note-input"
+              name="itemNote"
+              rows={2}
+              disabled={!product.isAvailable || !storeOpen}
+              value={itemNote}
+              onChange={(e) => setItemNote(e.target.value.slice(0, 100))}
+              placeholder="Contoh: Sambal dipisah, jangan terlalu pedas..."
+              className={`w-full text-xs p-2.5 rounded-xl border border-[#E5E5E5] text-[#111111] focus:outline-hidden focus:border-[#F25B09] transition-colors resize-none ${
+                !product.isAvailable || !storeOpen
+                  ? "bg-neutral-100 opacity-60 cursor-not-allowed"
+                  : "bg-white"
+              }`}
+            />
+            <div className="text-right text-[9.5px] text-[#737373]">
+              {itemNote.length}/100
             </div>
           </section>
-        ) : null}
         </div>
       </main>
+
+      {/* 6. Recommended Companion Products - Full-Width Edge-to-Edge #F6F6F7 Background */}
+      {(recommendedSlot !== undefined || recommendedProducts.length > 0) && (
+        <section
+          data-testid="recommended-products-section"
+          className="w-full bg-[#F6F6F7] border-t border-[#E5E5E5] py-4 sm:py-5"
+        >
+          <div className="max-w-md mx-auto px-3.5 sm:px-4 space-y-2.5">
+            {recommendedSlot !== undefined ? (
+              recommendedSlot
+            ) : (
+              <>
+                <h2 className="text-xs sm:text-sm font-bold text-[#111111]">
+                  Menu Rekomendasi Lainnya
+                </h2>
+                <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+                  {recommendedProducts.map((p) => (
+                    <ProductCard key={p.id} product={p} />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* 8. Sticky Bottom Purchase Action Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#E5E5E5]">
