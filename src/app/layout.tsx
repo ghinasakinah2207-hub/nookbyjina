@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { AppProvider } from "@/context/AppProvider";
+import { getRootJsonLd } from "@/lib/json-ld";
 import "./globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -22,29 +23,54 @@ const plusJakartaSans = Plus_Jakarta_Sans({
   ],
 });
 
-// Determine canonical site origin for metadata resolution.
-// In production, configure NEXT_PUBLIC_SITE_URL (e.g. "https://your-domain.com").
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ||
-  (process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-    : undefined) ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ||
-  `http://localhost:${process.env.PORT || 3000}`;
-
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
-  title: "Nook by Jina — Makanan Homemade Penuh Rasa & Kehangatan",
+  metadataBase: new URL("https://nookbyjina.my.id"),
+  title: {
+    default: "Nook by Jina | Pesan Makanan Favoritmu",
+    template: "%s | Nook by Jina",
+  },
   description:
-    "Pesan menu makanan homemade lezat dari Nook by Jina di Lhoksukon. Nasi bakar cakalang, risol mayo lumer, dimsum mentai, dan minuman segar untuk pickup dan delivery.",
+    "Nook by Jina menyediakan pilihan makanan dan minuman dengan sistem pre-order. Lihat menu dan pesan dengan mudah secara online.",
+  alternates: {
+    canonical: "/",
+  },
   icons: {
-    icon: "/favicon.ico",
+    icon: [{ url: "/favicon.ico" }],
   },
   openGraph: {
-    title: "Nook by Jina — Makanan Homemade",
-    description: "Pemesanan makanan homemade praktis dan terpercaya di Lhoksukon.",
     type: "website",
     locale: "id_ID",
+    url: "https://nookbyjina.my.id",
+    siteName: "Nook by Jina",
+    title: "Nook by Jina | Pesan Makanan Favoritmu",
+    description:
+      "Nook by Jina menyediakan pilihan makanan dan minuman dengan sistem pre-order. Lihat menu dan pesan dengan mudah secara online.",
+    images: [
+      {
+        url: "/images/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Nook by Jina — Sajian Makanan Homemade & Pre-order",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Nook by Jina | Pesan Makanan Favoritmu",
+    description:
+      "Nook by Jina menyediakan pilihan makanan dan minuman dengan sistem pre-order. Lihat menu dan pesan dengan mudah secara online.",
+    images: ["/images/og-image.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
   },
 };
 
@@ -55,14 +81,21 @@ export const viewport: Viewport = {
   themeColor: "#F6F6F7",
 };
 
-
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const rootJsonLd = getRootJsonLd();
+
   return (
     <html lang="id" className={`${plusJakartaSans.variable} h-full`}>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(rootJsonLd) }}
+        />
+      </head>
       <body className="min-h-full flex flex-col bg-[#F6F6F7] text-[#111111] font-sans antialiased">
         <AppProvider>{children}</AppProvider>
         <Analytics />

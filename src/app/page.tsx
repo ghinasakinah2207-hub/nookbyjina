@@ -1,10 +1,20 @@
 import React, { Suspense } from "react";
+import type { Metadata } from "next";
 import Image from "next/image";
 import { getStoreSettings } from "@/lib/supabase/store-settings";
 import { LandingOrderCta } from "@/components/home/LandingOrderCta";
 import { WelcomeIntroAnimation } from "@/components/home/WelcomeIntroAnimation";
 
 export const instant = false;
+
+export const metadata: Metadata = {
+  title: "Nook by Jina | Pesan Makanan Favoritmu",
+  description:
+    "Nook by Jina menyediakan pilihan makanan dan minuman dengan sistem pre-order. Lihat menu dan pesan dengan mudah secara online.",
+  alternates: {
+    canonical: "https://nookbyjina.my.id",
+  },
+};
 
 async function DynamicLandingOrderCta() {
   const settings = await getStoreSettings();

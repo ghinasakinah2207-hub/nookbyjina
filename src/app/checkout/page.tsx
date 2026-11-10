@@ -1,9 +1,19 @@
 import React, { Suspense } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Store } from "lucide-react";
 import { getStoreSettings } from "@/lib/supabase/store-settings";
 import CheckoutClient from "@/components/checkout/CheckoutClient";
+
 export const instant = false;
+
+export const metadata: Metadata = {
+  title: "Checkout Pesanan",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default async function CheckoutPage() {
   const storeSettings = await getStoreSettings();

@@ -1,4 +1,5 @@
 import React from "react";
+import type { Metadata } from "next";
 import { getStoreSettings } from "@/lib/supabase/store-settings";
 import { getPublicHomeBanners } from "@/lib/supabase/banners";
 import {
@@ -11,6 +12,21 @@ import { StoreClosedView } from "@/components/home/StoreClosedView";
 import ShoppingHomeClient from "@/components/home/ShoppingHomeClient";
 
 export const instant = false;
+
+export const metadata: Metadata = {
+  title: "Katalog Menu & Rekomendasi Makanan",
+  description:
+    "Jelajahi aneka menu pilihan Nook by Jina di Lhoksukon. Nasi bakar, risol mayo lumer, dimsum mentai, hingga aneka minuman segar siap pesan online.",
+  alternates: {
+    canonical: "https://nookbyjina.my.id/home",
+  },
+  openGraph: {
+    title: "Katalog Menu & Rekomendasi Makanan | Nook by Jina",
+    description:
+      "Jelajahi aneka menu pilihan Nook by Jina di Lhoksukon. Nasi bakar, risol mayo lumer, dimsum mentai, hingga aneka minuman segar siap pesan online.",
+    url: "https://nookbyjina.my.id/home",
+  },
+};
 
 export default async function ShoppingHomePage() {
   const [storeSettings, banners, rawSections, catalogProducts, categories] =
