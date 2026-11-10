@@ -17,6 +17,7 @@ export async function POST(request: Request) {
       customerWhatsapp,
       fulfillmentType,
       deliveryArea,
+      deliveryAddress,
       items,
       orderNote,
       paymentMethod,
@@ -459,6 +460,12 @@ export async function POST(request: Request) {
         targetFulfillment === "pickup"
           ? "Pickup Toko (Lhoksukon)"
           : targetArea,
+      deliveryAddress:
+        targetFulfillment === "pickup"
+          ? ""
+          : typeof deliveryAddress === "string"
+          ? deliveryAddress.slice(0, 300).trim()
+          : "",
       orderNote: (orderNote || "").slice(0, 200).trim(),
       items: validatedItems,
       subtotal: authoritativeSubtotal,
@@ -467,7 +474,7 @@ export async function POST(request: Request) {
       orderStatus: "Pesanan baru",
       paymentStatus: "Menunggu Pembayaran",
       paymentMethod: canonicalMethod,
-      paymentDeadline: isCashOrder ? "" : deadline.toISOString(),
+      paymentDeadline: isCashOrder ? null : deadline.toISOString(),
       merchantName: storeSettings.qrisMerchantName || "Nook by Jina",
     };
 
@@ -579,7 +586,9 @@ export async function POST(request: Request) {
       err instanceof Error
         ? err.message
         : "Terjadi kesalahan saat memvalidasi dan membuat pesanan.";
-    console.error("[POST /api/orders] Order creation failed:", message);
+    console.error("[POST /api/orders] Order creation failed:", {
+      error: message,
+    });
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

@@ -341,7 +341,7 @@ export function OrderProvider({
       orderStatus: "Pesanan baru",
       paymentStatus: isCash ? "Menunggu Pembayaran" : "Menunggu Verifikasi",
       paymentMethod: isCash ? "Cash" : "QRIS Statis",
-      paymentDeadline: isCash ? "" : deadline.toISOString(),
+      paymentDeadline: isCash ? null : deadline.toISOString(),
       merchantName: STORE_SETTINGS.qrisMerchantName,
       serverConfirmed: false,
       syncStatus: "pending",

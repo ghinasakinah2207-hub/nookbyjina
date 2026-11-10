@@ -127,6 +127,7 @@ export interface Order {
   customerWhatsapp: string;
   fulfillmentType: FulfillmentType;
   deliveryArea: string;
+  deliveryAddress?: string;
   orderNote: string;
   items: CartItem[];
   subtotal: number;
@@ -135,7 +136,7 @@ export interface Order {
   orderStatus: OrderStatus;
   paymentStatus: PaymentStatus;
   paymentMethod: PaymentMethod;
-  paymentDeadline: string; // ISO 8601
+  paymentDeadline: string | null; // ISO 8601 for QRIS expiration, or null for Cash orders
   merchantName: string;
   gatewayProvider?: GatewayProvider;
   waroengpayInvoiceId?: string;

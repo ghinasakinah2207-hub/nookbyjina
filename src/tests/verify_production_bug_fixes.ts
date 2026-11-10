@@ -44,7 +44,6 @@ async function runBugFixRegressionTests() {
   // 1.1 Direct saveOrder call with Cash order
   const now = new Date();
   const dummyToken = "tok_test_sec_token_0123456789abcdef";
-  const cashDeadline = new Date(now.getTime() + 30 * 60 * 1000).toISOString();
 
   const cashOrderPayload: Order = {
     id: `TJ-${now.getFullYear().toString().slice(-2)}${(now.getMonth() + 1).toString().padStart(2, "0")}${now.getDate().toString().padStart(2, "0")}-888`,
@@ -62,44 +61,39 @@ async function runBugFixRegressionTests() {
     orderStatus: "Pesanan baru",
     paymentStatus: "Menunggu Pembayaran",
     paymentMethod: "Cash",
-    paymentDeadline: cashDeadline,
+    paymentDeadline: null,
     merchantName: "Nook by Jina",
   };
 
   const savedCash = await saveOrder(cashOrderPayload);
   assert(
-    typeof savedCash.paymentDeadline === "string" && savedCash.paymentDeadline.length > 0,
-    "Cash order has a non-empty paymentDeadline"
-  );
-  assert(
-    !isNaN(Date.parse(savedCash.paymentDeadline)),
-    "Cash order paymentDeadline is a valid ISO 8601 timestamp"
-  );
-  const diffMinutes = Math.round(
-    (new Date(savedCash.paymentDeadline).getTime() - new Date(savedCash.createdAt).getTime()) / (60 * 1000)
-  );
-  assert(
-    diffMinutes === 30,
-    `Cash order paymentDeadline is exactly 30 minutes from createdAt (diff: ${diffMinutes}m)`
+    savedCash.paymentDeadline === null || savedCash.paymentDeadline === "",
+    "Cash order stores NULL / empty paymentDeadline (payment expiration does not apply to Cash)"
   );
   assert(
     savedCash.paymentMethod === "Cash" && savedCash.paymentStatus === "Menunggu Pembayaran",
     "Cash order maintains correct payment method and initial status"
   );
 
-  // 1.2 Direct saveOrder call with missing/empty paymentDeadline fallback protection
-  const fallbackToken = "tok_test_fallback_0123456789abcdef";
-  const emptyDeadlineOrder: Order = {
+  // 1.2 Direct saveOrder call with QRIS order ensuring valid paymentDeadline
+  const qrisToken = "tok_test_qris_token_0123456789abcdef";
+  const qrisDeadline = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
+  const qrisOrderPayload: Order = {
     ...cashOrderPayload,
     id: `TJ-${now.getFullYear().toString().slice(-2)}${(now.getMonth() + 1).toString().padStart(2, "0")}${now.getDate().toString().padStart(2, "0")}-889`,
-    token: fallbackToken,
-    paymentDeadline: "", // deliberately empty to test fallback
+    token: qrisToken,
+    paymentMethod: "QRIS",
+    paymentDeadline: qrisDeadline,
   };
 
-  const savedFallback = await saveOrder(emptyDeadlineOrder);
+  const savedQris = await saveOrder(qrisOrderPayload);
   assert(
-    typeof savedFallback.paymentDeadline === "string",
-    "saveOrder fallback handles empty deadline safely"
+    typeof savedQris.paymentDeadline === "string" && savedQris.paymentDeadline.length > 0,
+    "QRIS order maintains valid non-empty paymentDeadline"
+  );
+  assert(
+    !isNaN(Date.parse(savedQris.paymentDeadline!)),
+    "QRIS order paymentDeadline is a valid ISO 8601 timestamp"
   );
 
   // ============================================================================

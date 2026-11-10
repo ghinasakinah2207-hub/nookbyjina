@@ -262,6 +262,12 @@ export function normalizeOrder(order: unknown, productTypeMap?: Map<string, Prod
     subtotal: rawSubtotal,
     shippingFee: rawShipping,
     total: finalTotal,
+    paymentDeadline:
+      o.paymentDeadline !== undefined && o.paymentDeadline !== null && o.paymentDeadline !== ""
+        ? String(o.paymentDeadline)
+        : o.payment_deadline
+        ? String(o.payment_deadline)
+        : null,
     merchantName: String(o.merchantName || o.merchant_name || "Nook by Jina"),
     gatewayProvider: rawGatewayProvider || undefined,
     paymentUrl: rawPaymentUrl || undefined,
