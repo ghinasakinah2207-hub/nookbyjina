@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   MoreHorizontal,
   ChevronRight,
+  Wallet,
 } from "lucide-react";
 import { logoutAction } from "@/app/admin/actions";
 import { supabase } from "@/lib/supabase/client";
@@ -38,7 +39,7 @@ interface NavItem {
   badgeColor?: string;
 }
 
-const NAV_ITEMS: NavItem[] = [
+const OPERATIONAL_NAV: NavItem[] = [
   {
     name: "Dashboard",
     href: "/admin",
@@ -63,16 +64,35 @@ const NAV_ITEMS: NavItem[] = [
     badge: "Etalase",
     badgeColor: "bg-blue-100 text-blue-700",
   },
+];
+
+const FINANCE_NAV: NavItem[] = [
   {
     name: "Laporan Penjualan",
     href: "/admin/laporan",
     icon: BarChart3,
   },
   {
+    name: "Saldo WaroengPay",
+    href: "/admin/keuangan/saldo",
+    icon: Wallet,
+    badge: "QRIS",
+    badgeColor: "bg-emerald-100 text-[#18794E]",
+  },
+];
+
+const SETTINGS_NAV: NavItem[] = [
+  {
     name: "Pengaturan Toko",
     href: "/admin/pengaturan",
     icon: Settings,
   },
+];
+
+export const NAV_ITEMS: NavItem[] = [
+  ...OPERATIONAL_NAV,
+  ...FINANCE_NAV,
+  ...SETTINGS_NAV,
 ];
 
 interface RouteHeaderConfig {
@@ -105,6 +125,18 @@ const ROUTE_CONFIG: Record<string, RouteHeaderConfig> = {
     badge: "Keuangan",
     description:
       "Ringkasan omzet, estimasi laba kotor, dan analitik produk terlaris",
+  },
+  "/admin/keuangan/saldo": {
+    title: "Saldo WaroengPay",
+    badge: "Keuangan",
+    description:
+      "Monitoring saldo akun merchant, dana tertahan, dan status pencairan WaroengPay",
+  },
+  "/admin/saldo": {
+    title: "Saldo WaroengPay",
+    badge: "Keuangan",
+    description:
+      "Monitoring saldo akun merchant, dana tertahan, dan status pencairan WaroengPay",
   },
   "/admin/pengaturan": {
     title: "Pengaturan Toko",
@@ -229,6 +261,8 @@ export function AdminShell({
     moreSheetOpen ||
     pathname.startsWith("/admin/beranda") ||
     pathname.startsWith("/admin/laporan") ||
+    pathname.startsWith("/admin/keuangan") ||
+    pathname.startsWith("/admin/saldo") ||
     pathname.startsWith("/admin/pengaturan");
 
   return (
@@ -265,12 +299,13 @@ export function AdminShell({
 
         {/* Navigation Section */}
         <div className="flex-1 px-3 py-4 space-y-6 overflow-y-auto">
+          {/* Menu Operasional */}
           <div>
             <div className="px-3 pb-2 text-[10px] font-semibold text-[#737373] uppercase tracking-wider">
               Menu Operasional
             </div>
             <nav className="space-y-1">
-              {NAV_ITEMS.slice(0, 5).map((item) => {
+              {OPERATIONAL_NAV.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.href);
                 return (
@@ -302,12 +337,51 @@ export function AdminShell({
             </nav>
           </div>
 
+          {/* Keuangan */}
           <div>
             <div className="px-3 pb-2 text-[10px] font-semibold text-[#737373] uppercase tracking-wider">
-              Analitik & Pengaturan
+              Keuangan
             </div>
             <nav className="space-y-1">
-              {NAV_ITEMS.slice(5).map((item) => {
+              {FINANCE_NAV.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                      active
+                        ? "bg-[#111111] text-white"
+                        : "text-[#737373] hover:text-[#111111] hover:bg-neutral-100"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Icon className={`w-4 h-4 ${active ? "text-white" : "text-[#737373]"}`} />
+                      <span>{item.name}</span>
+                    </div>
+                    {item.badge && !active && (
+                      <span
+                        className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-md ${
+                          item.badgeColor || "bg-neutral-100 text-[#737373]"
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* Pengaturan */}
+          <div>
+            <div className="px-3 pb-2 text-[10px] font-semibold text-[#737373] uppercase tracking-wider">
+              Pengaturan
+            </div>
+            <nav className="space-y-1">
+              {SETTINGS_NAV.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.href);
                 return (
@@ -644,6 +718,41 @@ export function AdminShell({
                     <span className="text-xs font-semibold block leading-tight">Laporan Penjualan</span>
                     <span className="text-[10px] text-[#737373] block mt-0.5">
                       Ringkasan omzet, laba kotor & analitik
+                    </span>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-[#737373]" />
+              </Link>
+
+              {/* Saldo WaroengPay (Keuangan) */}
+              <Link
+                href="/admin/keuangan/saldo"
+                onClick={() => setMoreSheetOpen(false)}
+                className={`flex items-center justify-between p-3 rounded-xl transition-colors ${
+                  pathname.startsWith("/admin/keuangan") || pathname.startsWith("/admin/saldo")
+                    ? "bg-orange-50 text-[#F25B09] font-medium border border-orange-200"
+                    : "bg-neutral-50 hover:bg-neutral-100 text-[#111111] border border-transparent"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                      pathname.startsWith("/admin/keuangan") || pathname.startsWith("/admin/saldo")
+                        ? "bg-orange-100 text-[#F25B09]"
+                        : "bg-white text-[#737373] border border-[#E5E5E5]"
+                    }`}
+                  >
+                    <Wallet className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-semibold block leading-tight">Saldo WaroengPay</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-[#18794E]">
+                        Keuangan
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-[#737373] block mt-0.5">
+                      Monitoring saldo akun QRIS & dana pencairan
                     </span>
                   </div>
                 </div>

@@ -289,3 +289,119 @@ export function verifyWaroengPayWebhookSignature(
     return false;
   }
 }
+
+export interface WaroengPayUpcomingRelease {
+  at: string;
+  amount: number;
+  count: number;
+}
+
+export interface WaroengPayPendingWithdrawals {
+  count: number;
+  amount: number;
+}
+
+export interface WaroengPayBalanceResponse {
+  currency?: string;
+  available: number;
+  held: number;
+  in_process: number;
+  withdrawn: number;
+  gross: number;
+  fee: number;
+  platform_fee: number;
+  adjustments: number;
+  min_withdraw: number;
+  pending_withdrawals: WaroengPayPendingWithdrawals;
+  next_release_at: string | null;
+  upcoming: WaroengPayUpcomingRelease[];
+  server_time: string;
+  total_received?: number;
+  settled?: number;
+}
+
+/**
+ * Retrieves merchant account balance from WaroengPay via GET /api/balance.
+ * Strictly server-side only. Never logs or leaks API keys.
+ * Timeout configured to 12 seconds with AbortSignal.
+ */
+export async function getWaroengPayBalance(): Promise<WaroengPayBalanceResponse> {
+  const config = getWaroengPayConfig();
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+  try {
+    const res = await fetch(`${config.baseUrl}/api/balance`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        Accept: "application/json",
+      },
+      signal: controller.signal,
+      cache: "no-store",
+    });
+
+    const responseJson = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      const errorMsg =
+        responseJson?.error ||
+        `WaroengPay API Error (${res.status} ${res.statusText})`;
+      const errorCode = responseJson?.code || "balance_error";
+      throw new Error(`[${errorCode}] ${errorMsg}`);
+    }
+
+    if (
+      !responseJson ||
+      typeof responseJson !== "object" ||
+      typeof responseJson.available !== "number"
+    ) {
+      throw new Error("Format respons saldo WaroengPay tidak valid.");
+    }
+
+    // Normalize and ensure all required fields are strictly typed
+    const balance: WaroengPayBalanceResponse = {
+      currency: responseJson.currency || "IDR",
+      available: Number(responseJson.available) || 0,
+      held: Number(responseJson.held) || 0,
+      in_process: Number(responseJson.in_process) || 0,
+      withdrawn: Number(responseJson.withdrawn) || 0,
+      gross: Number(responseJson.gross) || 0,
+      fee: Number(responseJson.fee) || 0,
+      platform_fee: Number(responseJson.platform_fee) || 0,
+      adjustments: Number(responseJson.adjustments) || 0,
+      min_withdraw: Number(responseJson.min_withdraw) || 0,
+      pending_withdrawals: {
+        count: Number(responseJson.pending_withdrawals?.count) || 0,
+        amount: Number(responseJson.pending_withdrawals?.amount) || 0,
+      },
+      next_release_at: responseJson.next_release_at || null,
+      upcoming: Array.isArray(responseJson.upcoming)
+        ? responseJson.upcoming.map((u: Record<string, unknown>) => ({
+            at: String(u?.at || ""),
+            amount: Number(u?.amount) || 0,
+            count: Number(u?.count) || 0,
+          }))
+        : [],
+      server_time: responseJson.server_time || new Date().toISOString(),
+      total_received:
+        typeof responseJson.total_received === "number"
+          ? responseJson.total_received
+          : undefined,
+      settled:
+        typeof responseJson.settled === "number"
+          ? responseJson.settled
+          : undefined,
+    };
+
+    return balance;
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("Permintaan ke server WaroengPay melebihi batas waktu (timeout 12s).");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
