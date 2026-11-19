@@ -15,9 +15,6 @@ import {
   RotateCcw,
   CreditCard,
   Banknote,
-  Upload,
-  Trash2,
-  Image as ImageIcon,
   Mail,
   Bell,
 } from "lucide-react";
@@ -31,7 +28,6 @@ import { InstagramIcon } from "@/components/ui/InstagramIcon";
 import {
   saveStoreSettingsAction,
   toggleStoreStatusAction,
-  uploadQrisImageAction,
 } from "@/app/admin/pengaturan/actions";
 
 interface SettingsManagerProps {
@@ -57,12 +53,6 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
   // Status toggle confirmation modal state
   const [showCloseModal, setShowCloseModal] = useState(false);
 
-  // QRIS Image upload and delete states
-  const [isUploadingQris, setIsUploadingQris] = useState(false);
-  const [qrisUploadFeedback, setQrisUploadFeedback] = useState<string | null>(null);
-  const [showDeleteQrisModal, setShowDeleteQrisModal] = useState(false);
-  const qrisFileInputRef = React.useRef<HTMLInputElement>(null);
-
   // Async transitions and notifications
   const [isPending, startTransition] = useTransition();
   const [isSaving, setIsSaving] = useState(false);
@@ -87,9 +77,6 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
     formState.adminWhatsapp !== confirmedSettings.adminWhatsapp ||
     (formState.instagramUrl || "").trim() !== (confirmedSettings.instagramUrl || "").trim() ||
     (formState.supportEmail || "").trim() !== (confirmedSettings.supportEmail || "").trim() ||
-    formState.qrisMerchantName !== confirmedSettings.qrisMerchantName ||
-    formState.qrisNmid !== confirmedSettings.qrisNmid ||
-    (formState.qrisImageUrl || "").trim() !== (confirmedSettings.qrisImageUrl || "").trim() ||
     formState.paymentMethods?.qris !== confirmedSettings.paymentMethods?.qris ||
     formState.paymentMethods?.cash !== confirmedSettings.paymentMethods?.cash ||
     formState.deliveryConfig.configuredArea !== confirmedSettings.deliveryConfig.configuredArea ||
@@ -249,73 +236,6 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
       String(confirmedSettings.deliveryConfig.freeShippingThreshold)
     );
     setErrorMessage(null);
-    setQrisUploadFeedback(null);
-  };
-
-  // QRIS File selection and upload handler
-  const handleQrisFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Reset input value so re-selecting same file triggers change
-    e.target.value = "";
-
-    // 1. Client-side size check (max 5 MB)
-    const MAX_SIZE = 5 * 1024 * 1024;
-    if (file.size > MAX_SIZE) {
-      setErrorMessage(
-        `Ukuran file terlalu besar (${(file.size / (1024 * 1024)).toFixed(1)} MB). Batas maksimal adalah 5 MB.`
-      );
-      return;
-    }
-
-    // 2. Client-side MIME check
-    const validMimes = ["image/jpeg", "image/png", "image/webp"];
-    if (!validMimes.includes(file.type)) {
-      setErrorMessage(
-        "Format file tidak didukung. Harap gunakan format JPG, PNG, atau WebP."
-      );
-      return;
-    }
-
-    setIsUploadingQris(true);
-    setErrorMessage(null);
-    setQrisUploadFeedback(null);
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      if (formState.qrisImageUrl) {
-        formData.append("previousUrl", formState.qrisImageUrl);
-      }
-
-      const result = await uploadQrisImageAction(formData);
-      if (result.success && result.url) {
-        setFormState((prev) => ({ ...prev, qrisImageUrl: result.url }));
-        setQrisUploadFeedback(
-          "Foto QRIS berhasil diunggah ke Supabase Storage! Klik 'Simpan Pengaturan' di bawah untuk menerapkan perubahan ke halaman pembayaran pelanggan."
-        );
-      } else {
-        setErrorMessage(result.error || "Gagal mengunggah foto QRIS.");
-      }
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : "Terjadi kesalahan saat mengunggah foto QRIS.";
-      setErrorMessage(msg);
-    } finally {
-      setIsUploadingQris(false);
-    }
-  };
-
-  // Confirm delete / remove QRIS image
-  const handleConfirmDeleteQris = () => {
-    setFormState((prev) => ({ ...prev, qrisImageUrl: "" }));
-    setShowDeleteQrisModal(false);
-    setQrisUploadFeedback(
-      "Foto QRIS telah dihapus dari formulir. Klik 'Simpan Pengaturan' di bawah untuk menerapkan perubahan."
-    );
   };
 
   // Immediate toggle handler for Store Open/Close Segmented Control
@@ -897,208 +817,6 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
         </div>
 
         {/* =========================================================================
-            GROUP 4: PENGATURAN QRIS MERCHANT
-            ========================================================================= */}
-        <div className="bg-white border border-[#E5E5E5] rounded-2xl p-5 sm:p-6 space-y-5 shadow-xs">
-          <div className="flex items-center gap-3 pb-3 border-b border-neutral-100">
-            <div className="w-9 h-9 rounded-xl bg-amber-50 text-[#8A4B08] flex items-center justify-center flex-shrink-0">
-              <QrCode className="w-4.5 h-4.5" />
-            </div>
-            <div>
-              <h3 className="text-xs sm:text-sm font-bold text-[#111111]">
-                Informasi QRIS Statis Merchant
-              </h3>
-              <p className="text-[11px] text-[#737373]">
-                Konfigurasi nama merchant, NMID, dan foto QRIS resmi toko untuk halaman pembayaran pelanggan
-              </p>
-            </div>
-          </div>
-
-          {/* Feedback banner for QRIS upload */}
-          {qrisUploadFeedback && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-[#18794E] flex items-start justify-between gap-2.5 animate-landing-fade">
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <span className="text-[11px] font-medium leading-relaxed">
-                  {qrisUploadFeedback}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setQrisUploadFeedback(null)}
-                className="text-emerald-500 hover:text-emerald-700 p-0.5"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div>
-              <label className="block font-semibold text-[#111111] mb-1.5">
-                Nama Merchant QRIS
-              </label>
-              <input
-                type="text"
-                value={formState.qrisMerchantName}
-                onChange={(e) =>
-                  setFormState({
-                    ...formState,
-                    qrisMerchantName: e.target.value,
-                  })
-                }
-                className="w-full px-3.5 py-2.5 bg-white border border-[#E5E5E5] rounded-xl text-xs text-[#111111] focus:border-[#111111] focus:ring-1 focus:ring-[#111111] outline-none transition-colors"
-                placeholder="Nook by Jina"
-              />
-              <p className="text-[10px] text-[#737373] mt-1">
-                Nama yang harus diverifikasi pelanggan saat memindai QR code.
-              </p>
-            </div>
-
-            <div>
-              <label className="block font-semibold text-[#111111] mb-1.5">
-                NMID Merchant
-              </label>
-              <input
-                type="text"
-                value={formState.qrisNmid}
-                onChange={(e) =>
-                  setFormState({ ...formState, qrisNmid: e.target.value })
-                }
-                className="w-full px-3.5 py-2.5 bg-white border border-[#E5E5E5] rounded-xl text-xs font-mono text-[#111111] focus:border-[#111111] focus:ring-1 focus:ring-[#111111] outline-none transition-colors"
-                placeholder="ID1020021111111"
-              />
-              <p className="text-[10px] text-[#737373] mt-1">
-                Nomor identifikasi merchant nasional resmi.
-              </p>
-            </div>
-          </div>
-
-          {/* Static QRIS Image Upload & Preview Section */}
-          <div className="pt-3 border-t border-neutral-100 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-              <label className="block font-semibold text-[#111111] text-xs">
-                Foto QRIS Statis Toko
-              </label>
-              <span className="text-[11px] text-[#737373]">
-                Maksimal 5 MB • Format: JPG, PNG, WebP
-              </span>
-            </div>
-
-            <p className="text-[11px] text-[#737373] leading-relaxed">
-              Unggah foto kode QRIS statis resmi toko Anda. Pastikan gambar jelas, tidak buram, dan seluruh pola kotak (finder pattern) terlihat utuh tanpa terpotong agar pelanggan dapat memindai dengan akurat.
-            </p>
-
-            {/* Hidden native file input */}
-            <input
-              ref={qrisFileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={handleQrisFileChange}
-              disabled={isUploadingQris}
-              className="hidden"
-            />
-
-            {/* Image Preview or Upload Dropzone */}
-            {formState.qrisImageUrl ? (
-              <div className="p-4 bg-neutral-50 border border-[#E5E5E5] rounded-2xl flex flex-col sm:flex-row items-center sm:items-start gap-4">
-                {/* QR Preview Frame */}
-                <div className="relative w-44 h-44 sm:w-48 sm:h-48 bg-white border border-[#E5E5E5] rounded-xl p-2.5 flex items-center justify-center flex-shrink-0 shadow-xs">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={formState.qrisImageUrl}
-                    alt="Foto QRIS Merchant"
-                    className="w-full h-full object-contain"
-                  />
-                  {isUploadingQris && (
-                    <div className="absolute inset-0 bg-white/80 backdrop-blur-xs flex flex-col items-center justify-center gap-1.5 rounded-xl">
-                      <Loader2 className="w-5 h-5 text-[#111111] animate-spin" />
-                      <span className="text-[10px] font-semibold text-[#111111]">
-                        Mengunggah...
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* QR Details and Actions */}
-                <div className="flex-1 space-y-3 text-center sm:text-left">
-                  <div className="space-y-1">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-[#18794E] rounded-full text-[10px] font-bold">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>QRIS Terkonfigurasi</span>
-                    </div>
-                    <p className="text-xs font-bold text-[#111111]">
-                      {formState.qrisMerchantName || "Merchant QRIS"}
-                    </p>
-                    <p className="text-[11px] font-mono text-[#737373]">
-                      NMID: {formState.qrisNmid || "-"}
-                    </p>
-                    <p className="text-[10px] text-[#737373] truncate max-w-xs sm:max-w-md">
-                      File: {formState.qrisImageUrl}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => qrisFileInputRef.current?.click()}
-                      disabled={isUploadingQris}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-neutral-50 border border-[#E5E5E5] text-[#111111] rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Ganti Foto QRIS</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowDeleteQrisModal(true)}
-                      disabled={isUploadingQris}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-red-50 hover:bg-red-100 text-[#B42318] border border-red-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Hapus Foto</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="p-6 bg-neutral-50 border border-dashed border-[#CCCCCC] rounded-2xl text-center space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-white border border-[#E5E5E5] text-[#737373] flex items-center justify-center mx-auto shadow-xs">
-                  <ImageIcon className="w-6 h-6 text-[#737373]" />
-                </div>
-                <div className="space-y-1 max-w-sm mx-auto">
-                  <p className="text-xs font-bold text-[#111111]">
-                    Belum Ada Foto QRIS
-                  </p>
-                  <p className="text-[11px] text-[#737373] leading-relaxed">
-                    Unggah kode QRIS toko agar pelanggan dapat melakukan pembayaran non-tunai melalui QRIS.
-                  </p>
-                </div>
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => qrisFileInputRef.current?.click()}
-                    disabled={isUploadingQris}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#111111] hover:bg-neutral-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 shadow-xs"
-                  >
-                    {isUploadingQris ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Mengunggah...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Upload Foto QRIS</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* =========================================================================
             GROUP 4: DELIVERY & ONGKOS KIRIM
             ========================================================================= */}
         <div className="bg-white border border-[#E5E5E5] rounded-2xl p-5 sm:p-6 space-y-4 shadow-xs">
@@ -1320,47 +1038,6 @@ export function SettingsManager({ initialSettings }: SettingsManagerProps) {
                 className="px-4 py-2 rounded-xl bg-[#B42318] hover:bg-red-700 text-white text-xs font-bold transition-colors cursor-pointer"
               >
                 Ya, Tutup Toko
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Confirmation Modal before Removing QRIS Image */}
-      {showDeleteQrisModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-landing-fade">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-[#E5E5E5] space-y-4">
-            <div className="flex items-start gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-red-50 text-[#B42318] flex items-center justify-center flex-shrink-0">
-                <Trash2 className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h4 className="text-sm font-bold text-[#111111]">
-                  Hapus Foto QRIS Merchant?
-                </h4>
-                <p className="text-xs text-[#737373] leading-relaxed">
-                  Apakah Anda yakin ingin menghapus foto kode QRIS yang tersimpan? Jika dihapus, pelanggan di halaman checkout & pembayaran QRIS tidak akan melihat kode QR untuk dipindai sampai Anda mengunggah foto baru.
-                </p>
-                <p className="text-[11px] text-[#737373] pt-1">
-                  Nama merchant dan NMID akan tetap tersimpan.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-neutral-100">
-              <button
-                type="button"
-                onClick={() => setShowDeleteQrisModal(false)}
-                className="px-4 py-2 rounded-xl border border-[#E5E5E5] text-xs font-semibold text-[#111111] hover:bg-neutral-50 transition-colors cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDeleteQris}
-                className="px-4 py-2 rounded-xl bg-[#B42318] hover:bg-red-700 text-white text-xs font-bold transition-colors cursor-pointer"
-              >
-                Ya, Hapus Foto
               </button>
             </div>
           </div>

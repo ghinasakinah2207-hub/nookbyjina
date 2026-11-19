@@ -142,7 +142,7 @@ const ROUTE_CONFIG: Record<string, RouteHeaderConfig> = {
     title: "Pengaturan Toko",
     badge: "Pengaturan",
     description:
-      "Konfigurasi status toko, jam operasional, kontak WhatsApp, QRIS, dan tarif ongkir",
+      "Konfigurasi status toko, jam operasional, kontak WhatsApp, metode pembayaran, dan tarif ongkir",
   },
 };
 
