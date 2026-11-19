@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   Search,
   CheckCircle2,
@@ -38,25 +38,89 @@ interface OrdersManagerProps {
 
 export function OrdersManager({ initialOrders }: OrdersManagerProps = {}) {
   const { orders, updateOrderStatus, fetchOrders } = useAdminOrders({ initialOrders });
+  const router = useRouter();
   const searchParams = useSearchParams();
   const orderIdParam = searchParams.get("orderId");
   const [activeTab, setActiveTab] = useState<FilterTab>("semua");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
+  // Track processed and dismissed orderId parameters to prevent repetitive popups
+  const processedOrderIdRef = useRef<string | null>(null);
+  const dismissedOrderIdRef = useRef<string | null>(null);
+
+  // Centralized handler to close the order detail modal and purge ?orderId from URL
+  const handleCloseModal = useCallback(() => {
+    setSelectedOrder(null);
+    if (orderIdParam) {
+      dismissedOrderIdRef.current = orderIdParam;
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has("orderId")) {
+          url.searchParams.delete("orderId");
+          const newUrl = url.pathname + (url.search ? url.search : "");
+          window.history.replaceState({}, "", newUrl);
+          router.replace(newUrl, { scroll: false });
+        }
+      } catch {
+        // Fallback silent catch
+      }
+    }
+  }, [orderIdParam, router]);
+
   // Auto-select and display order modal if orderId is provided in URL params
   useEffect(() => {
     if (!orderIdParam || orders.length === 0) return;
+
+    // If already dismissed by user or already opened for this param, do not re-open
+    if (
+      dismissedOrderIdRef.current === orderIdParam ||
+      processedOrderIdRef.current === orderIdParam
+    ) {
+      return;
+    }
+
     const found = orders.find(
       (o) => o.id === orderIdParam || o.uuid === orderIdParam
     );
     if (found) {
+      processedOrderIdRef.current = orderIdParam;
       const timer = setTimeout(() => {
-        setSelectedOrder((prev) => (prev?.id === found.id ? prev : found));
+        setSelectedOrder(found);
       }, 0);
       return () => clearTimeout(timer);
     }
   }, [orderIdParam, orders]);
+
+  // Keep selectedOrder in sync with background order updates only if currently open
+  useEffect(() => {
+    if (!selectedOrder) return;
+    const updated = orders.find(
+      (o) => o.id === selectedOrder.id || o.uuid === selectedOrder.uuid
+    );
+    if (
+      updated &&
+      (updated.orderStatus !== selectedOrder.orderStatus ||
+        updated.paymentStatus !== selectedOrder.paymentStatus)
+    ) {
+      const timer = setTimeout(() => {
+        setSelectedOrder(updated);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [orders, selectedOrder]);
+
+  // Close modal on Escape key press
+  useEffect(() => {
+    if (!selectedOrder) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        handleCloseModal();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedOrder, handleCloseModal]);
 
 
   // Instantly refresh orders when a real-time new order event is detected
@@ -908,8 +972,14 @@ export function OrdersManager({ initialOrders }: OrdersManagerProps = {}) {
           ORDER DETAIL DRAWER / MODAL & PRINT CONTAINER
           ========================================================================= */}
       {selectedOrder && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-landing-fade print-modal-overlay">
-          <div className="bg-white border border-[#E5E5E5] rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-5 sm:p-6 space-y-4 print-modal-container">
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-landing-fade print-modal-overlay"
+          onClick={handleCloseModal}
+        >
+          <div
+            className="bg-white border border-[#E5E5E5] rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-5 sm:p-6 space-y-4 print-modal-container"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Interactive Screen-Only Modal Content */}
             <div className="space-y-3 print-hide">
               <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
@@ -921,7 +991,7 @@ export function OrdersManager({ initialOrders }: OrdersManagerProps = {}) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSelectedOrder(null)}
+                  onClick={handleCloseModal}
                   className="p-1.5 rounded-lg text-[#737373] hover:text-[#111111] hover:bg-neutral-100 transition-colors cursor-pointer"
                   aria-label="Tutup modal"
                 >
@@ -1079,7 +1149,7 @@ export function OrdersManager({ initialOrders }: OrdersManagerProps = {}) {
               <div className="flex justify-end pt-1">
                 <button
                   type="button"
-                  onClick={() => setSelectedOrder(null)}
+                  onClick={handleCloseModal}
                   className="px-4 py-2 border border-[#E5E5E5] bg-white hover:bg-neutral-100 text-[#111111] rounded-xl text-xs font-semibold cursor-pointer transition-colors"
                 >
                   Tutup

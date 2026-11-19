@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -14,6 +14,8 @@ import {
   CreditCard,
   Banknote,
   Clock,
+  X,
+  ArrowRight,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { useCart } from "@/context/CartContext";
@@ -89,6 +91,65 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
     customerName?: string;
     customerWhatsapp?: string;
   }>({});
+
+  // Floating top notification state for mobile & desktop visibility
+  const [notificationToast, setNotificationToast] = useState<{
+    id: number;
+    title: string;
+    message: string;
+    isExiting?: boolean;
+  } | null>(null);
+
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const exitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const dismissNotificationToast = useCallback(() => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setNotificationToast((prev) => (prev ? { ...prev, isExiting: true } : null));
+    if (exitTimeoutRef.current) clearTimeout(exitTimeoutRef.current);
+    exitTimeoutRef.current = setTimeout(() => {
+      setNotificationToast(null);
+    }, 250);
+  }, []);
+
+  const showNotificationToast = useCallback(
+    (title: string, message: string) => {
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+      if (exitTimeoutRef.current) clearTimeout(exitTimeoutRef.current);
+
+      setNotificationToast({
+        id: Date.now(),
+        title,
+        message,
+        isExiting: false,
+      });
+
+      toastTimeoutRef.current = setTimeout(() => {
+        dismissNotificationToast();
+      }, 5000);
+    },
+    [dismissNotificationToast]
+  );
+
+  const handleToastClick = useCallback(() => {
+    const nameMissing = !customerName.trim() || customerName.trim().length < 2;
+    const targetId = nameMissing ? "customerNameInput" : "customerWhatsappInput";
+    const targetElement = document.getElementById(targetId);
+    if (targetElement) {
+      targetElement.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => {
+        targetElement.focus();
+      }, 250);
+    }
+  }, [customerName]);
+
+  // Clean up notification toast timers on unmount
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+      if (exitTimeoutRef.current) clearTimeout(exitTimeoutRef.current);
+    };
+  }, []);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = React.useRef(false);
@@ -246,19 +307,25 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
     if (isSubmittingRef.current || isSubmitting) return;
 
     if (selectedItems.length === 0) {
-      setSubmitError("Tidak ada menu yang dipilih untuk dipesan.");
+      const msg = "Tidak ada menu yang dipilih untuk dipesan.";
+      setSubmitError(msg);
+      showNotificationToast("Keranjang Kosong", msg);
       return;
     }
 
     if (hasSoldOutSelected) {
-      setSubmitError("Terdapat menu yang stoknya habis. Silakan kembali ke keranjang untuk menyesuaikan pesanan.");
+      const msg =
+        "Terdapat menu yang stoknya habis. Silakan kembali ke keranjang untuk menyesuaikan pesanan.";
+      setSubmitError(msg);
+      showNotificationToast("Menu Tidak Tersedia", msg);
       return;
     }
 
     if (!storeSettings) {
-      setSubmitError(
-        "Gagal memuat pengaturan toko resmi. Silakan segarkan halaman sebelum membuat pesanan."
-      );
+      const msg =
+        "Gagal memuat pengaturan toko resmi. Silakan segarkan halaman sebelum membuat pesanan.";
+      setSubmitError(msg);
+      showNotificationToast("Pengaturan Toko Bermasalah", msg);
       return;
     }
 
@@ -276,6 +343,33 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+
+      // Determine pop-up title & message
+      let title = "Data Kontak Belum Lengkap";
+      let message = "Nama lengkap dan nomor WhatsApp aktif wajib diisi.";
+
+      if (newErrors.customerName && !newErrors.customerWhatsapp) {
+        title = "Nama Belum Diisi";
+        message = "Nama lengkap pemesan wajib diisi (minimal 2 karakter).";
+      } else if (!newErrors.customerName && newErrors.customerWhatsapp) {
+        title = "Nomor WhatsApp Belum Benar";
+        message = newErrors.customerWhatsapp;
+      }
+
+      showNotificationToast(title, message);
+
+      // Scroll smoothly to the first missing / invalid field so it is immediately visible on screen
+      const targetId = newErrors.customerName
+        ? "customerNameInput"
+        : "customerWhatsappInput";
+      const targetElement = document.getElementById(targetId);
+      if (targetElement) {
+        targetElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        setTimeout(() => {
+          targetElement.focus();
+        }, 300);
+      }
+
       return;
     }
 
@@ -284,9 +378,10 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
     }
 
     if (!selectedPaymentMethod) {
-      setSubmitError(
-        "Metode pembayaran tidak tersedia saat ini. Silakan hubungi admin toko."
-      );
+      const msg =
+        "Metode pembayaran tidak tersedia saat ini. Silakan hubungi admin toko.";
+      setSubmitError(msg);
+      showNotificationToast("Metode Pembayaran Tidak Tersedia", msg);
       return;
     }
 
@@ -356,6 +451,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
           ? err.message
           : "Terjadi kesalahan saat memproses pesanan.";
       setSubmitError(msg);
+      showNotificationToast("Gagal Membuat Pesanan", msg);
     }
   };
 
@@ -366,6 +462,59 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
         paddingBottom: "calc(6rem + env(safe-area-inset-bottom, 0px))",
       }}
     >
+      {/* Floating Top Notification Popup (Mobile & Desktop) */}
+      {notificationToast && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          aria-label="Peringatan Kelengkapan Data"
+          className="fixed left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:max-w-md z-[100] pointer-events-none flex justify-center"
+          style={{
+            top: "calc(0.75rem + env(safe-area-inset-top, 0px))",
+          }}
+        >
+          <div
+            onClick={handleToastClick}
+            className={`pointer-events-auto w-full bg-white/95 backdrop-blur-md border border-red-200/90 rounded-2xl p-3.5 sm:p-4 shadow-xl order-toast-shadow flex items-start gap-3 cursor-pointer select-none transition-all active:scale-[0.99] ${
+              notificationToast.isExiting
+                ? "animate-order-toast-out"
+                : "animate-order-toast-in"
+            }`}
+          >
+            <div className="w-9 h-9 rounded-xl bg-red-50 text-[#B42318] border border-red-100 flex items-center justify-center shrink-0 mt-0.5">
+              <AlertCircle className="w-5 h-5 stroke-[2.2]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-xs sm:text-sm font-bold text-[#111111] tracking-tight">
+                  {notificationToast.title}
+                </h4>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    dismissNotificationToast();
+                  }}
+                  className="p-1 -mr-1 -mt-1 text-neutral-400 hover:text-neutral-700 rounded-lg hover:bg-neutral-100 transition-colors cursor-pointer"
+                  aria-label="Tutup notifikasi"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-[11px] sm:text-xs text-[#525252] mt-0.5 leading-snug">
+                {notificationToast.message}
+              </p>
+              {(!customerName.trim() || !validateIndonesianPhone(customerWhatsapp).isValid) && (
+                <div className="mt-2 flex items-center gap-1.5 text-[10px] sm:text-[11px] font-semibold text-[#F25B09]">
+                  <span>Ketuk untuk lengkapi data</span>
+                  <ArrowRight className="w-3 h-3" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <Header
         title={isBuyNow ? "Beli Sekarang" : "Checkout Pesanan"}
         showBack={true}
@@ -409,9 +558,17 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                 type="text"
                 value={customerName}
                 onChange={(e) => {
-                  setCustomerName(e.target.value);
+                  const val = e.target.value;
+                  setCustomerName(val);
                   if (errors.customerName) {
                     setErrors((prev) => ({ ...prev, customerName: undefined }));
+                  }
+                  if (
+                    notificationToast &&
+                    val.trim().length >= 2 &&
+                    validateIndonesianPhone(customerWhatsapp).isValid
+                  ) {
+                    dismissNotificationToast();
                   }
                 }}
                 placeholder="Contoh: Rina Safitri"
@@ -443,12 +600,20 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                 inputMode="numeric"
                 value={customerWhatsapp}
                 onChange={(e) => {
-                  setCustomerWhatsapp(e.target.value);
+                  const val = e.target.value;
+                  setCustomerWhatsapp(val);
                   if (errors.customerWhatsapp) {
                     setErrors((prev) => ({
                       ...prev,
                       customerWhatsapp: undefined,
                     }));
+                  }
+                  if (
+                    notificationToast &&
+                    customerName.trim().length >= 2 &&
+                    validateIndonesianPhone(val).isValid
+                  ) {
+                    dismissNotificationToast();
                   }
                 }}
                 placeholder="Contoh: 081234567890"

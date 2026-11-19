@@ -49,7 +49,7 @@ export function OrderNotificationToast({
   }, [onDismiss]);
 
   const handleView = useCallback(() => {
-    if (!notification) return;
+    if (!notification || isExiting) return;
     setIsExiting(true);
     setTimeout(() => {
       onViewOrder(notification);
@@ -60,7 +60,7 @@ export function OrderNotificationToast({
       );
       onDismiss();
     }, 150);
-  }, [notification, onViewOrder, router, onDismiss]);
+  }, [notification, isExiting, onViewOrder, router, onDismiss]);
 
   // Relative time updater
   useEffect(() => {
@@ -197,8 +197,9 @@ export function OrderNotificationToast({
           <div className="mt-3 flex items-center justify-end gap-2">
             <button
               type="button"
+              disabled={isExiting}
               onClick={handleView}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#111111] text-white text-xs font-semibold hover:bg-neutral-800 transition-colors cursor-pointer shadow-sm active:scale-[0.98]"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#111111] text-white text-xs font-semibold hover:bg-neutral-800 transition-colors cursor-pointer shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span>Lihat Pesanan</span>
               <ArrowRight className="w-3.5 h-3.5" />
