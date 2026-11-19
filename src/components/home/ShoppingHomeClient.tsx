@@ -464,8 +464,8 @@ export default function ShoppingHomeClient({
           </div>
         )}
 
-        {/* 6. Compact Business Contact Information Footer */}
-        <HomeFooter storeSettings={storeSettings} />
+        {/* 6. Footer Copyright */}
+        <HomeFooter />
       </main>
 
       {/* 6. Existing Bottom Navigation */}
