@@ -25,6 +25,7 @@ export interface StageInfo {
 export interface OrderProgressTrackerProps {
   order: Order;
   className?: string;
+  variant?: "light" | "dark";
 }
 
 /**
@@ -190,25 +191,49 @@ export function computeOrderProgress(order: Order) {
   };
 }
 
-export function OrderProgressTracker({ order, className = "" }: OrderProgressTrackerProps) {
+export function OrderProgressTracker({
+  order,
+  className = "",
+  variant = "light",
+}: OrderProgressTrackerProps) {
   const progress = computeOrderProgress(order);
 
   // Dedicated Cancelled Order State (Not a 5th stage)
   if (progress.isCancelled) {
     return (
       <div
-        className={`p-3 bg-red-50/70 border border-red-200/80 rounded-xl flex items-start gap-2.5 text-xs text-[#B42318] ${className}`}
+        className={`p-3 rounded-xl flex items-start gap-2.5 text-xs ${
+          variant === "dark"
+            ? "bg-red-950/40 border border-red-500/30 text-red-200"
+            : "bg-red-50/70 border border-red-200/80 text-[#B42318]"
+        } ${className}`}
       >
-        <XCircle className="w-4 h-4 text-[#B42318] shrink-0 mt-0.5" />
+        <XCircle
+          className={`w-4 h-4 shrink-0 mt-0.5 ${
+            variant === "dark" ? "text-red-400" : "text-[#B42318]"
+          }`}
+        />
         <div className="space-y-0.5 min-w-0 flex-1">
-          <span className="font-bold text-red-900 block">Pesanan Dibatalkan</span>
-          <p className="text-[11px] text-red-700 leading-snug">
+          <span
+            className={`font-bold block ${
+              variant === "dark" ? "text-red-100" : "text-red-900"
+            }`}
+          >
+            Pesanan Dibatalkan
+          </span>
+          <p
+            className={`text-[11px] leading-snug ${
+              variant === "dark" ? "text-red-300/80" : "text-red-700"
+            }`}
+          >
             {progress.desc}
           </p>
         </div>
       </div>
     );
   }
+
+  const inactiveLineColor = variant === "dark" ? "bg-white/15" : "bg-neutral-200";
 
   return (
     <div className={`w-full ${className}`}>
@@ -219,19 +244,19 @@ export function OrderProgressTracker({ order, className = "" }: OrderProgressTra
           {/* Segment 0: 0 -> 1 */}
           <div
             className={`absolute top-0 h-full left-[12.5%] w-[25%] transition-colors duration-300 motion-reduce:transition-none ${
-              progress.line0Active ? "bg-[#F25B09]" : "bg-neutral-200"
+              progress.line0Active ? "bg-[#F25B09]" : inactiveLineColor
             }`}
           />
           {/* Segment 1: 1 -> 2 */}
           <div
             className={`absolute top-0 h-full left-[37.5%] w-[25%] transition-colors duration-300 motion-reduce:transition-none ${
-              progress.line1Active ? "bg-[#F25B09]" : "bg-neutral-200"
+              progress.line1Active ? "bg-[#F25B09]" : inactiveLineColor
             }`}
           />
           {/* Segment 2: 2 -> 3 */}
           <div
             className={`absolute top-0 h-full left-[62.5%] w-[25%] transition-colors duration-300 motion-reduce:transition-none ${
-              progress.line2Active ? "bg-[#F25B09]" : "bg-neutral-200"
+              progress.line2Active ? "bg-[#F25B09]" : inactiveLineColor
             }`}
           />
         </div>
@@ -243,6 +268,11 @@ export function OrderProgressTracker({ order, className = "" }: OrderProgressTra
             const isCompleted = stage.status === "completed";
             const isActive = stage.status === "active";
 
+            const inactiveCircleClasses =
+              variant === "dark"
+                ? "bg-[#3A1810] text-neutral-400 border border-white/20"
+                : "bg-white text-neutral-400 border border-neutral-200";
+
             return (
               <div key={stage.id} className="flex flex-col items-center">
                 {/* Circular Icon Container */}
@@ -251,8 +281,12 @@ export function OrderProgressTracker({ order, className = "" }: OrderProgressTra
                     isCompleted
                       ? "bg-[#F25B09] text-white shadow-2xs"
                       : isActive
-                      ? "bg-[#F25B09] text-white ring-4 ring-orange-100 shadow-xs"
-                      : "bg-white text-neutral-400 border border-neutral-200"
+                      ? `bg-[#F25B09] text-white ${
+                          variant === "dark"
+                            ? "ring-4 ring-orange-500/25"
+                            : "ring-4 ring-orange-100"
+                        } shadow-xs`
+                      : inactiveCircleClasses
                   }`}
                   aria-label={`${stage.label}: ${stage.status}`}
                 >
@@ -267,9 +301,15 @@ export function OrderProgressTracker({ order, className = "" }: OrderProgressTra
                 <span
                   className={`text-[10px] sm:text-[10.5px] text-center leading-tight mt-1.5 transition-colors duration-300 motion-reduce:transition-none px-0.5 ${
                     isCompleted
-                      ? "font-semibold text-neutral-900"
+                      ? variant === "dark"
+                        ? "font-semibold text-orange-200/90"
+                        : "font-semibold text-neutral-900"
                       : isActive
-                      ? "font-bold text-[#F25B09]"
+                      ? variant === "dark"
+                        ? "font-bold text-white"
+                        : "font-bold text-[#F25B09]"
+                      : variant === "dark"
+                      ? "font-normal text-neutral-400"
                       : "font-normal text-neutral-400"
                   }`}
                 >
@@ -282,14 +322,30 @@ export function OrderProgressTracker({ order, className = "" }: OrderProgressTra
       </div>
 
       {/* Contextual Status Subtitle Pill */}
-      <div className="mt-2.5 px-3 py-1.5 rounded-xl bg-neutral-50/80 border border-neutral-100 flex items-center justify-between text-[11px] leading-tight">
+      <div
+        className={`mt-2.5 px-3 py-1.5 rounded-xl flex items-center justify-between text-[11px] leading-tight ${
+          variant === "dark"
+            ? "bg-white/10 border border-white/10"
+            : "bg-neutral-50/80 border border-neutral-100"
+        }`}
+      >
         <div className="flex items-center gap-1.5 min-w-0 pr-2">
           <span className={`w-2 h-2 rounded-full shrink-0 ${progress.statusDotColor}`} />
-          <span className="font-medium text-neutral-800 truncate">
+          <span
+            className={`font-medium truncate ${
+              variant === "dark" ? "text-white/90" : "text-neutral-800"
+            }`}
+          >
             {progress.statusSummaryText}
           </span>
         </div>
-        <span className="text-[9.5px] font-semibold text-neutral-500 bg-neutral-200/70 px-1.5 py-0.5 rounded-md shrink-0 uppercase tracking-wider">
+        <span
+          className={`text-[9.5px] font-semibold px-1.5 py-0.5 rounded-md shrink-0 uppercase tracking-wider ${
+            variant === "dark"
+              ? "text-white/70 bg-white/15"
+              : "text-neutral-500 bg-neutral-200/70"
+          }`}
+        >
           {order.fulfillmentType === "pickup" ? "Pickup" : "Delivery"}
         </span>
       </div>

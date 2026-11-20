@@ -14,6 +14,7 @@ import {
 import { Header } from "@/components/layout/Header";
 import { StatusBadge } from "@/components/ui/Badge";
 import { OrderProgressTracker } from "@/components/orders/OrderProgressTracker";
+import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
 import { useOrder } from "@/context/OrderContext";
 import { formatRupiah, STORE_SETTINGS } from "@/data/dummy-data";
 import { saveOrderToken, getOrderToken } from "@/lib/order-token-vault";
@@ -292,7 +293,7 @@ Metode: ${order.paymentMethod === "Cash" ? "Cash (Bayar Tunai)" : (order.gateway
 Pantau status pesanan: ${typeof window !== "undefined" ? window.location.href : ""}
 Terima kasih telah memesan di Nook by Jina!`;
 
-  const waShareUrl = `https://wa.me/?text=${encodeURIComponent(
+  const waShareUrl = `https://wa.me/${storePhone}?text=${encodeURIComponent(
     waShareReceiptText
   )}`;
 
@@ -307,17 +308,17 @@ Terima kasih telah memesan di Nook by Jina!`;
 
       <main className="max-w-md mx-auto px-4 pt-4 space-y-2.5">
         {/* Order Header Card */}
-        <section className="bg-white rounded-2xl p-4 space-y-3">
+        <section className="rounded-2xl bg-gradient-to-r from-[#21100C] via-[#35170E] to-[#54220F] border border-white/10 shadow-md shadow-black/25 p-4 space-y-3 text-white transition-all select-none">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <span className="text-[11px] text-[#737373] block uppercase tracking-wider">
+              <span className="text-[11px] text-white/60 block uppercase tracking-wider font-semibold">
                 Nomor Pesanan
               </span>
-              <h1 className="text-xl font-bold font-mono text-[#111111] mt-0.5">
+              <h1 className="text-xl font-bold font-mono text-white mt-0.5">
                 {order.id}
               </h1>
-              <p className="text-xs text-[#737373] flex items-center gap-1 mt-1">
-                <Clock className="w-3.5 h-3.5" />
+              <p className="text-xs text-white/60 flex items-center gap-1 mt-1">
+                <Clock className="w-3.5 h-3.5 text-white/50" />
                 {formattedDate}, {formattedTime}
               </p>
             </div>
@@ -326,7 +327,7 @@ Terima kasih telah memesan di Nook by Jina!`;
               type="button"
               onClick={handleManualRefresh}
               aria-label="Segarkan status"
-              className={`p-2 rounded-lg text-[#737373] hover:text-[#111111] hover:bg-neutral-100 ${
+              className={`p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors ${
                 isRefreshing ? "animate-spin text-[#F25B09]" : ""
               }`}
             >
@@ -335,21 +336,29 @@ Terima kasih telah memesan di Nook by Jina!`;
           </div>
 
           {/* Status Indicators */}
-          <div className="pt-3 border-t border-[#E5E5E5] flex flex-wrap items-center gap-2">
+          <div className="pt-3 border-t border-white/10 flex flex-wrap items-center gap-2">
             <span
               className={`text-[10px] font-bold px-2 py-0.5 rounded-full border select-none ${
                 getCartProductType(order.items) === "ready"
-                  ? "bg-emerald-50 text-[#18794E] border-emerald-200"
-                  : "bg-orange-50 text-[#F25B09] border-orange-200"
+                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                  : "bg-orange-500/20 text-orange-400 border-orange-500/30"
               }`}
             >
               {getCartProductType(order.items) === "ready" ? "READY" : "PRE-ORDER"}
             </span>
-            <StatusBadge status={isOrderExpired(order) ? "Dibatalkan" : order.orderStatus} type="order" />
-            <StatusBadge status={isOrderExpired(order) ? "Dibatalkan" : order.paymentStatus} type="payment" />
+            <StatusBadge
+              status={isOrderExpired(order) ? "Dibatalkan" : order.orderStatus}
+              type="order"
+              variant="dark"
+            />
+            <StatusBadge
+              status={isOrderExpired(order) ? "Dibatalkan" : order.paymentStatus}
+              type="payment"
+              variant="dark"
+            />
           </div>
 
-          <div className="text-[10px] text-[#737373] flex items-center justify-between pt-1">
+          <div className="text-[10px] text-white/50 flex items-center justify-between pt-1">
             <span>Pemeriksaan otomatis setiap 15 detik</span>
             <span>
               Update:{" "}
@@ -362,8 +371,8 @@ Terima kasih telah memesan di Nook by Jina!`;
           </div>
 
           {/* Horizontal Order Progress Tracker */}
-          <div className="pt-3 border-t border-[#E5E5E5]/70">
-            <OrderProgressTracker order={order} />
+          <div className="pt-3 border-t border-white/10">
+            <OrderProgressTracker order={order} variant="dark" />
           </div>
         </section>
 
@@ -602,7 +611,7 @@ Terima kasih telah memesan di Nook by Jina!`;
                 rel="noopener noreferrer"
                 className="min-h-[44px] px-3 py-2 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
-                <MessageCircle className="w-3.5 h-3.5" />
+                <WhatsAppIcon className="w-4 h-4" />
                 <span>Kirim Struk WA</span>
               </a>
             </div>

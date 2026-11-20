@@ -128,16 +128,16 @@ export default function OrderHistoryPage() {
               return (
                 <div
                   key={order.id}
-                  className="bg-white rounded-2xl p-4 space-y-3"
+                  className="rounded-2xl bg-gradient-to-r from-[#21100C] via-[#35170E] to-[#54220F] border border-white/10 shadow-md shadow-black/25 p-4 space-y-3 text-white transition-all select-none"
                 >
                   {/* Card Header: Order ID & Time */}
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <span className="text-xs font-mono font-bold text-[#111111] block">
+                      <span className="text-xs font-mono font-bold text-white block">
                         {order.id}
                       </span>
-                      <span className="text-[11px] text-[#737373] flex items-center gap-1 mt-0.5">
-                        <Clock className="w-3 h-3" />
+                      <span className="text-[11px] text-white/60 flex items-center gap-1 mt-0.5">
+                        <Clock className="w-3 h-3 text-white/50" />
                         {formattedDate}, {formattedTime}
                       </span>
                     </div>
@@ -146,39 +146,40 @@ export default function OrderHistoryPage() {
                       <StatusBadge
                         status={isCancelled ? "Dibatalkan" : order.orderStatus}
                         showDot={false}
+                        variant="dark"
                       />
                     </div>
                   </div>
 
                   {/* Horizontal Order Progress Tracker */}
-                  <OrderProgressTracker order={order} />
+                  <OrderProgressTracker order={order} variant="dark" />
 
                   {/* Items summary */}
-                  <div className="pt-2 border-t border-[#E5E5E5]/60 text-xs text-[#737373] space-y-0.5">
+                  <div className="pt-2 border-t border-white/10 text-xs text-white/70 space-y-0.5">
                     {order.items.slice(0, 2).map((item) => (
                       <div key={item.id} className="flex justify-between">
-                        <span className="truncate pr-2">
+                        <span className="truncate pr-2 text-white/80">
                           {item.quantity}x {item.productName}
                         </span>
-                        <span className="font-medium text-[#111111] flex-shrink-0">
+                        <span className="font-medium text-white flex-shrink-0">
                           {formatRupiah(item.itemTotal)}
                         </span>
                       </div>
                     ))}
                     {order.items.length > 2 ? (
-                      <span className="text-[11px] text-[#737373] italic">
+                      <span className="text-[11px] text-white/50 italic">
                         +{order.items.length - 2} menu lainnya...
                       </span>
                     ) : null}
                   </div>
 
                   {/* Total & Action Links */}
-                  <div className="pt-2 border-t border-[#E5E5E5] flex items-center justify-between">
+                  <div className="pt-2 border-t border-white/10 flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] text-[#737373] block leading-none">
+                      <span className="text-[10px] text-white/60 block leading-none">
                         Total Pesanan
                       </span>
-                      <span className="text-sm font-bold text-[#111111] mt-0.5 block">
+                      <span className="text-sm font-extrabold text-white mt-0.5 block">
                         {formatRupiah(order.total)}
                       </span>
                     </div>
@@ -188,7 +189,7 @@ export default function OrderHistoryPage() {
                       (order.paymentMethod === "QRIS Statis" || !order.paymentMethod) ? (
                         <Link
                           href={`/pembayaran/${order.id}`}
-                          className="px-2.5 py-1.5 bg-orange-50 text-[#F25B09] border border-orange-200 rounded-lg text-xs font-medium flex items-center gap-1 hover:bg-orange-100"
+                          className="px-2.5 py-1.5 bg-[#F25B09] hover:bg-[#D94D06] text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors shadow-xs"
                         >
                           <QrCode className="w-3.5 h-3.5" />
                           <span>Bayar</span>
@@ -198,19 +199,19 @@ export default function OrderHistoryPage() {
                       {resolvedToken ? (
                         <Link
                           href={`/pesanan/${resolvedToken}`}
-                          className="px-3 py-1.5 bg-neutral-50 text-[#111111] border border-[#E5E5E5] rounded-lg text-xs font-semibold flex items-center gap-1 hover:bg-neutral-100"
+                          className="px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white border border-white/10 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors shadow-xs"
                         >
                           <span>Detail</span>
-                          <ChevronRight className="w-3.5 h-3.5 text-[#737373]" />
+                          <ChevronRight className="w-3.5 h-3.5 text-white/70" />
                         </Link>
                       ) : (
                         <button
                           type="button"
                           onClick={() => setRestrictedOrder(order)}
-                          className="px-3 py-1.5 bg-neutral-50 text-[#737373] border border-[#E5E5E5] rounded-lg text-xs font-semibold flex items-center gap-1 hover:bg-neutral-100 cursor-pointer"
+                          className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white/50 border border-white/10 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
                         >
                           <span>Detail</span>
-                          <ChevronRight className="w-3.5 h-3.5 text-[#A3A3A3]" />
+                          <ChevronRight className="w-3.5 h-3.5 text-white/40" />
                         </button>
                       )}
                     </div>

@@ -91,11 +91,11 @@ function verifyCleanCardOutlines() {
   const pesananFile = path.resolve(process.cwd(), "src/app/pesanan/page.tsx");
   const pesananContent = fs.readFileSync(pesananFile, "utf-8");
   assert(
-    pesananContent.includes("bg-white rounded-2xl p-4 space-y-3"),
-    "Pesanan order cards have no outer border"
+    pesananContent.includes("bg-gradient-to-r from-[#21100C] via-[#35170E] to-[#54220F]"),
+    "Pesanan order cards use dark gradient background matching active order card"
   );
   assert(
-    pesananContent.includes("border-t border-[#E5E5E5]/60"),
+    pesananContent.includes("border-t border-white/10"),
     "Pesanan items summary internal divider is preserved"
   );
 
@@ -108,8 +108,8 @@ function verifyCleanCardOutlines() {
     "Detail pesanan section cards have no outer border"
   );
   assert(
-    detailContent.includes("bg-white rounded-2xl p-4 space-y-3"),
-    "Detail pesanan sections use clean bg-white rounded-2xl"
+    detailContent.includes("bg-gradient-to-r from-[#21100C] via-[#35170E] to-[#54220F]"),
+    "Detail pesanan order number header card uses dark gradient background"
   );
 
   // 6. Pembayaran QRIS

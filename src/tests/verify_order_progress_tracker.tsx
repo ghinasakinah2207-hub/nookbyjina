@@ -200,7 +200,7 @@ console.log("  [PASS] Cancelled and expired orders use dedicated state");
 console.log("\n--- Section 8: Card Layout Integration in pesanan/page.tsx ---");
 const pesananPageSrc = fs.readFileSync(path.resolve(process.cwd(), "src/app/pesanan/page.tsx"), "utf-8");
 assert(pesananPageSrc.includes("OrderProgressTracker"), "OrderProgressTracker imported in pesanan/page.tsx");
-assert(pesananPageSrc.includes("<OrderProgressTracker order={order} />"), "OrderProgressTracker mounted in order card");
+assert(pesananPageSrc.includes("<OrderProgressTracker order={order} variant=\"dark\" />"), "OrderProgressTracker mounted in order card");
 assert(pesananPageSrc.includes("order.id"), "Order ID preserved");
 assert(pesananPageSrc.includes("formattedDate"), "Order date preserved");
 assert(pesananPageSrc.includes("StatusBadge"), "Status badge preserved");
