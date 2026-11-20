@@ -28,6 +28,27 @@ export default function OrderHistoryPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [restrictedOrder, setRestrictedOrder] = useState<Order | null>(null);
+  const [liveAdminWhatsapp, setLiveAdminWhatsapp] = useState<string>("");
+
+  React.useEffect(() => {
+    let isMounted = true;
+    async function loadLiveSettings() {
+      try {
+        const res = await fetch("/api/store-settings", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted && data.success && data.settings?.adminWhatsapp) {
+          setLiveAdminWhatsapp(data.settings.adminWhatsapp);
+        }
+      } catch {
+        // Fallback silently
+      }
+    }
+    loadLiveSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleManualSync = async () => {
     setIsSyncing(true);
@@ -41,7 +62,11 @@ export default function OrderHistoryPage() {
     }
   };
 
-  const storePhone = STORE_SETTINGS.adminWhatsapp.replace(/[^0-9]/g, "");
+  const rawStorePhone = liveAdminWhatsapp || STORE_SETTINGS.adminWhatsapp;
+  const cleanPhoneDigits = rawStorePhone.replace(/[^0-9]/g, "");
+  const storePhone = cleanPhoneDigits.startsWith("0")
+    ? "62" + cleanPhoneDigits.slice(1)
+    : cleanPhoneDigits;
 
   return (
     <div className="min-h-screen pb-24 bg-[#F6F6F7]">

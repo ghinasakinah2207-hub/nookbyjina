@@ -35,6 +35,7 @@ function OrderDetailContent() {
   }, [orders]);
 
   const [order, setOrder] = useState<Order | null>(null);
+  const [adminWhatsapp, setAdminWhatsapp] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isOrderIdParam, setIsOrderIdParam] = useState<boolean>(false);
@@ -44,6 +45,27 @@ function OrderDetailContent() {
 
   // In-flight guard to prevent parallel concurrent requests
   const inFlightRef = useRef(false);
+
+  // Fetch live store settings directly from backend
+  useEffect(() => {
+    let isMounted = true;
+    async function loadLiveSettings() {
+      try {
+        const res = await fetch("/api/store-settings", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted && data.success && data.settings?.adminWhatsapp) {
+          setAdminWhatsapp(data.settings.adminWhatsapp);
+        }
+      } catch {
+        // Fallback silently
+      }
+    }
+    loadLiveSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Authoritative server fetch for order details
   const fetchOrder = useCallback(
@@ -78,6 +100,9 @@ function OrderDetailContent() {
           cache: "no-store",
         });
         const data = await res.json();
+        if (data.storeWhatsapp) {
+          setAdminWhatsapp(data.storeWhatsapp);
+        }
         if (res.ok && data.success && data.order) {
           const loadedOrder: Order = {
             ...data.order,
@@ -170,7 +195,12 @@ function OrderDetailContent() {
     }
   };
 
-  const storePhone = STORE_SETTINGS.adminWhatsapp.replace(/[^0-9]/g, "");
+  // Authoritative admin WhatsApp number from live database settings
+  const rawAdminPhone = adminWhatsapp || STORE_SETTINGS.adminWhatsapp;
+  const cleanPhoneDigits = rawAdminPhone.replace(/[^0-9]/g, "");
+  const storePhone = cleanPhoneDigits.startsWith("0")
+    ? "62" + cleanPhoneDigits.slice(1)
+    : cleanPhoneDigits;
 
   if (loading) {
     return (

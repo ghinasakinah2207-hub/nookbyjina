@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOrderByToken, sanitizeOrderForCustomer } from "@/lib/orders-store";
+import { getStoreSettings } from "@/lib/supabase/store-settings";
 
 export async function GET(
   request: Request,
@@ -18,7 +19,10 @@ export async function GET(
       );
     }
 
-    const order = await getOrderByToken(token.trim());
+    const [order, storeSettings] = await Promise.all([
+      getOrderByToken(token.trim()),
+      getStoreSettings().catch(() => null),
+    ]);
 
     if (!order) {
       return NextResponse.json(
@@ -37,6 +41,7 @@ export async function GET(
       {
         success: true,
         order: sanitized,
+        storeWhatsapp: storeSettings?.adminWhatsapp || "",
       },
       {
         status: 200,
