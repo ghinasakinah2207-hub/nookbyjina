@@ -443,8 +443,8 @@ export async function POST(request: Request) {
         : generateSecureOrderToken();
 
     const now = new Date();
-    // WaroengPay standard expiry period: 15 minutes
-    const EXPIRY_MINUTES = 15;
+    // WaroengPay invoice active duration: 30 minutes (within allowed 5–60 min range)
+    const EXPIRY_MINUTES = 30;
     const deadline = new Date(now.getTime() + EXPIRY_MINUTES * 60 * 1000);
 
     const isCashOrder = canonicalMethod === "Cash";
@@ -496,7 +496,7 @@ export async function POST(request: Request) {
             description: `Pesanan Nook by Jina ${savedOrder.id}`.slice(0, 200),
             callback_url: callbackUrl,
             redirect_url: redirectUrl,
-            expires_in: 15,
+            expires_in: EXPIRY_MINUTES,
           },
           savedOrder.id // Idempotency-Key
         );

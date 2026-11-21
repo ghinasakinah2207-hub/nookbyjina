@@ -643,25 +643,26 @@ function PaymentContent() {
 
           {/* Slim Countdown & Grace period strip */}
           {!isPaid && !isExpired && (
-            <div
-              className={`px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-2 border ${
-                isInGracePeriod
-                  ? "bg-amber-50 border-amber-300/80 text-amber-900"
-                  : "bg-[#FFF6EB] border-[#F6C885] text-[#8A4B08]"
-              }`}
-            >
-              <div className="flex items-center gap-1.5 min-w-0">
-                <Clock className="w-3.5 h-3.5 shrink-0" />
-                <span className="text-[11px] font-semibold truncate">
-                  {isInGracePeriod
-                    ? "Masa tenggang (5 mnt) • Cek mutasi"
-                    : "Batas Waktu Pembayaran"}
+            isInGracePeriod ? (
+              <div className="px-2.5 py-2 rounded-lg flex items-center gap-2 border bg-amber-50 border-amber-300/80 text-amber-900">
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-amber-700" />
+                <span className="text-[11px] font-semibold leading-snug">
+                  Waktu habis. Menunggu konfirmasi mutasi bank...
                 </span>
               </div>
-              <span className="font-mono font-bold text-xs sm:text-sm tracking-tight bg-white px-2 py-0.5 rounded-md border border-current/30 shadow-2xs shrink-0">
-                {isInGracePeriod ? "00:00" : formattedCountdown}
-              </span>
-            </div>
+            ) : (
+              <div className="px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-2 border bg-[#FFF6EB] border-[#F6C885] text-[#8A4B08]">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <span className="text-[11px] font-semibold truncate">
+                    Batas Waktu Pembayaran
+                  </span>
+                </div>
+                <span className="font-mono font-bold text-xs sm:text-sm tracking-tight bg-white px-2 py-0.5 rounded-md border border-current/30 shadow-2xs shrink-0">
+                  {formattedCountdown}
+                </span>
+              </div>
+            )
           )}
         </section>
 

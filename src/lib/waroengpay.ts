@@ -133,6 +133,11 @@ export async function createWaroengPayPayment(
     headers["Idempotency-Key"] = idempotencyKey.trim().slice(0, 100);
   }
 
+  const requestedExpiresIn = Number(payload.expires_in ?? 30);
+  const clampedExpiresIn = Number.isFinite(requestedExpiresIn)
+    ? Math.min(60, Math.max(5, Math.round(requestedExpiresIn)))
+    : 30;
+
   const res = await fetch(`${config.baseUrl}/api/payments`, {
     method: "POST",
     headers,
@@ -142,7 +147,7 @@ export async function createWaroengPayPayment(
       description: payload.description ? String(payload.description).slice(0, 200) : undefined,
       callback_url: payload.callback_url,
       redirect_url: payload.redirect_url,
-      expires_in: payload.expires_in ?? 15,
+      expires_in: clampedExpiresIn,
       platform_fee: payload.platform_fee ?? 0,
     }),
   });
