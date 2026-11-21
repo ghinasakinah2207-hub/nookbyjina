@@ -400,13 +400,13 @@ function PaymentContent() {
     return (
       <div className="min-h-screen pb-16 bg-[#F6F6F7]">
         <Header title="Pembayaran QRIS" showBack={true} backHref="/home" showCart={false} />
-        <main className="max-w-md mx-auto px-3 sm:px-4 pt-4 space-y-3">
-          <div className="bg-white rounded-2xl p-4 sm:p-5 space-y-3 animate-pulse">
+        <main className="max-w-md mx-auto px-2.5 sm:px-3.5 pt-2.5 space-y-2.5">
+          <div className="bg-white rounded-2xl p-3.5 sm:p-4 space-y-2 animate-pulse">
             <div className="h-4 bg-neutral-200 rounded w-1/3" />
-            <div className="h-8 bg-neutral-200 rounded w-1/2" />
+            <div className="h-7 bg-neutral-200 rounded w-1/2" />
           </div>
-          <div className="bg-white rounded-2xl p-4 space-y-4 text-center animate-pulse flex flex-col items-center justify-center">
-            <div className="w-64 h-64 bg-neutral-200 rounded-xl" />
+          <div className="bg-white rounded-2xl p-3.5 sm:p-4 space-y-3 text-center animate-pulse flex flex-col items-center justify-center">
+            <div className="w-60 h-60 bg-neutral-200 rounded-xl" />
             <div className="h-4 bg-neutral-200 rounded w-3/4" />
           </div>
         </main>
@@ -535,20 +535,20 @@ function PaymentContent() {
         showCart={false}
       />
 
-      <main className="max-w-md mx-auto px-3 sm:px-4 pt-3.5 space-y-3">
+      <main className="max-w-md mx-auto px-2.5 sm:px-3.5 pt-2.5 space-y-2.5">
         {/* Order Info & Nominal Card */}
-        <section className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-[#E5E5E5]/60 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <span className="text-[11px] text-[#737373] uppercase font-semibold tracking-wider">
+        <section className="bg-white rounded-2xl p-3.5 sm:p-4 shadow-xs border border-[#E5E5E5]/70 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <span className="text-[10px] text-[#737373] uppercase font-semibold tracking-wider block leading-tight">
                 Nomor Pesanan
               </span>
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm font-bold text-[#111111] font-mono">{order.id}</span>
+              <div className="flex items-center gap-1 mt-0.5">
+                <span className="text-sm font-bold text-[#111111] font-mono leading-tight">{order.id}</span>
                 <button
                   type="button"
                   onClick={handleCopyOrderId}
-                  className="p-1 rounded-md hover:bg-neutral-100 text-[#737373] hover:text-[#111111] transition-colors cursor-pointer"
+                  className="p-0.5 rounded-md hover:bg-neutral-100 text-[#737373] hover:text-[#111111] transition-colors cursor-pointer"
                   title="Salin Nomor Pesanan"
                 >
                   {copiedOrderId ? (
@@ -568,10 +568,10 @@ function PaymentContent() {
           <div className="h-px bg-neutral-100" />
 
           {/* Amount to pay & Order Details Dropdown */}
-          <div className="space-y-1.5">
-            <span className="text-xs text-[#737373] block">Total yang Wajib Ditransfer:</span>
+          <div className="space-y-0.5">
+            <span className="text-[11px] text-[#737373] block leading-tight">Total yang Wajib Ditransfer:</span>
             <div className="flex items-center justify-between gap-2">
-              <div className="text-2xl font-black text-[#111111] tracking-tight">
+              <div className="text-[22px] sm:text-2xl font-black text-[#111111] tracking-tight leading-tight">
                 {formatRupiah(paymentAmount)}
               </div>
               <button
@@ -579,7 +579,7 @@ function PaymentContent() {
                 onClick={() => setIsDetailsOpen((prev) => !prev)}
                 aria-expanded={isDetailsOpen}
                 aria-controls="order-details-dropdown"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#F25B09] hover:bg-orange-50 active:bg-orange-100 transition-colors cursor-pointer shrink-0 border border-orange-200/60"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-[#F25B09] bg-orange-50/50 hover:bg-orange-50 active:bg-orange-100 transition-colors cursor-pointer shrink-0 border border-orange-200/70"
               >
                 <span>Lihat Detail</span>
                 <ChevronDown
@@ -590,8 +590,8 @@ function PaymentContent() {
               </button>
             </div>
             {uniqueCode !== undefined && uniqueCode > 0 ? (
-              <p className="text-[11px] text-[#737373] leading-snug">
-                Termasuk kode unik <strong className="text-[#111111]">Rp {uniqueCode}</strong> untuk verifikasi instan otomatis.
+              <p className="text-[11px] text-[#737373] leading-tight pt-0.5">
+                Termasuk kode unik <strong className="text-[#111111]">Rp {uniqueCode}</strong> untuk verifikasi otomatis.
               </p>
             ) : null}
 
@@ -599,7 +599,7 @@ function PaymentContent() {
             {isDetailsOpen && (
               <div
                 id="order-details-dropdown"
-                className="mt-2.5 p-3.5 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs space-y-2 animate-landing-fade"
+                className="mt-2 p-3 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs space-y-1.5 animate-landing-fade"
               >
                 <div className="flex justify-between items-center py-0.5">
                   <span className="text-[#737373]">No. tagihan</span>
@@ -641,29 +641,24 @@ function PaymentContent() {
             )}
           </div>
 
-          {/* Countdown & Grace period indicator */}
+          {/* Slim Countdown & Grace period strip */}
           {!isPaid && !isExpired && (
             <div
-              className={`p-3 rounded-xl flex items-center justify-between text-xs shadow-xs border ${
+              className={`px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-2 border ${
                 isInGracePeriod
-                  ? "bg-amber-50 border-amber-300 text-amber-900"
-                  : "bg-[#FFF4E5] border-[#FBD38D] text-[#8A4B08]"
+                  ? "bg-amber-50 border-amber-300/80 text-amber-900"
+                  : "bg-[#FFF6EB] border-[#F6C885] text-[#8A4B08]"
               }`}
             >
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 shrink-0" />
-                <div>
-                  <span className="font-semibold block leading-tight">
-                    {isInGracePeriod ? "Masa Tenggang Tambahan (5 Menit)" : "Batas Waktu Pembayaran:"}
-                  </span>
-                  <span className="text-[11px] opacity-80">
-                    {isInGracePeriod
-                      ? "Menunggu konfirmasi mutasi bank..."
-                      : "Selesaikan sebelum waktu habis:"}
-                  </span>
-                </div>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                <span className="text-[11px] font-semibold truncate">
+                  {isInGracePeriod
+                    ? "Masa tenggang (5 mnt) • Cek mutasi"
+                    : "Batas Waktu Pembayaran"}
+                </span>
               </div>
-              <span className="font-mono font-bold text-base bg-white px-2.5 py-1 rounded-lg border border-current">
+              <span className="font-mono font-bold text-xs sm:text-sm tracking-tight bg-white px-2 py-0.5 rounded-md border border-current/30 shadow-2xs shrink-0">
                 {isInGracePeriod ? "00:00" : formattedCountdown}
               </span>
             </div>
@@ -739,29 +734,27 @@ function PaymentContent() {
             STATE 3: PENDING (ACTIVE QRIS)
             ========================================================================= */}
         {!isPaid && !isExpired && (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {/* Real QRIS Code Card (White background) */}
-            <section className="bg-white rounded-2xl p-4 sm:p-5 text-center space-y-3.5 shadow-xs border border-[#E5E5E5]/60 flex flex-col items-center">
-              <div className="space-y-0.5">
-                <p className="text-xs text-[#737373]">
-                  Mendukung GoPay, OVO, DANA, ShopeePay & seluruh Mobile Banking
-                </p>
-              </div>
+            <section className="bg-white rounded-2xl p-3.5 sm:p-4 text-center space-y-2.5 shadow-xs border border-[#E5E5E5]/70 flex flex-col items-center">
+              <p className="text-[11px] text-[#737373] leading-snug">
+                Mendukung GoPay, OVO, DANA, ShopeePay & seluruh Mobile Banking
+              </p>
 
               {/* Official QRIS Logo Asset (public/QRISLogo.svg) */}
-              <div className="pt-1 flex items-center justify-center">
+              <div className="flex items-center justify-center">
                 <Image
                   src="/QRISLogo.svg"
                   alt="QRIS - Quick Response Code Indonesian Standard"
                   width={106}
                   height={40}
-                  className="h-8 w-auto object-contain"
+                  className="h-7 w-auto object-contain"
                   priority
                 />
               </div>
 
               {/* QR Image */}
-              <div className="w-64 h-64 p-3 bg-white border border-[#E5E5E5] rounded-2xl shadow-sm flex items-center justify-center relative">
+              <div className="w-60 h-60 p-2.5 bg-white border border-[#E5E5E5] rounded-2xl shadow-xs flex items-center justify-center relative">
                 {qrDataUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -780,36 +773,36 @@ function PaymentContent() {
               </div>
 
               {/* WaroengPay NMID Display */}
-              <div className="text-xs font-mono font-medium text-[#737373] text-center pt-0.5">
+              <div className="text-[11px] font-mono font-medium text-[#737373] text-center">
                 NMID: {actualNmid}
               </div>
 
               {/* Merchant Identity Notice */}
-              <div className="w-full max-w-sm p-2.5 sm:p-3 bg-sky-50/80 border border-sky-100 rounded-xl text-left flex items-start gap-2 text-[11px] text-sky-950 leading-relaxed shadow-2xs">
-                <Info className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+              <div className="w-full p-2.5 bg-sky-50/80 border border-sky-100 rounded-xl text-left flex items-start gap-2 text-[11px] text-sky-950 leading-snug">
+                <Info className="w-3.5 h-3.5 text-sky-600 shrink-0 mt-0.5" />
                 <p>
                   Di aplikasi pembayaran akan tertulis: <strong>WAROENGKU</strong> (penampung resmi resi payment Nook by Jina).
                 </p>
               </div>
 
               {/* Action Buttons: Download & Share */}
-              <div className="w-full max-w-xs grid grid-cols-2 gap-2 pt-1">
+              <div className="w-full grid grid-cols-2 gap-2 pt-0.5">
                 <button
                   type="button"
                   onClick={handleDownloadQr}
                   disabled={!qrDataUrl}
-                  className="w-full min-h-[44px] px-3 py-2 bg-neutral-100 hover:bg-neutral-200 active:bg-neutral-300 text-[#111111] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                  className="w-full min-h-[42px] px-3 py-2 bg-white hover:bg-orange-50/70 active:scale-[0.98] text-[#111111] text-xs font-semibold rounded-xl border border-neutral-300 hover:border-[#F25B09]/50 shadow-xs hover:shadow-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                 >
-                  <Download className="w-4 h-4 shrink-0" />
+                  <Download className="w-4 h-4 shrink-0 text-[#F25B09]" />
                   <span>Unduh QRIS</span>
                 </button>
                 <button
                   type="button"
                   onClick={handleShareQr}
                   disabled={!qrDataUrl}
-                  className="w-full min-h-[44px] px-3 py-2 bg-neutral-100 hover:bg-neutral-200 active:bg-neutral-300 text-[#111111] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                  className="w-full min-h-[42px] px-3 py-2 bg-white hover:bg-neutral-50 active:scale-[0.98] text-[#111111] text-xs font-semibold rounded-xl border border-neutral-300 hover:border-neutral-400 shadow-xs hover:shadow-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                 >
-                  <Share2 className="w-4 h-4 shrink-0" />
+                  <Share2 className="w-4 h-4 shrink-0 text-[#35170E]" />
                   <span>Bagikan</span>
                 </button>
               </div>
@@ -820,12 +813,12 @@ function PaymentContent() {
             </section>
 
             {/* CEK TRANSAKSI Button & Status Verification Feedback (Directly below QRIS card) */}
-            <div className="space-y-2 pt-0.5">
+            <div className="space-y-2">
               <button
                 type="button"
                 onClick={handleCheckTransaction}
                 disabled={isCheckingStatus}
-                className="w-full py-3.5 px-4 bg-[#0F172A] hover:bg-[#1E293B] active:bg-[#020617] text-white font-bold text-xs tracking-wider uppercase rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full py-3.5 px-4 bg-gradient-to-r from-[#21100C] via-[#35170E] to-[#54220F] hover:brightness-110 active:scale-[0.99] text-white font-bold text-xs tracking-wider uppercase rounded-xl border border-white/10 shadow-md shadow-[#21100C]/25 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isCheckingStatus ? (
                   <>
@@ -853,7 +846,7 @@ function PaymentContent() {
             </div>
 
             {/* Instructions for Paying with Single Phone */}
-            <section className="bg-white rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs border border-[#E5E5E5]/60 text-xs">
+            <section className="bg-white rounded-2xl p-3.5 sm:p-4 space-y-2.5 shadow-xs border border-[#E5E5E5]/70 text-xs">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-orange-100 text-[#F25B09] flex items-center justify-center shrink-0">
                   <Smartphone className="w-4 h-4" />
