@@ -289,7 +289,7 @@ export default function CartClient({
           </div>
         ) : cart.length === 0 ? (
           /* Empty State */
-          <div className="p-8 text-center bg-white rounded-2xl border border-neutral-200/70 shadow-sm space-y-4 my-8">
+          <div className="p-8 text-center bg-white rounded-2xl border border-[#E2DFDA] space-y-4 my-8">
             <div className="w-16 h-16 mx-auto rounded-full bg-neutral-100 flex items-center justify-center text-[#737373]">
               <ShoppingBag className="w-8 h-8 stroke-[1.5]" />
             </div>
@@ -326,7 +326,7 @@ export default function CartClient({
             ) : null}
 
             {/* Shopee-Inspired Grouped Cart Card (Compact) */}
-            <div className="bg-white rounded-2xl border border-neutral-200/70 shadow-sm p-3 space-y-1.5">
+            <div className="bg-white rounded-2xl border border-[#E2DFDA] p-3 space-y-1.5">
               {/* Store Header with Select All — Compact single-line header */}
               <div className="flex items-center gap-2 pb-2 border-b border-[#E5E5E5]">
                 {/* Select All Checkbox */}

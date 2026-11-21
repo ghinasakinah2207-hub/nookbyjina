@@ -552,7 +552,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
 
         <form id="checkout-form" onSubmit={handleCreateOrder} className="space-y-2">
           {/* Card 1: Customer Contact Info */}
-          <div className="bg-white rounded-2xl border border-neutral-200/70 shadow-sm p-3 sm:p-3.5 space-y-2.5">
+          <div className="bg-white rounded-2xl border border-[#E2DFDA] p-3 sm:p-3.5 space-y-2.5">
             {/* Customer Name */}
             <div className="space-y-0.5">
               <label
@@ -641,7 +641,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
           </div>
 
           {/* Card 2: Read-Only Order Summary */}
-          <div className="bg-white rounded-2xl border border-neutral-200/70 shadow-sm p-3 sm:p-3.5 space-y-2">
+          <div className="bg-white rounded-2xl border border-[#E2DFDA] p-3 sm:p-3.5 space-y-2">
             <div className="flex items-center justify-between pb-1.5 border-b border-[#E5E5E5]">
               <h2 className="text-sm font-bold text-[#111111]">
                 {isBuyNow ? "Beli Langsung" : "Ringkasan Pesanan"}
@@ -732,7 +732,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
           </div>
 
           {/* Card 3: Opsi Pengiriman */}
-          <div className="bg-white rounded-2xl border border-neutral-200/70 shadow-sm p-3 sm:p-3.5 space-y-2.5">
+          <div className="bg-white rounded-2xl border border-[#E2DFDA] p-3 sm:p-3.5 space-y-2.5">
             <h2 className="text-sm font-bold text-[#111111]">
               Opsi Pengiriman
             </h2>
@@ -1039,7 +1039,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
           </div>
 
           {/* Card 4: Metode Pembayaran */}
-          <div className="bg-white rounded-2xl border border-neutral-200/70 shadow-sm p-3 sm:p-3.5 space-y-2">
+          <div className="bg-white rounded-2xl border border-[#E2DFDA] p-3 sm:p-3.5 space-y-2">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-[#111111] flex items-center gap-1.5">
                 <CreditCard className="w-4 h-4 text-[#F25B09]" />
@@ -1134,7 +1134,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
           </div>
 
           {/* Card 5: Rincian Pembayaran */}
-          <div className="bg-white rounded-2xl border border-neutral-200/70 shadow-sm p-3 sm:p-3.5 space-y-2">
+          <div className="bg-white rounded-2xl border border-[#E2DFDA] p-3 sm:p-3.5 space-y-2">
             <h2 className="text-sm font-bold text-[#111111]">
               Rincian Pembayaran
             </h2>

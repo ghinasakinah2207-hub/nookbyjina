@@ -75,7 +75,7 @@ export default function PaymentReturnClient() {
   if (errorMessage) {
     return (
       <div className="min-h-screen bg-[#F6F6F7] flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-sm border border-[#E5E5E5] text-center space-y-4">
+        <div className="w-full max-w-md bg-white rounded-2xl p-6 border border-[#E2DFDA] text-center space-y-4">
           <div className="w-12 h-12 bg-red-50 text-[#B42318] rounded-full flex items-center justify-center mx-auto">
             <AlertCircle className="w-6 h-6" />
           </div>
@@ -99,7 +99,7 @@ export default function PaymentReturnClient() {
   // Fallback case: Order ID present, but browser token vault does not contain the secret access token
   return (
     <div className="min-h-screen bg-[#F6F6F7] flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-sm border border-[#E5E5E5] space-y-4">
+      <div className="w-full max-w-md bg-white rounded-2xl p-6 border border-[#E2DFDA] space-y-4">
         <div className="w-12 h-12 bg-orange-50 text-[#F25B09] rounded-full flex items-center justify-center mx-auto">
           <Clock className="w-6 h-6" />
         </div>

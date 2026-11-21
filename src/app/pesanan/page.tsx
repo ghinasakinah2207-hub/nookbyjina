@@ -83,7 +83,7 @@ export default function OrderHistoryPage() {
           </div>
         ) : orders.length === 0 ? (
           /* Empty State */
-          <div className="p-8 text-center bg-white rounded-2xl border border-neutral-200/70 shadow-sm space-y-4 my-8">
+          <div className="p-8 text-center bg-white rounded-2xl border border-[#E2DFDA] space-y-4 my-8">
             <div className="w-16 h-16 mx-auto rounded-full bg-neutral-100 flex items-center justify-center text-[#737373]">
               <ReceiptText className="w-8 h-8 stroke-[1.5]" />
             </div>
