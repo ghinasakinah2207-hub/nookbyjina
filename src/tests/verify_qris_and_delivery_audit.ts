@@ -17,7 +17,7 @@ async function runAuditTests() {
   console.log("==================================================================\n");
 
   // -----------------------------------------------------------------------------
-  // TEST SUITE 1: Delivery Fee Threshold (> Rp50,000 strictly)
+  // TEST SUITE 1: Delivery Fee Threshold (>= Rp50,000 inclusive)
   // -----------------------------------------------------------------------------
   console.log("=== 1. Delivery Fee Threshold Boundary Tests ===");
   const standardConfig = {
@@ -35,9 +35,9 @@ async function runAuditTests() {
   });
   assert.strictEqual(fee49999.shippingFee, 4000, "Subtotal 49,999 incurs standard fee Rp4,000");
   assert.strictEqual(fee49999.isFree, false, "Subtotal 49,999 is not free");
-  assert.strictEqual(fee49999.remainingToFreeShipping, 2, "Remaining to free shipping for 49,999 is 2");
+  assert.strictEqual(fee49999.remainingToFreeShipping, 1, "Remaining to free shipping for 49,999 is 1");
 
-  // Case 1B: Subtotal == 50,000 (EXACT BOUNDARY: MUST INCUR STANDARD FEE)
+  // Case 1B: Subtotal == 50,000 (EXACT BOUNDARY: QUALIFIES FOR FREE SHIPPING)
   const fee50000 = calculateDeliveryFee({
     fulfillmentType: "delivery",
     deliveryArea: "Lhoksukon",
@@ -46,18 +46,18 @@ async function runAuditTests() {
   });
   assert.strictEqual(
     fee50000.shippingFee,
-    4000,
-    "CRITICAL: Subtotal exactly 50,000 MUST incur configured delivery fee (Rp4,000)"
+    0,
+    "CRITICAL: Subtotal exactly 50,000 MUST qualify for Rp0 free delivery"
   );
   assert.strictEqual(
     fee50000.isFree,
-    false,
-    "CRITICAL: Subtotal exactly 50,000 must NOT be free shipping"
+    true,
+    "CRITICAL: Subtotal exactly 50,000 must be free shipping"
   );
   assert.strictEqual(
     fee50000.remainingToFreeShipping,
-    1,
-    "Remaining amount for subtotal 50,000 must be Rp1 (strictly > 50,000 required)"
+    0,
+    "Remaining amount for subtotal 50,000 must be 0"
   );
 
   // Case 1C: Subtotal == 50,001 (STRICTLY GREATER: QUALIFIES FOR FREE SHIPPING)

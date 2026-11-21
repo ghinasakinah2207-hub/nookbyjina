@@ -226,9 +226,17 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
     fulfillmentType === "pickup" ? 0 : deliveryCalc ? deliveryCalc.shippingFee : 0;
   const grandTotal = selectedSubtotal + (isOutsideConfiguredArea ? 0 : shippingFee);
 
+  const standardDeliveryFee = Math.max(
+    0,
+    Math.round(Number(storeSettings?.deliveryConfig.standardFee ?? 4000) || 0)
+  );
+  const freeDeliveryThreshold = Math.max(
+    0,
+    Math.round(Number(storeSettings?.deliveryConfig.freeShippingThreshold ?? 50000) || 0)
+  );
   const isFreeDeliveryQualified =
-    selectedSubtotal >= (storeSettings?.deliveryConfig.freeShippingThreshold ?? 50000);
-  const standardDeliveryFee = storeSettings?.deliveryConfig.standardFee ?? 4000;
+    standardDeliveryFee === 0 ||
+    (freeDeliveryThreshold > 0 && Math.round(Number(selectedSubtotal) || 0) >= freeDeliveryThreshold);
   const deliveryRowFeeDisplay =
     fulfillmentType === "delivery" && deliveryArea !== configuredAreaName
       ? "Perlu konfirmasi"

@@ -37,10 +37,14 @@ export function calculateDeliveryFee({
   deliveryConfig,
 }: DeliveryCalculationParams): DeliveryCalculationResult {
   const configuredArea = (deliveryConfig?.configuredArea || "Lhoksukon").trim();
-  const standardFee = Math.max(0, Number(deliveryConfig?.standardFee ?? 0));
+  const normalizedSubtotal = Math.max(0, Math.round(Number(subtotal) || 0));
+  const standardFee = Math.max(
+    0,
+    Math.round(Number(deliveryConfig?.standardFee ?? 0) || 0)
+  );
   const freeShippingThreshold = Math.max(
     0,
-    Number(deliveryConfig?.freeShippingThreshold ?? 50000)
+    Math.round(Number(deliveryConfig?.freeShippingThreshold ?? 50000) || 0)
   );
 
   if (fulfillmentType === "pickup") {
@@ -71,18 +75,21 @@ export function calculateDeliveryFee({
       standardFee,
       freeShippingThreshold,
       configuredArea,
-      remainingToFreeShipping: Math.max(0, freeShippingThreshold - subtotal),
+      remainingToFreeShipping: Math.max(0, freeShippingThreshold - normalizedSubtotal),
     };
   }
 
-  // Free delivery applies when subtotal is strictly greater than freeShippingThreshold (> threshold)
-  // This matches the database RPC and the business rule:
-  // "Free delivery applies when the item subtotal is strictly greater than Rp50,000."
-  const isFree = subtotal > freeShippingThreshold;
+  // Free delivery applies when subtotal is greater than or equal to freeShippingThreshold (>= threshold).
+  // Matches the database RPC `create_order_atomic`:
+  // `v_free_thresh > 0 AND v_calculated_subtotal >= v_free_thresh`
+  const isFree =
+    standardFee === 0 ||
+    (freeShippingThreshold > 0 && normalizedSubtotal >= freeShippingThreshold);
   const shippingFee = isFree ? 0 : standardFee;
-  const remainingToFreeShipping = isFree
-    ? 0
-    : Math.max(0, freeShippingThreshold - subtotal + 1);
+  const remainingToFreeShipping =
+    isFree || freeShippingThreshold <= 0
+      ? 0
+      : Math.max(0, freeShippingThreshold - normalizedSubtotal);
 
   return {
     shippingFee,
