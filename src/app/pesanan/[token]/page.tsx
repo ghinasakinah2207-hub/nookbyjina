@@ -464,7 +464,7 @@ Terima kasih telah memesan di Nook by Jina!`;
         ) : null}
 
         {/* Unified E-Receipt: Ringkasan Pesanan Card */}
-        <section className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-[#E5E5E5]/60 space-y-3.5 text-xs">
+        <section className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-neutral-200/70 space-y-3.5 text-xs">
           {/* A. Order Header */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">

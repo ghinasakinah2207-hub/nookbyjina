@@ -96,7 +96,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(rootJsonLd) }}
         />
       </head>
-      <body className="min-h-full flex flex-col bg-[#F6F6F7] text-[#111111] font-sans antialiased">
+      <body className="min-h-screen flex flex-col bg-grid-pattern bg-repeat text-[#111111] font-sans antialiased">
         <AppProvider>{children}</AppProvider>
         <Analytics />
       </body>

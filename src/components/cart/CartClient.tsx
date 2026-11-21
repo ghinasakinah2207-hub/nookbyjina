@@ -204,7 +204,7 @@ export default function CartClient({
   };
 
   return (
-    <div className={`min-h-screen bg-[#F6F6F7] ${isHydrated && cart.length > 0 ? "pb-40" : "pb-24"}`}>
+    <div className={`min-h-screen bg-[#F6F6F7] ${isHydrated && cart.length > 0 ? "pb-36" : "pb-24"}`}>
       <Header
         title={isHydrated ? `Keranjang (${cart.length})` : "Keranjang"}
         showBack={false}
@@ -267,16 +267,16 @@ export default function CartClient({
         </div>
       ) : null}
 
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-2.5">
+      <main className="max-w-md mx-auto px-3 pt-2.5 space-y-2">
         {/* Warning if store is closed */}
         {!storeOpen ? (
-          <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 animate-landing-fade">
-            <AlertTriangle className="w-5 h-5 text-[#B42318] flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-[#B42318] space-y-1">
+          <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5 animate-landing-fade">
+            <AlertTriangle className="w-4.5 h-4.5 text-[#B42318] flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-[#B42318] space-y-0.5">
               <p className="font-semibold">
                 Toko Sedang Close Order
               </p>
-              <p>
+              <p className="text-[11px] leading-snug">
                 Pemesanan baru sedang ditutup sementara oleh pemilik toko. Checkout dinonaktifkan.
               </p>
             </div>
@@ -289,7 +289,7 @@ export default function CartClient({
           </div>
         ) : cart.length === 0 ? (
           /* Empty State */
-          <div className="p-8 text-center bg-white rounded-2xl space-y-4 my-8">
+          <div className="p-8 text-center bg-white rounded-2xl border border-neutral-200/70 shadow-sm space-y-4 my-8">
             <div className="w-16 h-16 mx-auto rounded-full bg-neutral-100 flex items-center justify-center text-[#737373]">
               <ShoppingBag className="w-8 h-8 stroke-[1.5]" />
             </div>
@@ -303,7 +303,7 @@ export default function CartClient({
             </div>
             <Link
               href="/menu"
-              className="inline-flex items-center justify-center min-h-[48px] px-6 py-2.5 bg-[#F25B09] hover:bg-[#D94D06] text-white text-xs font-semibold rounded-xl transition-colors"
+              className="inline-flex items-center justify-center min-h-[44px] px-6 py-2.5 bg-[#F25B09] hover:bg-[#D94D06] text-white text-xs font-semibold rounded-xl transition-colors"
             >
               Lihat Menu Sekarang
             </Link>
@@ -312,29 +312,29 @@ export default function CartClient({
           <>
             {/* Warning if there are sold-out items in selection */}
             {hasSoldOutSelected ? (
-              <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-[#B42318] flex-shrink-0 mt-0.5" />
-                <div className="text-xs text-[#B42318] space-y-1">
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5">
+                <AlertTriangle className="w-4.5 h-4.5 text-[#B42318] flex-shrink-0 mt-0.5" />
+                <div className="text-xs text-[#B42318] space-y-0.5">
                   <p className="font-semibold">
                     Terdapat menu yang sedang habis di keranjangmu!
                   </p>
-                  <p>
+                  <p className="text-[11px] leading-snug">
                     Silakan hapus menu yang habis terlebih dahulu sebelum melanjutkan ke checkout.
                   </p>
                 </div>
               </div>
             ) : null}
 
-            {/* Shopee-Inspired Grouped Cart Card */}
-            <div className="bg-white rounded-2xl p-3.5 space-y-3">
-              {/* Store Header with Select All — Displayed ONCE above product list */}
-              <div className="flex items-center gap-2 pb-2.5 border-b border-[#E5E5E5]">
+            {/* Shopee-Inspired Grouped Cart Card (Compact) */}
+            <div className="bg-white rounded-2xl border border-neutral-200/70 shadow-sm p-3 space-y-1.5">
+              {/* Store Header with Select All — Compact single-line header */}
+              <div className="flex items-center gap-2 pb-2 border-b border-[#E5E5E5]">
                 {/* Select All Checkbox */}
                 <button
                   type="button"
                   onClick={toggleSelectAllCartItems}
                   aria-label={isAllSelected ? "Hapus semua pilihan" : "Pilih semua menu"}
-                  className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+                  className={`w-4.5 h-4.5 rounded-md border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
                     isAllSelected
                       ? "bg-[#F25B09] border-[#F25B09] text-white"
                       : isPartiallySelected
@@ -343,62 +343,62 @@ export default function CartClient({
                   }`}
                 >
                   {isAllSelected ? (
-                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    <Check className="w-3 h-3 stroke-[3]" />
                   ) : isPartiallySelected ? (
-                    <Minus className="w-3.5 h-3.5 stroke-[3]" />
+                    <Minus className="w-3 h-3 stroke-[3]" />
                   ) : null}
                 </button>
 
-                <span className="px-1.5 py-0.5 rounded bg-[#F25B09] text-white text-[10px] font-bold tracking-wide uppercase">
+                <span className="px-1.5 py-0.5 rounded bg-[#F25B09] text-white text-[9.5px] font-bold tracking-wide uppercase leading-none">
                   nook
                 </span>
-                <span className="text-xs font-bold text-[#111111] flex-1">
+                <span className="text-xs font-bold text-[#111111] flex-1 leading-none">
                   Nook By Jina
                 </span>
-                <span className="text-[10px] text-[#737373]">
+                <span className="text-[10px] text-[#737373] leading-none">
                   {selectedCartItems.length}/{cart.length} dipilih
                 </span>
               </div>
 
               {/* Cart Items List */}
-              <div className="space-y-2">
-                {cart.map((item, index) => {
+              <div className="divide-y divide-[#E5E5E5]/70">
+                {cart.map((item) => {
                   const variationSummary = getVariationSummary(item);
                   const isSelected = selectedCartItemIds.has(item.id);
 
                   return (
                     <div
                       key={item.id}
-                      className={`flex items-start gap-2.5 py-2.5 ${
-                        index > 0 ? "border-t border-[#E5E5E5]" : ""
-                      } ${!item.isAvailable ? "opacity-75" : ""}`}
+                      className={`flex items-start gap-2 py-2 first:pt-1 last:pb-0.5 ${
+                        !item.isAvailable ? "opacity-75" : ""
+                      }`}
                     >
                       {/* Selection Checkbox */}
                       <button
                         type="button"
                         onClick={() => toggleCartItemSelection(item.id)}
                         aria-label={isSelected ? `Batal pilih ${item.productName}` : `Pilih ${item.productName}`}
-                        className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors cursor-pointer shrink-0 mt-7 ${
+                        className={`w-4.5 h-4.5 rounded-md border flex items-center justify-center transition-colors cursor-pointer shrink-0 mt-5 ${
                           isSelected
                             ? "bg-[#F25B09] border-[#F25B09] text-white"
                             : "bg-white border-[#D4D4D4] hover:border-neutral-400"
                         }`}
                       >
-                        {isSelected ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : null}
+                        {isSelected ? <Check className="w-3 h-3 stroke-[3]" /> : null}
                       </button>
 
-                      {/* Product Thumbnail */}
-                      <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-neutral-100 flex-shrink-0">
+                      {/* Product Thumbnail (Compact w-16 h-16) */}
+                      <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-neutral-100 border border-[#E5E5E5]/60 flex-shrink-0">
                         <Image
                           src={item.productImage}
                           alt={item.productName}
                           fill
                           className={`object-cover ${!item.isAvailable ? "grayscale" : ""}`}
-                          sizes="80px"
+                          sizes="64px"
                         />
                         {!item.isAvailable && (
                           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                            <span className="text-[10px] font-bold text-white bg-red-600 px-1.5 py-0.5 rounded">
+                            <span className="text-[9.5px] font-bold text-white bg-red-600 px-1.5 py-0.5 rounded">
                               Habis
                             </span>
                           </div>
@@ -406,17 +406,17 @@ export default function CartClient({
                       </div>
 
                       {/* RIGHT: Product Details */}
-                      <div className="flex-1 min-w-0 space-y-1.5">
+                      <div className="flex-1 min-w-0 space-y-1">
                         {/* Title & Delete Action */}
                         <div className="flex items-start justify-between gap-1.5">
-                          <h3 className="text-xs sm:text-sm font-semibold text-[#111111] leading-snug line-clamp-2">
+                          <h3 className="text-xs font-semibold text-[#111111] leading-tight line-clamp-2">
                             {item.productName}
                           </h3>
                           <button
                             type="button"
                             onClick={() => removeFromCart(item.id)}
                             aria-label={`Hapus ${item.productName}`}
-                            className="w-6 h-6 -mr-1 flex items-center justify-center rounded-md text-[#737373] hover:text-[#B42318] hover:bg-neutral-50 flex-shrink-0 transition-colors"
+                            className="w-5 h-5 -mr-0.5 flex items-center justify-center rounded text-[#737373] hover:text-[#B42318] hover:bg-neutral-50 flex-shrink-0 transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -427,41 +427,41 @@ export default function CartClient({
                           <button
                             type="button"
                             onClick={() => handleOpenVariationModal(item)}
-                            className="inline-flex items-center gap-1.5 px-2 py-1 bg-[#F5F5F6] hover:bg-[#EBEBEF] rounded-md text-[11px] text-[#555555] hover:text-[#111111] transition-colors max-w-full text-left"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#F5F5F6] hover:bg-[#EBEBEF] rounded text-[10.5px] text-[#555555] hover:text-[#111111] transition-colors max-w-full text-left cursor-pointer"
                             title="Ubah Variasi"
                           >
-                            <span className="truncate max-w-[150px] sm:max-w-[190px]">
+                            <span className="truncate max-w-[155px] sm:max-w-[195px]">
                               {variationSummary}
                             </span>
                             <ChevronDown className="w-3 h-3 flex-shrink-0 text-[#737373]" />
                           </button>
                         </div>
 
-                        {/* Product Price & Quantity Row */}
+                        {/* Product Price & Slim Quantity Row */}
                         <div className="flex items-center justify-between gap-2 pt-0.5">
-                          <div className="text-xs sm:text-sm font-bold text-[#F25B09]">
+                          <div className="text-xs font-bold text-[#F25B09] leading-none">
                             {formatRupiah(item.unitPrice)}
                           </div>
 
-                          <div className="flex items-center border border-[#E5E5E5] rounded-xl p-0.5 bg-neutral-50">
+                          <div className="flex items-center border border-[#E5E5E5] rounded-lg p-0.5 bg-neutral-50">
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity - 1)}
                               aria-label="Kurangi kuantitas"
-                              className="w-7 h-7 flex items-center justify-center rounded-lg text-[#111111] hover:bg-white min-h-[28px] min-w-[28px] transition-colors"
+                              className="w-6 h-6 flex items-center justify-center rounded-md text-[#111111] hover:bg-white transition-colors cursor-pointer"
                             >
                               <Minus className="w-3 h-3" />
                             </button>
-                            <span className="w-7 text-center text-xs font-semibold text-[#111111]">
+                            <span className="w-6 text-center text-[11px] font-bold text-[#111111] tabular-nums">
                               {item.quantity}
                             </span>
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity + 1)}
                               aria-label="Tambah kuantitas"
-                              className="w-7 h-7 flex items-center justify-center rounded-lg text-[#111111] hover:bg-white min-h-[28px] min-w-[28px] transition-colors"
+                              className="w-6 h-6 flex items-center justify-center rounded-md text-[#111111] hover:bg-white transition-colors cursor-pointer"
                             >
-                              <Plus className="w-3.5 h-3.5" />
+                              <Plus className="w-3 h-3" />
                             </button>
                           </div>
                         </div>
@@ -475,7 +475,7 @@ export default function CartClient({
         )}
       </main>
 
-      {/* Sticky Bottom Bar for Checkout */}
+      {/* Sticky Bottom Bar for Checkout (Compact) */}
       {isHydrated && cart.length > 0 ? (
         <div
           className="fixed left-0 right-0 z-30 bg-white border-t border-[#E5E5E5] shadow-[0_-4px_16px_rgba(0,0,0,0.04)]"
@@ -483,12 +483,12 @@ export default function CartClient({
             bottom: "calc(55px + env(safe-area-inset-bottom, 0px))",
           }}
         >
-          <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between gap-4">
+          <div className="max-w-md mx-auto px-3 py-2 flex items-center justify-between gap-3">
             <div>
-              <span className="text-[11px] text-[#737373] block leading-none">
+              <span className="text-[10.5px] text-[#737373] block leading-tight">
                 Total Pembayaran
               </span>
-              <span className="text-base font-bold text-[#111111] leading-tight">
+              <span className="text-sm sm:text-base font-extrabold text-[#111111] leading-tight">
                 {noneSelected ? formatRupiah(0) : formatRupiah(selectedSubtotal)}
               </span>
             </div>
@@ -497,9 +497,9 @@ export default function CartClient({
               type="button"
               disabled={noneSelected || hasSoldOutSelected || !storeOpen}
               onClick={handleProceedToCheckout}
-              className={`min-h-[48px] px-6 py-3 rounded-xl font-bold text-sm sm:text-base flex items-center justify-center transition-colors ${
+              className={`min-h-[40px] px-5 py-2 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center transition-colors ${
                 !noneSelected && !hasSoldOutSelected && storeOpen
-                  ? "bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white"
+                  ? "bg-[#F25B09] hover:bg-[#D94D06] active:bg-[#D94D06] text-white cursor-pointer"
                   : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
               }`}
             >

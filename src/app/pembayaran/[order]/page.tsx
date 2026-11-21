@@ -537,7 +537,7 @@ function PaymentContent() {
 
       <main className="max-w-md mx-auto px-2.5 sm:px-3.5 pt-2.5 space-y-2.5">
         {/* Order Info & Nominal Card */}
-        <section className="bg-white rounded-2xl p-3.5 sm:p-4 shadow-xs border border-[#E5E5E5]/70 space-y-2">
+        <section className="bg-white rounded-2xl p-3.5 sm:p-4 shadow-sm border border-neutral-200/70 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div>
               <span className="text-[10px] text-[#737373] uppercase font-semibold tracking-wider block leading-tight">
@@ -737,7 +737,7 @@ function PaymentContent() {
         {!isPaid && !isExpired && (
           <div className="space-y-2.5">
             {/* Real QRIS Code Card (White background) */}
-            <section className="bg-white rounded-2xl p-3.5 sm:p-4 text-center space-y-2.5 shadow-xs border border-[#E5E5E5]/70 flex flex-col items-center">
+            <section className="bg-white rounded-2xl p-3.5 sm:p-4 text-center space-y-2.5 shadow-sm border border-neutral-200/70 flex flex-col items-center">
               <p className="text-[11px] text-[#737373] leading-snug">
                 Mendukung GoPay, OVO, DANA, ShopeePay & seluruh Mobile Banking
               </p>
@@ -847,7 +847,7 @@ function PaymentContent() {
             </div>
 
             {/* Instructions for Paying with Single Phone */}
-            <section className="bg-white rounded-2xl p-3.5 sm:p-4 space-y-2.5 shadow-xs border border-[#E5E5E5]/70 text-xs">
+            <section className="bg-white rounded-2xl p-3.5 sm:p-4 space-y-2.5 shadow-sm border border-neutral-200/70 text-xs">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-orange-100 text-[#F25B09] flex items-center justify-center shrink-0">
                   <Smartphone className="w-4 h-4" />

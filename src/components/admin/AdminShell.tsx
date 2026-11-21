@@ -266,7 +266,7 @@ export function AdminShell({
     pathname.startsWith("/admin/pengaturan");
 
   return (
-    <div className="min-h-screen bg-[#F6F6F7] flex flex-col md:flex-row">
+    <div className="min-h-screen bg-grid-pattern bg-repeat flex flex-col md:flex-row">
       {/* =========================================================================
           DESKTOP SIDEBAR (Visible on md and larger) - 100% Preserved
           ========================================================================= */}
