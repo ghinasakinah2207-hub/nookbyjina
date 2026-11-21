@@ -67,13 +67,24 @@ export interface WaroengPayWebhookEvent {
 
 const WAROENGPAY_BASE_URL = "https://waroengpay.com";
 
+function normalizeEnvSecret(value: string | undefined): string {
+  const trimmed = (value || "").trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
 /**
  * Returns WaroengPay configuration from environment.
  * Validates presence of API key and webhook secret.
  */
 export function getWaroengPayConfig(): WaroengPayConfig {
-  const apiKey = (process.env.WAROENGPAY_API_KEY || "").trim();
-  const webhookSecret = (process.env.WAROENGPAY_WEBHOOK_SECRET || "").trim();
+  const apiKey = normalizeEnvSecret(process.env.WAROENGPAY_API_KEY);
+  const webhookSecret = normalizeEnvSecret(process.env.WAROENGPAY_WEBHOOK_SECRET);
 
   if (!apiKey) {
     throw new Error("WAROENGPAY_API_KEY belum dikonfigurasi di environment server.");
@@ -233,10 +244,126 @@ export async function simulateWaroengPayPayment(
   return responseJson as WaroengPayPaymentResponse;
 }
 
+export interface WaroengPaySignatureVerificationResult {
+  valid: boolean;
+  reason?:
+    | "missing_params"
+    | "missing_secret"
+    | "invalid_timestamp"
+    | "expired_timestamp"
+    | "invalid_signature_length"
+    | "signature_mismatch";
+  timestampSeconds?: number;
+  serverSeconds?: number;
+  skewSeconds?: number;
+}
+
+/**
+ * Verifies WaroengPay webhook signature with detailed failure diagnostics.
+ * Formula: hex(HMAC-SHA256(webhook_secret, "<timestamp>.<raw body>"))
+ * Rejects timestamps older or ahead by more than `maxSkewSeconds` (default 300s).
+ */
+export function verifyWaroengPayWebhookSignatureDetailed(
+  params: {
+    rawBody: string;
+    timestamp: string;
+    signature: string;
+  },
+  customSecret?: string,
+  maxSkewSeconds = 300
+): WaroengPaySignatureVerificationResult {
+  const rawBody = params.rawBody;
+  const timestamp = (params.timestamp || "").trim();
+  const normalizedSignature = (params.signature || "")
+    .trim()
+    .replace(/^sha256=/i, "")
+    .toLowerCase();
+
+  if (!rawBody || !timestamp || !normalizedSignature) {
+    return { valid: false, reason: "missing_params" };
+  }
+
+  const secret = normalizeEnvSecret(customSecret ?? process.env.WAROENGPAY_WEBHOOK_SECRET);
+  if (!secret) {
+    return { valid: false, reason: "missing_secret" };
+  }
+
+  // 1. Freshness check: timestamp must be within maxSkewSeconds
+  const parsedTs = Number(timestamp);
+  if (!Number.isFinite(parsedTs) || parsedTs <= 0) {
+    return { valid: false, reason: "invalid_timestamp" };
+  }
+
+  // Support Unix seconds (10 digits) and milliseconds (13 digits) gracefully
+  const timestampSeconds = parsedTs > 1e12 ? Math.floor(parsedTs / 1000) : Math.floor(parsedTs);
+  const serverSeconds = Math.floor(Date.now() / 1000);
+  const skewSeconds = Math.abs(serverSeconds - timestampSeconds);
+
+  if (skewSeconds > maxSkewSeconds) {
+    return {
+      valid: false,
+      reason: "expired_timestamp",
+      timestampSeconds,
+      serverSeconds,
+      skewSeconds,
+    };
+  }
+
+  // 2. Compute expected HMAC-SHA256 signature using exact "<timestamp>.<rawBody>" format
+  const dataToSign = `${timestamp}.${rawBody}`;
+  const expectedSignature = crypto
+    .createHmac("sha256", secret)
+    .update(dataToSign)
+    .digest("hex")
+    .toLowerCase();
+
+  // 3. Timing-safe comparison to protect against timing attacks
+  try {
+    const sigBuffer = Buffer.from(normalizedSignature, "utf8");
+    const expectedBuffer = Buffer.from(expectedSignature, "utf8");
+
+    if (sigBuffer.length !== expectedBuffer.length || sigBuffer.length === 0) {
+      return {
+        valid: false,
+        reason: "invalid_signature_length",
+        timestampSeconds,
+        serverSeconds,
+        skewSeconds,
+      };
+    }
+
+    const matched = crypto.timingSafeEqual(sigBuffer, expectedBuffer);
+    if (!matched) {
+      return {
+        valid: false,
+        reason: "signature_mismatch",
+        timestampSeconds,
+        serverSeconds,
+        skewSeconds,
+      };
+    }
+
+    return {
+      valid: true,
+      timestampSeconds,
+      serverSeconds,
+      skewSeconds,
+    };
+  } catch {
+    return {
+      valid: false,
+      reason: "signature_mismatch",
+      timestampSeconds,
+      serverSeconds,
+      skewSeconds,
+    };
+  }
+}
+
 /**
  * Verifies WaroengPay webhook signature using HMAC-SHA256 and constant-time comparison.
  * Formula: hex(HMAC-SHA256(webhook_secret, "<timestamp>.<raw body>"))
- * Rejects timestamps older or ahead by more than 300 seconds (replay defense).
+ * Rejects timestamps older or ahead by more than `maxSkewSeconds` (default 300s).
  */
 export function verifyWaroengPayWebhookSignature(
   params: {
@@ -244,50 +371,10 @@ export function verifyWaroengPayWebhookSignature(
     timestamp: string;
     signature: string;
   },
-  customSecret?: string
+  customSecret?: string,
+  maxSkewSeconds = 300
 ): boolean {
-  const { rawBody, timestamp, signature } = params;
-
-  if (!rawBody || !timestamp || !signature) {
-    return false;
-  }
-
-  const secret = customSecret ?? (process.env.WAROENGPAY_WEBHOOK_SECRET || "").trim();
-  if (!secret) {
-    return false;
-  }
-
-  // 1. Freshness check: timestamp must be within 300 seconds (5 minutes)
-  const parsedTs = Number(timestamp);
-  if (isNaN(parsedTs) || parsedTs <= 0) {
-    return false;
-  }
-
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  if (Math.abs(nowSeconds - parsedTs) > 300) {
-    return false;
-  }
-
-  // 2. Compute expected HMAC-SHA256 signature
-  const dataToSign = `${timestamp}.${rawBody}`;
-  const expectedSignature = crypto
-    .createHmac("sha256", secret)
-    .update(dataToSign)
-    .digest("hex");
-
-  // 3. Timing-safe comparison to protect against timing attacks
-  try {
-    const sigBuffer = Buffer.from(signature.toLowerCase(), "hex");
-    const expectedBuffer = Buffer.from(expectedSignature.toLowerCase(), "hex");
-
-    if (sigBuffer.length !== expectedBuffer.length || sigBuffer.length === 0) {
-      return false;
-    }
-
-    return crypto.timingSafeEqual(sigBuffer, expectedBuffer);
-  } catch {
-    return false;
-  }
+  return verifyWaroengPayWebhookSignatureDetailed(params, customSecret, maxSkewSeconds).valid;
 }
 
 export interface WaroengPayUpcomingRelease {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
 import {
   getWaroengPayConfig,
-  verifyWaroengPayWebhookSignature,
+  verifyWaroengPayWebhookSignatureDetailed,
   WaroengPayWebhookEvent,
 } from "@/lib/waroengpay";
 import { updateOrderStatusServer, getDevOrderByWaroengPayId } from "@/lib/orders-store";
@@ -25,10 +25,11 @@ import { updateOrderStatusServer, getDevOrderByWaroengPayId } from "@/lib/orders
  */
 export async function POST(req: NextRequest) {
   try {
+    // 0. Always read the raw request body FIRST (never call req.json() before HMAC verification)
     const rawBody = await req.text();
-    const timestamp = req.headers.get("x-waroengpay-timestamp") || "";
-    const signature = req.headers.get("x-signature") || "";
-    const eventType = req.headers.get("x-waroengpay-event") || "";
+    const timestamp = (req.headers.get("x-waroengpay-timestamp") || "").trim();
+    const signature = (req.headers.get("x-signature") || "").trim();
+    const eventType = (req.headers.get("x-waroengpay-event") || "").trim();
 
     // 1. Mandatory Header Verification
     if (!timestamp || !signature) {
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Load Configuration and Verify HMAC Signature
+    // 2. Load Configuration and Verify HMAC Signature (`${timestamp}.${rawBody}`)
     let config;
     try {
       config = getWaroengPayConfig();
@@ -51,15 +52,45 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const isSignatureValid = verifyWaroengPayWebhookSignature(
+    if (!config.webhookSecret) {
+      console.error("[WaroengPay Webhook] WAROENGPAY_WEBHOOK_SECRET is not configured on server");
+      return NextResponse.json(
+        { success: false, message: "Webhook secret missing on server" },
+        { status: 500 }
+      );
+    }
+
+    // Allow configurable timestamp tolerance (default 600s = 10m to handle minor clock drift / testing delays)
+    const configuredSkew = Number(process.env.WAROENGPAY_WEBHOOK_MAX_SKEW_SECONDS);
+    const maxSkewSeconds =
+      Number.isFinite(configuredSkew) && configuredSkew > 0 ? configuredSkew : 600;
+
+    const verification = verifyWaroengPayWebhookSignatureDetailed(
       { rawBody, timestamp, signature },
-      config.webhookSecret
+      config.webhookSecret,
+      maxSkewSeconds
     );
 
-    if (!isSignatureValid) {
-      console.warn("[WaroengPay Webhook] Invalid signature or expired timestamp (replay defense)");
+    if (!verification.valid) {
+      console.warn("[WaroengPay Webhook] Verification failed:", {
+        reason: verification.reason,
+        eventType: eventType || "unknown",
+        timestampHeader: timestamp,
+        serverSeconds: verification.serverSeconds,
+        skewSeconds: verification.skewSeconds,
+        maxSkewSeconds,
+        rawBodyLength: rawBody.length,
+        signatureLength: signature.length,
+        secretPrefix: config.webhookSecret.slice(0, 6),
+      });
+
+      const failureMessage =
+        verification.reason === "expired_timestamp" || verification.reason === "invalid_timestamp"
+          ? "Expired or invalid webhook timestamp"
+          : "Invalid webhook signature";
+
       return NextResponse.json(
-        { success: false, message: "Invalid signature or expired timestamp" },
+        { success: false, message: failureMessage, reason: verification.reason },
         { status: 401 }
       );
     }
