@@ -8,7 +8,6 @@ import {
 } from "@/lib/supabase/catalog";
 import { getAdminProductsServer } from "@/lib/supabase/admin-catalog";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { CATEGORIES, PRODUCTS } from "@/data/dummy-data";
 import { Category, Product, HomepageSection, Banner } from "@/types";
 
 export default async function AdminHomepageSectionsPage() {
@@ -31,12 +30,10 @@ export default async function AdminHomepageSectionsPage() {
 
     banners = fetchedBanners;
     sections = fetchedSections;
-    products = fetchedProds.length > 0 ? fetchedProds : PRODUCTS;
-    categories = fetchedCats.length > 0 ? fetchedCats : CATEGORIES;
+    products = fetchedProds;
+    categories = fetchedCats;
   } catch (err) {
     console.error("Error loading admin homepage sections data:", err);
-    products = PRODUCTS;
-    categories = CATEGORIES;
   }
 
   return (

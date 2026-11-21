@@ -6,7 +6,6 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getProductBySlugOrId, clearCatalogCache } from "@/lib/supabase/catalog";
-import { PRODUCTS } from "@/data/dummy-data";
 import { Product } from "@/types";
 import { generateSlug, resolveUniqueSlug } from "@/lib/slug";
 import { getServiceRoleSupabaseClient } from "@/lib/supabase/service-role";
@@ -1506,24 +1505,17 @@ export async function getAdminProductForEditAction(
     const serviceClient = getServiceRoleSupabaseClient();
     const client = serviceClient || supabase;
 
-    // 2. Fetch product by slug or id using catalog loader with authenticated admin client
+    // 2. Fetch product by slug or id strictly from Supabase database (no dummy fallback)
     const baseProduct = await getProductBySlugOrId(identifier, true, client);
 
-    // Fallback to dummy PRODUCTS if not yet seeded in database
-    let resolvedProduct: Product;
-    if (baseProduct) {
-      resolvedProduct = baseProduct;
-    } else {
-      const dummyProd = PRODUCTS.find((p) => p.id === identifier || p.slug === identifier);
-      if (dummyProd) {
-        resolvedProduct = dummyProd;
-      } else {
-        return {
-          success: false,
-          error: "Produk tidak ditemukan.",
-        };
-      }
+    if (!baseProduct) {
+      return {
+        success: false,
+        error: "Produk tidak ditemukan di database.",
+      };
     }
+
+    const resolvedProduct: Product = baseProduct;
 
     // 3. Fetch authoritative HPP and calories directly from products table (authorized admins only)
     let fetchedHpp: number | null = null;

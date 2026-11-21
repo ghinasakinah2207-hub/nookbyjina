@@ -3,7 +3,6 @@ import { requireAdminAuth } from "@/lib/supabase/admin-auth";
 import { MenuManager } from "@/components/admin/MenuManager";
 import { getActiveCategories } from "@/lib/supabase/catalog";
 import { getAdminProductsServer } from "@/lib/supabase/admin-catalog";
-import { CATEGORIES } from "@/data/dummy-data";
 import { Category, Product } from "@/types";
 import { AlertTriangle } from "lucide-react";
 
@@ -21,7 +20,7 @@ export default async function AdminMenuPage() {
       getActiveCategories(),
       getAdminProductsServer(),
     ]);
-    categories = fetchedCats.length > 0 ? fetchedCats : CATEGORIES;
+    categories = fetchedCats;
     products = fetchedProds;
   } catch (err: unknown) {
     const msg =

@@ -7,9 +7,10 @@ import { isWaroengPayConfigured, isWaroengPaySandbox, simulateWaroengPayPayment 
  */
 export async function POST(req: NextRequest) {
   try {
-    if (!isWaroengPayConfigured() || !isWaroengPaySandbox()) {
+    // Hard-disable sandbox simulation endpoint in live production environments
+    if (process.env.NODE_ENV === "production" || !isWaroengPayConfigured() || !isWaroengPaySandbox()) {
       return NextResponse.json(
-        { success: false, message: "Simulasi hanya tersedia dalam mode Sandbox." },
+        { success: false, message: "Simulasi dinonaktifkan pada mode Live/Produksi." },
         { status: 403 }
       );
     }
