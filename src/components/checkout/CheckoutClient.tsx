@@ -530,10 +530,10 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
         showCart={false}
       />
 
-      <main className="max-w-md mx-auto px-4 pt-3 space-y-2.5">
+      <main className="max-w-md mx-auto px-3 pt-2.5 space-y-2">
         {/* Explicit Error Display if Settings Loading Failed */}
         {settingsError ? (
-          <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-[#B42318] space-y-1">
+          <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-xs text-[#B42318] space-y-1">
             <div className="flex items-center gap-2 font-bold">
               <AlertCircle className="w-4 h-4" />
               <span>Gagal Memuat Tarif Pengantaran</span>
@@ -544,17 +544,17 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
 
         {/* Submit Error Banner */}
         {submitError ? (
-          <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-[#B42318] flex items-center gap-2">
+          <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-xs text-[#B42318] flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{submitError}</span>
           </div>
         ) : null}
 
-        <form id="checkout-form" onSubmit={handleCreateOrder} className="space-y-2.5">
+        <form id="checkout-form" onSubmit={handleCreateOrder} className="space-y-2">
           {/* Card 1: Customer Contact Info */}
-          <div className="bg-white rounded-2xl p-4 space-y-3.5">
+          <div className="bg-white rounded-2xl p-3 sm:p-3.5 space-y-2.5">
             {/* Customer Name */}
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <label
                 htmlFor="customerNameInput"
                 className="text-xs font-semibold text-[#111111] block"
@@ -580,14 +580,14 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                   }
                 }}
                 placeholder="Contoh: Rina Safitri"
-                className={`w-full h-12 px-3.5 bg-white border rounded-xl text-xs sm:text-sm text-[#111111] placeholder:text-[#737373] focus:outline-hidden ${
+                className={`w-full h-10 px-3 bg-white border rounded-xl text-xs sm:text-sm text-[#111111] placeholder:text-[#737373] focus:outline-hidden ${
                   errors.customerName
                     ? "border-[#B42318] bg-red-50/20"
                     : "border-[#E5E5E5] focus:border-[#F25B09]"
                 }`}
               />
               {errors.customerName ? (
-                <p className="text-[11px] text-[#B42318] flex items-center gap-1 mt-1">
+                <p className="text-[11px] text-[#B42318] flex items-center gap-1 mt-0.5">
                   <AlertCircle className="w-3.5 h-3.5" />
                   {errors.customerName}
                 </p>
@@ -595,7 +595,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
             </div>
 
             {/* WhatsApp Number */}
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <label
                 htmlFor="customerWhatsappInput"
                 className="text-xs font-semibold text-[#111111] block"
@@ -625,14 +625,14 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                   }
                 }}
                 placeholder="Contoh: 081234567890"
-                className={`w-full h-12 px-3.5 bg-white border rounded-xl text-xs sm:text-sm text-[#111111] placeholder:text-[#737373] focus:outline-hidden ${
+                className={`w-full h-10 px-3 bg-white border rounded-xl text-xs sm:text-sm text-[#111111] placeholder:text-[#737373] focus:outline-hidden ${
                   errors.customerWhatsapp
                     ? "border-[#B42318] bg-red-50/20"
                     : "border-[#E5E5E5] focus:border-[#F25B09]"
                 }`}
               />
               {errors.customerWhatsapp ? (
-                <p className="text-[11px] text-[#B42318] flex items-center gap-1 mt-1">
+                <p className="text-[11px] text-[#B42318] flex items-center gap-1 mt-0.5">
                   <AlertCircle className="w-3.5 h-3.5" />
                   {errors.customerWhatsapp}
                 </p>
@@ -641,12 +641,12 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
           </div>
 
           {/* Card 2: Read-Only Order Summary */}
-          <div className="bg-white rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-[#E5E5E5]">
+          <div className="bg-white rounded-2xl p-3 sm:p-3.5 space-y-2">
+            <div className="flex items-center justify-between pb-1.5 border-b border-[#E5E5E5]">
               <h2 className="text-sm font-bold text-[#111111]">
                 {isBuyNow ? "Beli Langsung" : "Ringkasan Pesanan"}
               </h2>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <span className="text-xs font-normal text-[#737373]">
                   {checkoutItems.length} menu
                 </span>
@@ -661,7 +661,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
             {/* Compact Preparation-Type Indicator */}
             {checkoutItems.length > 0 && (
               <div
-                className={`px-3 py-2 rounded-xl flex items-center gap-2 text-xs border ${
+                className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border ${
                   checkoutTypeConfig.type === "ready"
                     ? "bg-emerald-50/70 border-emerald-200/80 text-[#18794E]"
                     : "bg-orange-50/70 border-orange-200/80 text-[#F25B09]"
@@ -675,20 +675,20 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
             )}
 
             {/* Product Items List (Read-Only) */}
-            <div className="space-y-3 pt-1 divide-y divide-[#E5E5E5]/60">
+            <div className="space-y-2 pt-0.5 divide-y divide-[#E5E5E5]/60">
               {checkoutItems.map((item) => (
                 <div
                   key={item.id}
-                  className="pt-2.5 first:pt-0 flex items-start gap-3"
+                  className="pt-2 first:pt-0 flex items-start gap-2.5"
                 >
                   {/* Product Thumbnail */}
-                  <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-neutral-100 border border-[#E5E5E5] shrink-0 mt-0.5">
+                  <div className="relative w-11 h-11 rounded-lg overflow-hidden bg-neutral-100 border border-[#E5E5E5] shrink-0">
                     <Image
                       src={item.productImage || "/images/hero-food.webp"}
                       alt={item.productName}
                       fill
                       className={`object-cover ${!item.isAvailable ? "grayscale" : ""}`}
-                      sizes="48px"
+                      sizes="44px"
                     />
                   </div>
 
@@ -732,48 +732,48 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
           </div>
 
           {/* Card 3: Opsi Pengiriman */}
-          <div className="bg-white rounded-2xl p-4 space-y-3.5">
+          <div className="bg-white rounded-2xl p-3 sm:p-3.5 space-y-2.5">
             <h2 className="text-sm font-bold text-[#111111]">
               Opsi Pengiriman
             </h2>
 
             {/* Compact Shipping Option Cards */}
-            <div role="radiogroup" aria-label="Opsi Pengiriman" className="space-y-2">
+            <div role="radiogroup" aria-label="Opsi Pengiriman" className="space-y-1.5">
               {/* Option 1: Ambil Sendiri */}
               <button
                 type="button"
                 role="radio"
                 aria-checked={fulfillmentType === "pickup"}
                 onClick={() => setFulfillmentType("pickup")}
-                className={`w-full p-3 sm:p-3.5 rounded-xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#F25B09] ${
+                className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between gap-2.5 transition-all cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#F25B09] ${
                   fulfillmentType === "pickup"
                     ? "border-[#F25B09] bg-orange-50/30 ring-1 ring-[#F25B09]"
                     : "border-[#E5E5E5] bg-white hover:border-neutral-300"
                 }`}
               >
-                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <div
-                    className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
                       fulfillmentType === "pickup"
                         ? "bg-[#F25B09]/10 text-[#F25B09]"
                         : "bg-neutral-100 text-[#737373]"
                     }`}
                   >
-                    <Store className="w-5 h-5 stroke-[1.75]" />
+                    <Store className="w-4.5 h-4.5 stroke-[1.75]" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-xs sm:text-sm font-bold text-[#111111] block">
+                    <span className="text-xs sm:text-sm font-bold text-[#111111] block leading-tight">
                       Ambil Sendiri
                     </span>
-                    <span className="text-[11px] text-[#737373] block leading-snug">
+                    <span className="text-[11px] text-[#737373] block leading-tight mt-0.5">
                       Ambil pesanan langsung di toko
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 text-right">
+                <div className="flex items-center gap-2 shrink-0 text-right">
                   <span
-                    className={`text-xs sm:text-sm whitespace-nowrap font-bold ${
+                    className={`text-xs whitespace-nowrap font-bold ${
                       fulfillmentType === "pickup" ? "text-[#F25B09]" : "text-[#737373]"
                     }`}
                   >
@@ -807,35 +807,35 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                 role="radio"
                 aria-checked={fulfillmentType === "delivery"}
                 onClick={() => setFulfillmentType("delivery")}
-                className={`w-full p-3 sm:p-3.5 rounded-xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#F25B09] ${
+                className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between gap-2.5 transition-all cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#F25B09] ${
                   fulfillmentType === "delivery"
                     ? "border-[#F25B09] bg-orange-50/30 ring-1 ring-[#F25B09]"
                     : "border-[#E5E5E5] bg-white hover:border-neutral-300"
                 }`}
               >
-                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <div
-                    className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
                       fulfillmentType === "delivery"
                         ? "bg-[#F25B09]/10 text-[#F25B09]"
                         : "bg-neutral-100 text-[#737373]"
                     }`}
                   >
-                    <Bike className="w-5 h-5 stroke-[1.75]" />
+                    <Bike className="w-4.5 h-4.5 stroke-[1.75]" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-xs sm:text-sm font-bold text-[#111111] block">
+                    <span className="text-xs sm:text-sm font-bold text-[#111111] block leading-tight">
                       Pengantaran
                     </span>
-                    <span className="text-[11px] text-[#737373] block leading-snug">
+                    <span className="text-[11px] text-[#737373] block leading-tight mt-0.5">
                       Pesanan diantar ke alamat tujuan
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 text-right">
+                <div className="flex items-center gap-2 shrink-0 text-right">
                   <span
-                    className={`text-xs sm:text-sm whitespace-nowrap font-bold ${
+                    className={`text-xs whitespace-nowrap font-bold ${
                       fulfillmentType === "delivery" ? "text-[#F25B09]" : "text-[#737373]"
                     }`}
                   >
@@ -864,10 +864,10 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
               </button>
             </div>
 
-            {/* Pickup Info Banner */}
+            {/* Pickup Info Banner (Slim) */}
             {fulfillmentType === "pickup" && (
-              <div className="pt-3.5 border-t border-[#E5E5E5]">
-                <div className="p-3 bg-neutral-50 border border-neutral-200/80 rounded-xl text-xs text-[#737373]">
+              <div className="pt-2 border-t border-[#E5E5E5]">
+                <div className="px-2.5 py-1.5 bg-neutral-50 border border-neutral-200/80 rounded-lg text-[11px] text-[#737373] leading-tight">
                   <p>Gratis ongkir — Ambil sendiri di toko.</p>
                 </div>
               </div>
@@ -875,26 +875,26 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
 
             {/* Conditional Delivery Area Selection */}
             {fulfillmentType === "delivery" && (
-              <div className="pt-3.5 border-t border-[#E5E5E5] space-y-3">
+              <div className="pt-2.5 border-t border-[#E5E5E5] space-y-2">
                 <label className="text-xs font-bold text-[#111111] block">
                   Pilih Area Pengantaran
                 </label>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {/* Choice 1: Configured Area */}
                   <button
                     type="button"
                     role="radio"
                     aria-checked={deliveryArea === configuredAreaName}
                     onClick={() => setDeliveryArea(configuredAreaName)}
-                    className={`w-full p-3 rounded-xl border text-left flex items-start justify-between gap-3 transition-all cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#F25B09] ${
+                    className={`w-full p-2.5 rounded-xl border text-left flex items-start justify-between gap-2.5 transition-all cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#F25B09] ${
                       deliveryArea === configuredAreaName
                         ? "border-[#F25B09] bg-orange-50/20 ring-1 ring-[#F25B09]"
                         : "border-[#E5E5E5] bg-white hover:border-neutral-300"
                     }`}
                   >
-                    <div className="space-y-1 min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                    <div className="space-y-0.5 min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
                         <span className="text-xs font-bold text-[#111111]">
                           {configuredAreaName} (Kota & Sekitarnya)
                         </span>
@@ -904,7 +904,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-[#737373]">
+                      <p className="text-[11px] text-[#737373] leading-snug">
                         {deliveryCalc?.isFree && deliveryArea === configuredAreaName
                           ? `Gratis ongkir (min. belanja ${formatRupiah(
                               deliveryCalc.freeShippingThreshold
@@ -945,17 +945,17 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                     role="radio"
                     aria-checked={deliveryArea !== configuredAreaName}
                     onClick={() => setDeliveryArea("Area Lainnya")}
-                    className={`w-full p-3 rounded-xl border text-left flex items-start justify-between gap-3 transition-all cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#F25B09] ${
+                    className={`w-full p-2.5 rounded-xl border text-left flex items-start justify-between gap-2.5 transition-all cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#F25B09] ${
                       deliveryArea !== configuredAreaName
                         ? "border-[#F25B09] bg-orange-50/20 ring-1 ring-[#F25B09]"
                         : "border-[#E5E5E5] bg-white hover:border-neutral-300"
                     }`}
                   >
-                    <div className="space-y-1 min-w-0 flex-1">
+                    <div className="space-y-0.5 min-w-0 flex-1">
                       <span className="text-xs font-bold text-[#111111] block">
                         Area Lainnya
                       </span>
-                      <p className="text-[11px] text-[#737373]">
+                      <p className="text-[11px] text-[#737373] leading-snug">
                         Di luar {configuredAreaName} • Tarif ongkir perlu konfirmasi admin via
                         WhatsApp
                       </p>
@@ -987,20 +987,20 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                 {/* Delivery Rule Info for Configured Area */}
                 {deliveryArea === configuredAreaName &&
                   (deliveryCalc?.isFree ? (
-                    <div className="p-3 bg-orange-50/70 border border-orange-100 rounded-xl text-xs space-y-0.5 text-[#111111]">
-                      <p className="font-bold text-[#F25B09]">Yeay, gratis ongkir!</p>
-                      <p className="text-[11px] text-[#737373]">
+                    <div className="px-2.5 py-2 bg-orange-50/70 border border-orange-100 rounded-lg text-xs space-y-0.5 text-[#111111]">
+                      <p className="font-bold text-[#F25B09] leading-tight">Yeay, gratis ongkir!</p>
+                      <p className="text-[11px] text-[#737373] leading-tight">
                         Pesananmu sudah memenuhi minimum belanja{" "}
                         {formatRupiah(deliveryCalc.freeShippingThreshold)}.
                       </p>
                     </div>
                   ) : (
-                    <div className="p-3 bg-orange-50/70 border border-orange-100 rounded-xl text-xs space-y-0.5 text-[#111111]">
-                      <p className="font-bold text-[#111111]">
+                    <div className="px-2.5 py-2 bg-orange-50/70 border border-orange-100 rounded-lg text-xs space-y-0.5 text-[#111111]">
+                      <p className="font-bold text-[#111111] leading-tight">
                         Ongkir {configuredAreaName}:{" "}
                         {formatRupiah(deliveryCalc?.shippingFee ?? 4000)}
                       </p>
-                      <p className="text-[11px] text-[#737373]">
+                      <p className="text-[11px] text-[#737373] leading-tight">
                         Belanja{" "}
                         {formatRupiah(deliveryCalc?.remainingToFreeShipping ?? 0)} lagi untuk gratis ongkir.
                       </p>
@@ -1009,14 +1009,14 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
 
                 {/* WhatsApp Confirmation Box for Area Lainnya */}
                 {deliveryArea !== configuredAreaName && (
-                  <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-[#8A4B08] space-y-2.5">
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-[#8A4B08] space-y-2">
                     <div className="flex items-start gap-2">
                       <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <div className="space-y-1">
+                      <div className="space-y-0.5">
                         <p className="font-bold text-[#8A4B08]">
                           Konfirmasi Pengantaran Diperlukan
                         </p>
-                        <p className="text-[11px] leading-relaxed">
+                        <p className="text-[11px] leading-snug">
                           Pengantaran ke area di luar {configuredAreaName} belum memiliki
                           tarif tetap. Silakan konfirmasi ketersediaan kurir dan ongkir
                           terlebih dahulu dengan admin via WhatsApp.
@@ -1027,7 +1027,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                       href={waInquiryUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-2 w-full min-h-[44px] px-3.5 py-2.5 bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                      className="inline-flex items-center justify-center gap-2 w-full min-h-[40px] px-3 py-2 bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
                     >
                       <MessageCircle className="w-4 h-4" />
                       <span>Konfirmasi Area via WhatsApp</span>
@@ -1039,9 +1039,9 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
           </div>
 
           {/* Card 4: Metode Pembayaran */}
-          <div className="bg-white rounded-2xl p-4 space-y-3">
+          <div className="bg-white rounded-2xl p-3 sm:p-3.5 space-y-2">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-[#111111] flex items-center gap-2">
+              <h2 className="text-sm font-bold text-[#111111] flex items-center gap-1.5">
                 <CreditCard className="w-4 h-4 text-[#F25B09]" />
                 <span>Metode Pembayaran</span>
               </h2>
@@ -1051,22 +1051,22 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
             </div>
 
             {availablePaymentMethods.length === 0 ? (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-[#B42318] space-y-1">
+              <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-[#B42318] space-y-1">
                 <div className="flex items-center gap-1.5 font-bold">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>Tidak Ada Metode Pembayaran Aktif</span>
                 </div>
-                <p className="leading-relaxed text-[11px]">
+                <p className="leading-snug text-[11px]">
                   Saat ini toko sedang menonaktifkan seluruh metode pembayaran. Silakan
                   hubungi admin atau kembali beberapa saat lagi.
                 </p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {/* Option 1: QRIS Online */}
                 {(availablePaymentMethods.includes("QRIS") || availablePaymentMethods.includes("QRIS Statis")) && (
                   <label
-                    className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                    className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer ${
                       selectedPaymentMethod === "QRIS" || selectedPaymentMethod === "QRIS Statis"
                         ? "border-[#F25B09] bg-orange-50/40 ring-1 ring-[#F25B09]"
                         : "border-[#E5E5E5] bg-white hover:border-neutral-300"
@@ -1090,7 +1090,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                           Online
                         </span>
                       </div>
-                      <p className="text-[11px] text-[#737373] leading-relaxed">
+                      <p className="text-[11px] text-[#737373] leading-snug">
                         Pembayaran digital praktis melalui QRIS nasional (BCA, Mandiri, BRI, GoPay, OVO, Dana, ShopeePay, dll). Diproses secara instan dan aman melalui gateway pembayaran online.
                       </p>
                     </div>
@@ -1100,7 +1100,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                 {/* Option 2: Cash (Bayar Tunai) */}
                 {availablePaymentMethods.includes("Cash") && (
                   <label
-                    className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                    className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer ${
                       selectedPaymentMethod === "Cash"
                         ? "border-[#F25B09] bg-orange-50/40 ring-1 ring-[#F25B09]"
                         : "border-[#E5E5E5] bg-white hover:border-neutral-300"
@@ -1121,7 +1121,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                           Cash (Bayar Tunai)
                         </span>
                       </div>
-                      <p className="text-[11px] text-[#737373] leading-relaxed">
+                      <p className="text-[11px] text-[#737373] leading-snug">
                         {fulfillmentType === "pickup"
                           ? "Bayar dengan uang tunai langsung di kasir saat mengambil pesanan di toko. Pembayaran diverifikasi kasir setelah uang tunai diterima."
                           : "Bayar dengan uang tunai langsung ke kurir saat pesanan tiba di lokasi Anda. Pembayaran diverifikasi kurir/admin setelah uang tunai diterima."}
@@ -1134,12 +1134,12 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
           </div>
 
           {/* Card 5: Rincian Pembayaran */}
-          <div className="bg-white rounded-2xl p-4 space-y-3">
+          <div className="bg-white rounded-2xl p-3 sm:p-3.5 space-y-2">
             <h2 className="text-sm font-bold text-[#111111]">
               Rincian Pembayaran
             </h2>
 
-            <div className="space-y-2 text-xs">
+            <div className="space-y-1.5 text-xs">
               {/* Row 1: Subtotal Pesanan */}
               <div className="flex justify-between items-center text-[#737373]">
                 <span>Subtotal ({selectedItems.length} menu)</span>
@@ -1182,28 +1182,20 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
             </div>
           </div>
 
-          {/* Terms & Agreement Note */}
-          <div className="px-2 pb-3">
-            <p className="text-center text-[11px] text-[#737373] leading-relaxed">
-              Dengan membuat pesanan, Anda menyetujui rincian menu dan ketentuan pemesanan{" "}
-              {storeSettings?.storeName || "Nook by Jina"}.
-            </p>
-          </div>
-
           {/* Sticky Bottom Checkout Bar */}
           <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#E5E5E5]">
             <div
-              className="max-w-md mx-auto px-4 py-3 flex items-center justify-between gap-4"
+              className="max-w-md mx-auto px-3 py-2 flex items-center justify-between gap-3"
               style={{
-                paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))",
+                paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))",
               }}
             >
               {/* Left: Order Total */}
               <div className="flex flex-col min-w-0">
-                <span className="text-[11px] font-medium text-[#737373]">
+                <span className="text-[11px] font-medium text-[#737373] leading-tight">
                   Total ({selectedItems.length} menu)
                 </span>
-                <span className="text-base sm:text-lg font-extrabold text-[#F25B09] leading-tight truncate">
+                <span className="text-base font-extrabold text-[#F25B09] leading-tight truncate">
                   {formatRupiah(grandTotal)}
                 </span>
               </div>
@@ -1220,7 +1212,7 @@ export default function CheckoutClient({ initialStoreSettings }: CheckoutClientP
                   selectedItems.length === 0 ||
                   hasSoldOutSelected
                 }
-                className={`min-h-[44px] px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors shrink-0 ${
+                className={`min-h-[40px] px-5 py-2 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-colors shrink-0 ${
                   !isOutsideConfiguredArea &&
                   storeSettings &&
                   !settingsError &&
