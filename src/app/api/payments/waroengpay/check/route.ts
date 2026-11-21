@@ -47,20 +47,18 @@ export async function POST(req: NextRequest) {
       try {
         const wpPayment = await getWaroengPayPayment(order.waroengpayInvoiceId);
 
-        if (wpPayment.status === "paid") {
-          // Verify nominal amount
+        if (wpPayment.status === "paid" && wpPayment.livemode !== false) {
+          // Verify nominal amount against base order total (subtotal + shippingFee)
           const baseAmount = Math.round(Number(wpPayment.base_amount));
-          const totalAmount = Math.round(Number(wpPayment.amount));
-          const expected = Math.round(Number(order.total));
-          const subtotal = Math.round(Number(order.subtotal));
+          const expectedBaseTotal = Math.round(Number(order.subtotal) + Number(order.shippingFee));
 
           const isValidAmount =
-            baseAmount === expected ||
-            totalAmount === expected ||
-            baseAmount === subtotal;
+            Number.isFinite(baseAmount) &&
+            baseAmount > 0 &&
+            baseAmount === expectedBaseTotal;
 
           if (isValidAmount) {
-            await updateOrderStatusServer(order.id, "Pesanan baru", "Lunas");
+            await updateOrderStatusServer(order.id, "Diproses", "Lunas");
 
             // Update payments table
             const supabase = getServiceRoleSupabaseClient();
@@ -68,8 +66,10 @@ export async function POST(req: NextRequest) {
               await supabase
                 .from("payments")
                 .update({
+                  status: "Lunas",
                   gateway_status: "PAID",
-                  paid_at: wpPayment.paid_at || new Date().toISOString(),
+                  raw_response: wpPayment as unknown as Record<string, unknown>,
+                  updated_at: new Date().toISOString(),
                 })
                 .eq("order_id", order.uuid);
             }

@@ -512,7 +512,7 @@ export async function POST(request: Request) {
         savedOrder.paymentDeadline = waroengPayRes.expires_at;
         savedOrder.livemode = waroengPayRes.livemode;
 
-        // Store WaroengPay transaction metadata in payments table
+        // Store WaroengPay invoice ID (WRG-...) in orders.waroengpay_id and full metadata in payments
         const supabase = getServiceRoleSupabaseClient();
         if (supabase) {
           try {
@@ -530,18 +530,51 @@ export async function POST(request: Request) {
             }
 
             if (orderUuid && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderUuid)) {
+              // 1. Persist waroengpay_id (WRG-...) on orders table
+              const { error: orderUpdateErr } = await supabase
+                .from("orders")
+                .update({
+                  waroengpay_id: waroengPayRes.id,
+                  payment_deadline: waroengPayRes.expires_at,
+                })
+                .eq("id", orderUuid);
+
+              if (orderUpdateErr) {
+                console.error("[POST /api/orders] Error saving waroengpay_id on orders:", orderUpdateErr);
+              }
+
+              // 2. Persist full WaroengPay metadata on payments table
               const { error: updateErr } = await supabase
                 .from("payments")
                 .update({
                   gateway_provider: "waroengpay",
+                  waroengpay_invoice_id: waroengPayRes.id,
+                  qris_payload: waroengPayRes.qris,
+                  unique_code: waroengPayRes.unique_code,
+                  expires_at: waroengPayRes.expires_at,
                   payment_url: waroengPayRes.pay_url,
                   gateway_status: "INVOICE_CREATED",
                   raw_response: waroengPayRes as unknown as Record<string, unknown>,
+                  updated_at: new Date().toISOString(),
                 })
                 .eq("order_id", orderUuid);
 
               if (updateErr) {
-                console.error("[POST /api/orders] Error recording WaroengPay payment metadata:", updateErr);
+                console.warn("[POST /api/orders] Extended payments update failed, falling back to core columns:", updateErr);
+                const { error: fallbackErr } = await supabase
+                  .from("payments")
+                  .update({
+                    gateway_provider: "waroengpay",
+                    payment_url: waroengPayRes.pay_url,
+                    gateway_status: "INVOICE_CREATED",
+                    raw_response: waroengPayRes as unknown as Record<string, unknown>,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("order_id", orderUuid);
+
+                if (fallbackErr) {
+                  console.error("[POST /api/orders] Error recording WaroengPay payment metadata:", fallbackErr);
+                }
               }
             }
           } catch (updateErr) {

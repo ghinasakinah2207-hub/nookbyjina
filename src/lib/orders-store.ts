@@ -199,6 +199,7 @@ function mapDatabaseRowToOrder(
     merchantName: (row.merchant_name as string) || "Nook by Jina",
     gatewayProvider: (row.gateway_provider as Order["gatewayProvider"]) || undefined,
     duitkuReference: (row.duitku_reference as string) || undefined,
+    waroengpayInvoiceId: (row.waroengpay_id as string) || undefined,
     paymentUrl: (row.payment_url as string) || undefined,
   };
 }
@@ -370,6 +371,20 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
   const { data: order, error } = await orderQuery.maybeSingle();
   if (error || !order) return null;
   return mapDatabaseRowToOrder(order);
+}
+
+/**
+ * Dev-only mock store lookup strictly by WaroengPay invoice ID (WRG-...).
+ * Never matches by reference.
+ */
+export function getDevOrderByWaroengPayId(waroengPayInvoiceId: string): Order | null {
+  if (!waroengPayInvoiceId) return null;
+  for (const devOrder of devOrdersById.values()) {
+    if (devOrder.waroengpayInvoiceId === waroengPayInvoiceId) {
+      return { ...devOrder };
+    }
+  }
+  return null;
 }
 
 /**

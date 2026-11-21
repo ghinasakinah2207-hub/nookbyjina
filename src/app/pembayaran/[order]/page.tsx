@@ -15,7 +15,6 @@ import {
   HelpCircle,
   Download,
   Share2,
-  Sparkles,
   Smartphone,
   Check,
   AlertTriangle,
@@ -299,10 +298,6 @@ function PaymentContent() {
       .catch(() => {});
   }, []);
 
-  // Simulation in progress state (Sandbox only)
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [simulateSuccess, setSimulateSuccess] = useState(false);
-
   // Manual transaction status check state
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [checkFeedback, setCheckFeedback] = useState<{
@@ -460,7 +455,6 @@ function PaymentContent() {
   // Authoritative amounts
   const paymentAmount = order.rawAmount || order.total;
   const uniqueCode = order.uniqueCode;
-  const isSandbox = order.livemode === false || Boolean(order.waroengpayInvoiceId && order.qrisPayload?.startsWith("WAROENGPAY-TEST"));
 
   // Format countdown string MM:SS
   const absRemaining = Math.max(0, timeLeftSeconds);
@@ -531,37 +525,6 @@ function PaymentContent() {
     }
   };
 
-  // Simulate payment (Sandbox only)
-  const handleSimulatePayment = async () => {
-    if (!order.waroengpayInvoiceId || isSimulating) return;
-    setIsSimulating(true);
-    try {
-      const res = await fetch("/api/payments/waroengpay/simulate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          paymentId: order.waroengpayInvoiceId,
-          action: "pay",
-        }),
-      });
-      if (res.ok) {
-        setSimulateSuccess(true);
-        // Prompt re-fetch of order status
-        if (resolvedToken) {
-          const orderRes = await fetch(`/api/orders/${encodeURIComponent(resolvedToken)}`, { cache: "no-store" });
-          if (orderRes.ok) {
-            const data = await orderRes.json();
-            if (data?.order) addOrder({ ...data.order, token: resolvedToken });
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Simulation error:", err);
-    } finally {
-      setIsSimulating(false);
-    }
-  };
-
   return (
     <div className="min-h-screen pb-16 bg-[#F6F6F7]">
       <Header
@@ -573,38 +536,6 @@ function PaymentContent() {
       />
 
       <main className="max-w-md mx-auto px-3 sm:px-4 pt-3.5 space-y-3">
-        {/* Sandbox Mode Banner */}
-        {isSandbox && (
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center justify-between gap-2 shadow-xs">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
-              <div>
-                <span className="font-bold block text-[11px] uppercase tracking-wider text-amber-800">
-                  Mode Uji Sandbox (WaroengPay)
-                </span>
-                <span className="text-[11px] text-amber-700">
-                  Tagihan simulasi — tidak memerlukan transfer uang sungguhan.
-                </span>
-              </div>
-            </div>
-            {!isPaid && !isExpired && (
-              <button
-                type="button"
-                onClick={handleSimulatePayment}
-                disabled={isSimulating || simulateSuccess}
-                className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white font-semibold rounded-lg text-[11px] shrink-0 transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-60"
-              >
-                {isSimulating ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Check className="w-3 h-3" />
-                )}
-                <span>{simulateSuccess ? "Terkirim" : "Simulasi Bayar"}</span>
-              </button>
-            )}
-          </div>
-        )}
-
         {/* Order Info & Nominal Card */}
         <section className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-[#E5E5E5]/60 space-y-3">
           <div className="flex items-center justify-between">

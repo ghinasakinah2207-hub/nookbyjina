@@ -5,7 +5,7 @@ import {
   verifyWaroengPayWebhookSignature,
   WaroengPayWebhookEvent,
 } from "@/lib/waroengpay";
-import { updateOrderStatusServer, getOrderById } from "@/lib/orders-store";
+import { updateOrderStatusServer, getDevOrderByWaroengPayId } from "@/lib/orders-store";
 
 /**
  * WaroengPay Webhook Handler
@@ -82,14 +82,9 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. Production Sandbox Isolation Guard
-    // Test mode events (livemode: false) must never mutate live production orders
-    const isServerProduction =
-      process.env.NODE_ENV === "production" &&
-      !config.isSandbox &&
-      !config.apiKey.startsWith("wp_test_");
-
-    if (isServerProduction && event.livemode === false) {
-      console.warn("[WaroengPay Webhook] Ignoring test event in production mode:", event.id);
+    // Ignore all test/sandbox events (livemode: false) immediately with HTTP 200
+    if (event.livemode === false) {
+      console.warn("[WaroengPay Webhook] Ignoring test event (livemode: false):", event.id);
       return NextResponse.json(
         { success: true, message: "Sandbox event ignored on live production server" },
         { status: 200 }
@@ -105,9 +100,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const waroengPayInvoiceId = paymentData.id; // e.g. WRG-7K2M9QX4BD1PZ
+    const waroengPayInvoiceId = String(paymentData.id).trim(); // e.g. WRG-7K2M9QX4BD1PZ
 
-    // 6. Locate Order Strictly By WaroengPay Invoice ID (WRG-...)
+    // 6. Locate Order Strictly By WaroengPay Invoice ID (event.data.id WRG-...), NEVER by event.data.reference
     const supabase = getServiceRoleSupabaseClient();
     let matchedOrder: {
       id: string;
@@ -119,30 +114,60 @@ export async function POST(req: NextRequest) {
     } | null = null;
 
     if (supabase) {
-      // Find in payments table by raw_response->>'id' or waroengpay_invoice_id
-      const { data: payRecord } = await supabase
-        .from("payments")
-        .select("order_id, gateway_provider, raw_response, status")
-        .filter("raw_response->>id", "eq", waroengPayInvoiceId)
+      // 6a. Primary lookup: orders.waroengpay_id = event.data.id
+      const { data: directOrderRow, error: directOrderErr } = await supabase
+        .from("orders")
+        .select("id, order_number, total, payment_method, payment_status, order_status")
+        .eq("waroengpay_id", waroengPayInvoiceId)
         .maybeSingle();
 
-      if (payRecord && payRecord.order_id) {
-        const { data: orderRow } = await supabase
-          .from("orders")
-          .select("id, order_number, total, payment_method, payment_status, order_status")
-          .eq("id", payRecord.order_id)
+      if (!directOrderErr && directOrderRow) {
+        matchedOrder = directOrderRow;
+      }
+
+      // 6b. Secondary lookup (backward compatibility for pre-migration rows):
+      // payments.waroengpay_invoice_id or payments.raw_response->>'id' = event.data.id
+      if (!matchedOrder) {
+        let payOrderId: string | null = null;
+
+        const { data: payByCol, error: payByColErr } = await supabase
+          .from("payments")
+          .select("order_id")
+          .eq("waroengpay_invoice_id", waroengPayInvoiceId)
           .maybeSingle();
 
-        if (orderRow) {
-          matchedOrder = orderRow;
+        if (!payByColErr && payByCol?.order_id) {
+          payOrderId = payByCol.order_id;
+        }
+
+        if (!payOrderId) {
+          const { data: payByRaw } = await supabase
+            .from("payments")
+            .select("order_id")
+            .filter("raw_response->>id", "eq", waroengPayInvoiceId)
+            .maybeSingle();
+
+          if (payByRaw?.order_id) {
+            payOrderId = payByRaw.order_id;
+          }
+        }
+
+        if (payOrderId) {
+          const { data: orderRow } = await supabase
+            .from("orders")
+            .select("id, order_number, total, payment_method, payment_status, order_status")
+            .eq("id", payOrderId)
+            .maybeSingle();
+
+          if (orderRow) {
+            matchedOrder = orderRow;
+          }
         }
       }
-    }
-
-    // Fallback: If not found in DB or running dev mock store, search dev store
-    if (!matchedOrder) {
-      const devOrder = await getOrderById(paymentData.reference || "");
-      if (devOrder && (devOrder.waroengpayInvoiceId === waroengPayInvoiceId || devOrder.gatewayProvider === "waroengpay")) {
+    } else if (process.env.NODE_ENV !== "production") {
+      // Dev-only in-memory mock store lookup — strictly by waroengpayInvoiceId (NEVER reference)
+      const devOrder = getDevOrderByWaroengPayId(waroengPayInvoiceId);
+      if (devOrder) {
         matchedOrder = {
           id: devOrder.id,
           order_number: devOrder.id,
@@ -167,21 +192,18 @@ export async function POST(req: NextRequest) {
 
     // 7. Handle "payment.paid"
     if (event.event === "payment.paid") {
-      // 7a. Validate Base Amount vs Order Total
+      // 7a. Strictly validate event.data.base_amount === order total
       const receivedBaseAmount = Math.round(Number(paymentData.base_amount));
       const orderExpectedTotal = Math.round(Number(matchedOrder.total));
-
-      // Note: If order.total was already updated to include unique_code, compare against paymentData.amount as well
-      const receivedAmountWithCode = Math.round(Number(paymentData.amount));
       const isAmountValid =
-        receivedBaseAmount === orderExpectedTotal ||
-        receivedAmountWithCode === orderExpectedTotal;
+        Number.isFinite(receivedBaseAmount) &&
+        receivedBaseAmount > 0 &&
+        receivedBaseAmount === orderExpectedTotal;
 
       if (!isAmountValid) {
-        console.warn("[WaroengPay Webhook] Amount mismatch detected:", {
+        console.warn("[WaroengPay Webhook] Base amount mismatch detected:", {
           orderTotal: orderExpectedTotal,
           receivedBaseAmount,
-          receivedAmountWithCode,
           waroengPayInvoiceId,
         });
         return NextResponse.json(
@@ -243,6 +265,7 @@ export async function POST(req: NextRequest) {
             .from("payments")
             .update({
               status: "Lunas",
+              gateway_status: "PAID",
               raw_response: paymentData as unknown as Record<string, unknown>,
               updated_at: new Date().toISOString(),
             })

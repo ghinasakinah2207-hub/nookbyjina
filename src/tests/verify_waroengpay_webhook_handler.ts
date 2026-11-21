@@ -412,6 +412,62 @@ async function main() {
     process.env.WAROENGPAY_API_KEY = prevKey;
   });
 
+  // -----------------------------------------------------------------------------
+  // Test 11: Spoofed Reference With Unknown Invoice ID Must NOT Match Order
+  // -----------------------------------------------------------------------------
+  await runAsyncTest("TEST 11: Spoofed Reference With Different Invoice ID Rejected", async () => {
+    const token = "tok_test_waroengpay_005_1234567890ab";
+    const testOrder: Order = {
+      id: "TJ-WP-005",
+      token,
+      createdAt: new Date().toISOString(),
+      customerName: "Eka",
+      customerWhatsapp: "081234567895",
+      fulfillmentType: "pickup",
+      deliveryArea: "Pickup Toko",
+      orderNote: "",
+      items: [],
+      subtotal: 75000,
+      shippingFee: 0,
+      total: 75000,
+      orderStatus: "Pesanan baru",
+      paymentStatus: "Menunggu Pembayaran",
+      paymentMethod: "QRIS",
+      paymentDeadline: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      merchantName: "Nook by Jina",
+      gatewayProvider: "waroengpay",
+      waroengpayInvoiceId: "WRG-REAL-INVOICE-005",
+    };
+
+    await saveOrder(testOrder);
+
+    // Attacker sends payment.paid with matching reference TJ-WP-005, but WRONG invoice ID
+    const spoofedEvent = {
+      id: "evt_spoof_1",
+      event: "payment.paid",
+      created_at: new Date().toISOString(),
+      livemode: true,
+      data: {
+        id: "WRG-SPOOFED-INVOICE-999",
+        reference: "TJ-WP-005",
+        status: "paid",
+        base_amount: 75000,
+        amount: 75111,
+        late: false,
+        livemode: true,
+      },
+    };
+
+    const req = buildSignedWebhookRequest(spoofedEvent);
+    const res = await handleWebhook(req);
+    assert.strictEqual(res.status, 200);
+
+    // Order MUST remain unpaid!
+    const orderAfter = await getOrderByToken(token);
+    assert.ok(orderAfter);
+    assert.strictEqual(orderAfter.paymentStatus, "Menunggu Pembayaran");
+  });
+
   console.log("================================================================================");
   if (testsFailed === 0) {
     console.log(`🎉 ALL ${testsPassed} WAROENGPAY WEBHOOK TESTS PASSED (0 FAILURES)!`);
